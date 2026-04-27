@@ -1,37 +1,64 @@
-import * as THREE from "./assets/vendor/three.module.js";
+import {
+  ACESFilmicToneMapping,
+  AmbientLight,
+  Clock,
+  Color,
+  InstancedMesh,
+  MathUtils,
+  MeshStandardMaterial,
+  Object3D,
+  PerspectiveCamera,
+  PointLight,
+  Raycaster,
+  Scene,
+  SphereGeometry,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from "./assets/vendor/three.module.js";
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)");
 const lowPowerDevice = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const lowDetail = coarsePointer.matches || lowPowerDevice;
+const palette = [0xdff7ff, 0x8ccfff, 0xb58cff, 0xffa9d8, 0xf5f7ff];
+const dummy = new Object3D();
+const raycaster = new Raycaster();
+const planePoint = new Vector3();
+const pointer = new Vector2(0, 0);
+const targetPointer = new Vector2(0, 0);
+const worldPointer = new Vector3(0, 0, 0);
 
 let stage;
+let canvas;
 let renderer;
 let scene;
 let camera;
 let clock;
+let mesh;
+let material;
+let ambientLight;
+let pointerLight;
 let rafId = 0;
+let resizeRafId = 0;
 let active = false;
-let rootGroup;
-let heroMesh;
-let ringMesh;
-let companionMesh;
-let particles;
-let resizeObserver;
 let matchFocus = 0;
 let matchFocusTarget = 0;
-let resizeRafId = 0;
 let lastFrameTime = 0;
 let scrollProgress = 0;
+let count = 0;
+let positions;
+let velocities;
+let sizes;
+let maxX = 8;
+let maxY = 5;
+let maxZ = 3;
 let orientationListening = false;
 let orientationPromptBound = false;
 let orientationBaseline = null;
 let orientationLastAt = 0;
 let orientationStatus = "unavailable";
-
-const pointer = new THREE.Vector2(0, 0);
-const targetPointer = new THREE.Vector2(0, 0);
-const viewport = { width: 1, height: 1 };
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -42,6 +69,10 @@ function angleDelta(value, baseline) {
   while (delta > 180) delta -= 360;
   while (delta < -180) delta += 360;
   return delta;
+}
+
+function randomSpread(range) {
+  return (Math.random() - 0.5) * range;
 }
 
 function ensureStageStyles() {
@@ -60,7 +91,10 @@ function ensureStageStyles() {
       pointer-events: none;
       opacity: 0;
       contain: strict;
-      background: linear-gradient(135deg, #050711, #0a1024 42%, #171126);
+      background:
+        radial-gradient(circle at 20% 18%, rgba(98, 171, 255, .24), transparent 31%),
+        radial-gradient(circle at 78% 12%, rgba(255, 141, 214, .18), transparent 28%),
+        linear-gradient(135deg, #050711, #0a1024 46%, #171126);
       transition: opacity .42s ease;
     }
     #campus-spline-stage.is-active { opacity: 1; }
@@ -70,15 +104,14 @@ function ensureStageStyles() {
       display: block;
       transform: translateZ(0);
     }
-    #campus-spline-stage::after,
-    .campus-spline-fallback::before {
+    #campus-spline-stage::after {
       content: "";
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(circle at 18% 22%, rgba(84, 188, 255, .18), transparent 28%),
-        radial-gradient(circle at 82% 18%, rgba(255, 141, 214, .14), transparent 26%),
-        linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .36));
+        radial-gradient(circle at 20% 84%, rgba(116, 196, 255, .10), transparent 34%),
+        radial-gradient(circle at 78% 88%, rgba(255, 155, 216, .09), transparent 34%),
+        linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .2));
     }
     body[data-campus-spline="active"] {
       background: #050711 !important;
@@ -102,13 +135,13 @@ function createStage() {
   stage.id = "campus-spline-stage";
   stage.setAttribute("aria-hidden", "true");
 
-  const canvas = document.createElement("canvas");
+  canvas = document.createElement("canvas");
   canvas.id = "campus-spline-canvas";
   stage.appendChild(canvas);
   document.body.prepend(stage);
 
   try {
-    renderer = new THREE.WebGLRenderer({
+    renderer = new WebGLRenderer({
       canvas,
       alpha: true,
       antialias: !lowDetail,
@@ -121,13 +154,14 @@ function createStage() {
     return stage;
   }
 
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
   renderer.setClearColor(0x000000, 0);
 
-  scene = new THREE.Scene();
-  clock = new THREE.Clock();
-  camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-  camera.position.set(0, 0.25, 9.2);
+  scene = new Scene();
+  clock = new Clock();
+  camera = new PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(0, 1.8, lowDetail ? 21 : 20);
 
   buildScene();
   resizeScene();
@@ -141,157 +175,71 @@ function createStage() {
   prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
   setupOrientationControl();
 
-  resizeObserver = new ResizeObserver(requestResizeScene);
-  resizeObserver.observe(document.documentElement);
-
   return stage;
 }
 
 function buildScene() {
-  const ambient = new THREE.AmbientLight(0xbfd7ff, 1.85);
-  scene.add(ambient);
+  ambientLight = new AmbientLight(0xd4ebff, 2.15);
+  scene.add(ambientLight);
 
-  const keyLight = new THREE.PointLight(0x84d8ff, 35, 18);
-  keyLight.position.set(-4.4, 3.6, 5.2);
-  scene.add(keyLight);
+  pointerLight = new PointLight(0x9ddcff, lowDetail ? 120 : 170, 30, 1.6);
+  pointerLight.position.set(0, 3, 5);
+  scene.add(pointerLight);
 
-  const blushLight = new THREE.PointLight(0xff8bd5, 28, 18);
-  blushLight.position.set(4.4, -1.4, 3.6);
-  scene.add(blushLight);
-
-  const rimLight = new THREE.DirectionalLight(0xffffff, 2.3);
-  rimLight.position.set(0, 4, 3);
-  scene.add(rimLight);
-
-  rootGroup = new THREE.Group();
-  scene.add(rootGroup);
-
-  const glassMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xc7f1ff,
-    metalness: 0.08,
-    roughness: 0.2,
-    transparent: true,
-    opacity: 0.86,
-    clearcoat: 1,
-    clearcoatRoughness: 0.18,
-    iridescence: 0.38,
-    iridescenceIOR: 1.8,
-  });
-
-  const violetMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xb48cff,
-    metalness: 0.02,
-    roughness: 0.22,
-    transparent: true,
-    opacity: 0.62,
-    clearcoat: 1,
-    iridescence: 0.5,
-  });
-
-  const pinkMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xff9bd2,
+  const geometry = new SphereGeometry(1, lowDetail ? 18 : 28, lowDetail ? 12 : 18);
+  material = new MeshStandardMaterial({
+    color: 0x101827,
     metalness: 0.05,
-    roughness: 0.2,
+    roughness: 0.24,
+    vertexColors: false,
     transparent: true,
-    opacity: 0.72,
-    clearcoat: 1,
-    iridescence: 0.32,
+    opacity: 0.94,
+    emissive: 0x08152a,
+    emissiveIntensity: 0.2,
   });
 
-  const lineMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    emissive: 0x6ab8ff,
-    emissiveIntensity: 0.55,
-    roughness: 0.32,
-    metalness: 0.12,
-    transparent: true,
-    opacity: 0.78,
-  });
+  count = lowDetail ? 54 : 86;
+  mesh = new InstancedMesh(geometry, material, count);
+  mesh.instanceMatrix.setUsage(35048);
+  scene.add(mesh);
 
-  heroMesh = new THREE.Mesh(new THREE.TorusKnotGeometry(1.55, 0.34, lowDetail ? 96 : 128, lowDetail ? 14 : 20), glassMaterial);
-  heroMesh.position.set(1.72, 0.05, 0);
-  heroMesh.rotation.set(0.62, 0.08, -0.18);
-  rootGroup.add(heroMesh);
-
-  ringMesh = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.025, 8, lowDetail ? 88 : 120), lineMaterial);
-  ringMesh.position.set(1.64, 0.02, -0.18);
-  ringMesh.rotation.set(1.12, 0.42, 0.16);
-  rootGroup.add(ringMesh);
-
-  const ringTwo = new THREE.Mesh(new THREE.TorusGeometry(2.62, 0.018, 8, lowDetail ? 88 : 120), lineMaterial.clone());
-  ringTwo.material.opacity = 0.34;
-  ringTwo.position.set(1.62, 0.02, -0.28);
-  ringTwo.rotation.set(1.36, -0.42, 0.88);
-  rootGroup.add(ringTwo);
-
-  companionMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.92, lowDetail ? 1 : 2), violetMaterial);
-  companionMesh.position.set(-2.48, -0.76, -0.32);
-  companionMesh.rotation.set(0.3, 0.4, 0.2);
-  rootGroup.add(companionMesh);
-
-  const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.4, lowDetail ? 10 : 14, lowDetail ? 18 : 24), pinkMaterial);
-  capsule.position.set(-1.3, 1.58, -0.72);
-  capsule.rotation.set(0.42, 0.12, -0.72);
-  rootGroup.add(capsule);
-
-  const dotCount = lowDetail ? 10 : 14;
-  for (let i = 0; i < dotCount; i += 1) {
-    const size = 0.055 + (i % 4) * 0.018;
-    const dot = new THREE.Mesh(
-      new THREE.SphereGeometry(size, lowDetail ? 10 : 14, lowDetail ? 8 : 12),
-      new THREE.MeshStandardMaterial({
-        color: i % 3 === 0 ? 0xffffff : i % 3 === 1 ? 0x8bd3ff : 0xffa6d8,
-        emissive: i % 3 === 0 ? 0x96d8ff : 0x2c8cff,
-        emissiveIntensity: 0.3,
-        roughness: 0.2,
-        transparent: true,
-        opacity: 0.78,
-      }),
-    );
-    const angle = i * 0.82;
-    const radius = 1.55 + (i % 5) * 0.28;
-    dot.position.set(Math.cos(angle) * radius, Math.sin(angle * 1.1) * 1.4, -0.6 - (i % 3) * 0.42);
-    rootGroup.add(dot);
-  }
-
-  particles = createParticleField();
-  rootGroup.add(particles);
+  positions = new Float32Array(count * 3);
+  velocities = new Float32Array(count * 3);
+  sizes = new Float32Array(count);
+  seedBalls();
 }
 
-function createParticleField() {
-  const count = lowDetail ? 72 : 110;
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-
-  const colorA = new THREE.Color(0x8bd3ff);
-  const colorB = new THREE.Color(0xffb1dc);
-
-  for (let i = 0; i < count; i += 1) {
-    const index = i * 3;
-    positions[index] = (Math.random() - 0.5) * 10;
-    positions[index + 1] = (Math.random() - 0.5) * 6.4;
-    positions[index + 2] = -1.2 - Math.random() * 5.4;
-
-    const mix = i / count;
-    const c = colorA.clone().lerp(colorB, mix);
-    colors[index] = c.r;
-    colors[index + 1] = c.g;
-    colors[index + 2] = c.b;
+function seedBalls() {
+  if (!mesh) {
+    return;
   }
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const colorA = new Color();
+  const colorB = new Color();
+  for (let index = 0; index < count; index += 1) {
+    const base = index * 3;
+    const layer = index / Math.max(1, count - 1);
+    positions[base] = randomSpread(maxX * 1.55);
+    positions[base + 1] = randomSpread(maxY * 1.28) + maxY * 0.12;
+    positions[base + 2] = randomSpread(maxZ * 1.6);
+    velocities[base] = randomSpread(0.04);
+    velocities[base + 1] = randomSpread(0.04);
+    velocities[base + 2] = randomSpread(0.04);
+    sizes[index] = MathUtils.lerp(lowDetail ? 0.42 : 0.38, lowDetail ? 0.95 : 1.05, Math.random());
 
-  const material = new THREE.PointsMaterial({
-    size: 0.032,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.72,
-    depthWrite: false,
-  });
+    const start = palette[Math.floor(layer * (palette.length - 1))] ?? palette[0];
+    const end = palette[Math.min(palette.length - 1, Math.floor(layer * (palette.length - 1)) + 1)] ?? palette.at(-1);
+    const local = (layer * (palette.length - 1)) % 1;
+    colorA.set(start);
+    colorB.set(end);
+    mesh.setColorAt(index, colorA.lerp(colorB, local));
+  }
 
-  return new THREE.Points(geometry, material);
+  if (mesh.instanceColor) {
+    mesh.instanceColor.needsUpdate = true;
+  }
+  material.needsUpdate = true;
+  updateBallMatrices();
 }
 
 function handlePointerMove(event) {
@@ -299,8 +247,8 @@ function handlePointerMove(event) {
     return;
   }
 
-  targetPointer.x = (event.clientX / viewport.width - 0.5) * 2;
-  targetPointer.y = (event.clientY / viewport.height - 0.5) * -2;
+  targetPointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
+  targetPointer.y = (event.clientY / window.innerHeight - 0.5) * -2;
 }
 
 function applyOrientation(betaValue, gammaValue, force = false) {
@@ -320,10 +268,8 @@ function applyOrientation(betaValue, gammaValue, force = false) {
 
   orientationLastAt = performance.now();
   orientationStatus = "active";
-  const x = clamp(angleDelta(gamma, orientationBaseline.gamma) / 24, -1, 1);
-  const y = clamp(-angleDelta(beta, orientationBaseline.beta) / 30, -1, 1);
-  targetPointer.x = x;
-  targetPointer.y = y;
+  targetPointer.x = clamp(angleDelta(gamma, orientationBaseline.gamma) / 24, -1, 1);
+  targetPointer.y = clamp(-angleDelta(beta, orientationBaseline.beta) / 30, -1, 1);
 
   if (prefersReducedMotion.matches) {
     renderFrame(performance.now());
@@ -395,7 +341,6 @@ function resetOrientationControl() {
 function handleScroll() {
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
   scrollProgress = Math.min(1, Math.max(0, window.scrollY / max));
-  document.documentElement.style.setProperty("--campus-spline-scroll", scrollProgress.toFixed(3));
 
   if (active && prefersReducedMotion.matches) {
     renderFrame(performance.now());
@@ -403,8 +348,8 @@ function handleScroll() {
 }
 
 function pixelRatioForViewport() {
-  const base = Math.min(window.devicePixelRatio || 1, viewport.width < 640 ? 1.35 : 1.6);
-  return lowDetail ? Math.min(base, 1.15) : base;
+  const base = Math.min(window.devicePixelRatio || 1, window.innerWidth < 640 ? 1.25 : 1.45);
+  return lowDetail ? Math.min(base, 1.1) : base;
 }
 
 function frameBudget() {
@@ -419,6 +364,7 @@ function requestResizeScene() {
   resizeRafId = requestAnimationFrame(() => {
     resizeRafId = 0;
     resizeScene();
+    seedBalls();
     if (active) {
       renderFrame(performance.now());
     }
@@ -430,47 +376,177 @@ function resizeScene() {
     return;
   }
 
-  viewport.width = Math.max(1, window.innerWidth);
-  viewport.height = Math.max(1, window.innerHeight);
+  const width = Math.max(1, window.innerWidth);
+  const height = Math.max(1, window.innerHeight);
   renderer.setPixelRatio(pixelRatioForViewport());
-  renderer.setSize(viewport.width, viewport.height, false);
-  camera.aspect = viewport.width / viewport.height;
-  camera.fov = viewport.width < 640 ? 43 : 36;
-  camera.position.z = viewport.width < 640 ? 10.8 : 9.2;
+  renderer.setSize(width, height, false);
+  camera.aspect = width / height;
+  camera.fov = width < 640 ? 48 : 42;
+  camera.position.z = width < 640 ? 22 : 20;
   camera.updateProjectionMatrix();
+  updateBounds();
 }
 
-function renderFrame(now) {
-  if (!active || !renderer || !scene || !camera) {
+function updateBounds() {
+  const fov = MathUtils.degToRad(camera.fov);
+  const wHeight = 2 * Math.tan(fov / 2) * camera.position.z;
+  const wWidth = wHeight * camera.aspect;
+  maxX = wWidth * (window.innerWidth < 640 ? 0.64 : 0.56);
+  maxY = wHeight * (window.innerWidth < 640 ? 0.58 : 0.54);
+  maxZ = window.innerWidth < 640 ? 2.8 : 3.2;
+}
+
+function updateWorldPointer() {
+  pointer.lerp(targetPointer, prefersReducedMotion.matches ? 0.08 : 0.075);
+  raycaster.setFromCamera(pointer, camera);
+  const distance = -camera.position.z / raycaster.ray.direction.z;
+  planePoint.copy(raycaster.ray.direction).multiplyScalar(distance).add(raycaster.ray.origin);
+  worldPointer.copy(planePoint);
+  worldPointer.x += matchFocus * maxX * 0.16;
+  worldPointer.y += 1.2 - scrollProgress * 1.4;
+  worldPointer.z = 0;
+}
+
+function updatePhysics(delta, elapsed) {
+  if (!positions || !velocities) {
     return;
   }
 
-  const time = now / 1000;
-  const delta = Math.min(clock.getDelta(), 0.05);
   const reduced = prefersReducedMotion.matches;
+  const gravity = reduced ? 0.04 : 0.12;
+  const friction = reduced ? 0.992 : 0.986;
+  const bounce = 0.78;
+  const centerRadius = lowDetail ? 2.2 : 2.5;
 
-  pointer.lerp(targetPointer, reduced ? 0.04 : 0.075);
-  matchFocus += (matchFocusTarget - matchFocus) * (reduced ? 0.08 : 0.045);
+  for (let index = 0; index < count; index += 1) {
+    const base = index * 3;
+    const radius = sizes[index];
+    const dx = positions[base] - worldPointer.x;
+    const dy = positions[base + 1] - worldPointer.y;
+    const dz = positions[base + 2] - worldPointer.z;
+    const distance = Math.max(0.001, Math.hypot(dx, dy, dz));
+    const influence = Math.max(0, centerRadius + radius - distance);
 
-  rootGroup.rotation.y = pointer.x * 0.18 + matchFocus * 0.24;
-  rootGroup.rotation.x = pointer.y * 0.1 - scrollProgress * 0.08 + matchFocus * 0.08;
-  rootGroup.position.y = (viewport.width < 640 ? -0.2 : 0.02) + matchFocus * 0.08;
-  rootGroup.position.x = (viewport.width < 640 ? 0.34 : 0.62) - matchFocus * 0.18;
-  rootGroup.scale.setScalar(1 + matchFocus * 0.12);
+    velocities[base + 1] -= delta * gravity * radius;
+    velocities[base] += Math.sin(elapsed * 0.54 + index * 0.31) * delta * 0.008;
+    velocities[base + 2] += Math.cos(elapsed * 0.42 + index * 0.23) * delta * 0.006;
 
-  if (!reduced) {
-    heroMesh.rotation.x += delta * 0.18;
-    heroMesh.rotation.y += delta * 0.28;
-    ringMesh.rotation.z -= delta * 0.18;
-    companionMesh.rotation.y -= delta * 0.22;
-    companionMesh.position.y = -0.76 + Math.sin(time * 0.84) * 0.16;
-    particles.rotation.y += delta * 0.025;
+    if (influence > 0) {
+      const push = influence * (reduced ? 0.34 : 0.52);
+      velocities[base] += (dx / distance) * push;
+      velocities[base + 1] += (dy / distance) * push;
+      velocities[base + 2] += (dz / distance) * push * 0.6;
+    }
+
+    velocities[base] *= friction;
+    velocities[base + 1] *= friction;
+    velocities[base + 2] *= friction;
+    const speed = Math.hypot(velocities[base], velocities[base + 1], velocities[base + 2]);
+    const maxSpeed = reduced ? 0.08 : 0.16;
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / speed;
+      velocities[base] *= scale;
+      velocities[base + 1] *= scale;
+      velocities[base + 2] *= scale;
+    }
+
+    positions[base] += velocities[base];
+    positions[base + 1] += velocities[base + 1];
+    positions[base + 2] += velocities[base + 2];
+
+    if (Math.abs(positions[base]) + radius > maxX) {
+      positions[base] = Math.sign(positions[base]) * (maxX - radius);
+      velocities[base] *= -bounce;
+    }
+    if (positions[base + 1] - radius < -maxY) {
+      positions[base + 1] = -maxY + radius;
+      velocities[base + 1] *= -bounce;
+    }
+    if (positions[base + 1] + radius > maxY) {
+      positions[base + 1] = maxY - radius;
+      velocities[base + 1] *= -bounce * 0.72;
+    }
+    if (Math.abs(positions[base + 2]) + radius > maxZ) {
+      positions[base + 2] = Math.sign(positions[base + 2]) * (maxZ - radius);
+      velocities[base + 2] *= -bounce;
+    }
   }
 
-  camera.position.x = pointer.x * 0.34;
-  camera.position.y = 0.25 + pointer.y * 0.18;
-  camera.lookAt(0.25, 0.05, 0);
+  resolveBallCollisions();
+}
 
+function resolveBallCollisions() {
+  const passes = lowDetail ? 1 : 2;
+  for (let pass = 0; pass < passes; pass += 1) {
+    for (let index = 0; index < count; index += 1) {
+      const base = index * 3;
+      const radius = sizes[index];
+      for (let other = index + 1; other < count; other += 1) {
+        const otherBase = other * 3;
+        const otherRadius = sizes[other];
+        const dx = positions[otherBase] - positions[base];
+        const dy = positions[otherBase + 1] - positions[base + 1];
+        const dz = positions[otherBase + 2] - positions[base + 2];
+        const distance = Math.max(0.001, Math.hypot(dx, dy, dz));
+        const minDistance = (radius + otherRadius) * 0.9;
+        if (distance >= minDistance) {
+          continue;
+        }
+
+        const overlap = (minDistance - distance) * 0.5;
+        const nx = dx / distance;
+        const ny = dy / distance;
+        const nz = dz / distance;
+        positions[base] -= nx * overlap;
+        positions[base + 1] -= ny * overlap;
+        positions[base + 2] -= nz * overlap;
+        positions[otherBase] += nx * overlap;
+        positions[otherBase + 1] += ny * overlap;
+        positions[otherBase + 2] += nz * overlap;
+        velocities[base] -= nx * overlap * 0.05;
+        velocities[base + 1] -= ny * overlap * 0.05;
+        velocities[base + 2] -= nz * overlap * 0.05;
+        velocities[otherBase] += nx * overlap * 0.05;
+        velocities[otherBase + 1] += ny * overlap * 0.05;
+        velocities[otherBase + 2] += nz * overlap * 0.05;
+      }
+    }
+  }
+}
+
+function updateBallMatrices() {
+  if (!mesh) {
+    return;
+  }
+
+  for (let index = 0; index < count; index += 1) {
+    const base = index * 3;
+    dummy.position.set(positions[base], positions[base + 1], positions[base + 2]);
+    dummy.scale.setScalar(sizes[index]);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(index, dummy.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+}
+
+function renderFrame(now) {
+  if (!active || !renderer || !scene || !camera || !mesh) {
+    return;
+  }
+
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const elapsed = now / 1000;
+  matchFocus += (matchFocusTarget - matchFocus) * (prefersReducedMotion.matches ? 0.08 : 0.045);
+  updateWorldPointer();
+  updatePhysics(delta, elapsed);
+  updateBallMatrices();
+
+  mesh.rotation.y = pointer.x * 0.07 + matchFocus * 0.1;
+  mesh.rotation.x = -scrollProgress * 0.06 + pointer.y * 0.04;
+  pointerLight.position.lerp(worldPointer.clone().add(new Vector3(0, 2.4, 5.5)), 0.16);
+  camera.position.x += (pointer.x * 0.32 - camera.position.x) * 0.04;
+  camera.position.y += (1.8 + pointer.y * 0.2 - camera.position.y) * 0.04;
+  camera.lookAt(matchFocus * 0.5, 0, 0);
   renderer.render(scene, camera);
 }
 
@@ -590,8 +666,10 @@ window.CampusSplineScene = {
   },
   inspect() {
     return {
+      mode: "ballpit",
       active,
       hasRenderer: Boolean(renderer),
+      ballCount: count,
       canvasPixels: renderer ? renderer.domElement.width * renderer.domElement.height : 0,
       lowDetail,
       pixelRatio: renderer?.getPixelRatio?.() || 0,

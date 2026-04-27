@@ -1,0 +1,22 @@
+{
+  "name": "campus-match-public",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod",
+    "sync:db": "node scripts/sync-local-db.mjs",
+    "sync:mysql": "node scripts/sync-mysql.mjs",
+    "standalone": "node server/index.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.11",
+    "@netlify/neon": "^0.1.2",
+    "mysql2": "^3.22.2",
+    "nodemailer": "^8.0.5"
+  },
+  "devDependencies": {
+    "netlify-cli": "^25.2.0"
+  }
+}

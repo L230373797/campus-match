@@ -1,0 +1,60 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: campus-match-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      MYSQL_HOST: "mysql"
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      CAMPUS_ADMIN_EMAILS: "${CAMPUS_ADMIN_EMAILS}"
+      CAMPUS_ADMIN_EMAIL: "${CAMPUS_ADMIN_EMAIL}"
+      CAMPUS_ADMIN_PASSWORD: "${CAMPUS_ADMIN_PASSWORD}"
+      EMAIL_VERIFICATION_DEBUG: "${EMAIL_VERIFICATION_DEBUG:-false}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT:-465}"
+      SMTP_SECURE: "${SMTP_SECURE:-true}"
+      SMTP_FROM: "${SMTP_FROM}"
+      QQ_SMTP_USER: "${QQ_SMTP_USER}"
+      QQ_SMTP_AUTH_CODE: "${QQ_SMTP_AUTH_CODE}"
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    volumes:
+      - campus-match-data:/app/local-data
+
+  mysql:
+    image: mysql:8.0
+    container_name: campus-match-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  campus-match-data:
+  mysql-data:

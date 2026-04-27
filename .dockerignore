@@ -1,0 +1,12 @@
+.git
+.netlify
+.playwright-cli
+node_modules
+local-data
+standalone.log
+standalone.err.log
+netlify-dev.*.log
+.env
+.env.local
+.env.*
+!.env.example

@@ -1,0 +1,16 @@
+node_modules/
+.netlify/
+.playwright-cli/
+.env
+.env.*
+!.env.example
+!deploy/.env.server.example
+netlify-dev.*.log
+netlify-dev.pid
+standalone*.log
+playwright-test-email.txt
+deno.lock
+local-data/
+deploy/generated/
+output/
+*.zip

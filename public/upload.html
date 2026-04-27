@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>校园卡上传 - 校园匹配</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: #f8fbff;
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% 14%, rgba(130, 178, 255, 0.28), transparent 28%),
+          radial-gradient(circle at 78% 16%, rgba(255, 160, 201, 0.22), transparent 24%),
+          linear-gradient(180deg, #07111f, #0c1727 48%, #07101b);
+      }
+
+      main {
+        width: min(960px, calc(100% - 32px));
+        min-height: 100vh;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(300px, 1.05fr);
+        gap: 28px;
+        align-items: center;
+        padding: 32px 0;
+      }
+
+      .headline h1 {
+        margin: 0;
+        font-size: clamp(2.4rem, 7vw, 5rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .headline p {
+        margin: 18px 0 0;
+        max-width: 420px;
+        color: rgba(248, 251, 255, 0.72);
+        font-size: 1rem;
+        line-height: 1.8;
+      }
+
+      .panel {
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        padding: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+        backdrop-filter: blur(22px);
+      }
+
+      .status {
+        min-height: 24px;
+        margin-bottom: 16px;
+        color: rgba(248, 251, 255, 0.74);
+        font-size: 0.95rem;
+      }
+
+      .preview {
+        display: grid;
+        place-items: center;
+        width: 100%;
+        aspect-ratio: 1.6;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .preview img {
+        display: none;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .preview span {
+        color: rgba(248, 251, 255, 0.54);
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      input[type="file"] {
+        min-width: 0;
+        padding: 12px;
+        color: rgba(248, 251, 255, 0.82);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      button,
+      a.button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 20px;
+        color: #07111f;
+        font-weight: 700;
+        text-decoration: none;
+        background: linear-gradient(180deg, #ffffff, #d7e5ff 62%, #ffd8e5);
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .result {
+        display: none;
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 8px;
+        color: rgba(248, 251, 255, 0.82);
+        background: rgba(255, 255, 255, 0.1);
+        word-break: break-all;
+      }
+
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      a.secondary {
+        color: rgba(248, 251, 255, 0.78);
+        text-decoration: none;
+      }
+
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+          align-content: center;
+        }
+
+        .controls {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="headline">
+        <h1>校园卡上传</h1>
+        <p>上传校园卡后，我们会尽快完成认证。通过后，你的资料会更容易获得同校同学的信任。</p>
+        <div class="nav">
+          <a class="button" href="/">返回首页</a>
+          <a class="secondary" href="/profile">查看资料</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="status" id="status">正在检查登录状态...</div>
+        <div class="preview">
+          <img id="preview" alt="校园卡预览" />
+          <span id="empty">选择 JPG、PNG 或 WebP 图片</span>
+        </div>
+        <div class="controls">
+          <input id="file" type="file" accept="image/jpeg,image/png,image/webp" />
+          <button id="submit" type="button" disabled>上传</button>
+        </div>
+        <div class="result" id="result"></div>
+      </section>
+    </main>
+
+    <script>
+      const token = localStorage.getItem("token");
+      const fileInput = document.querySelector("#file");
+      const preview = document.querySelector("#preview");
+      const empty = document.querySelector("#empty");
+      const submit = document.querySelector("#submit");
+      const statusBox = document.querySelector("#status");
+      const result = document.querySelector("#result");
+      let selectedData = "";
+      let selectedType = "";
+
+      function setStatus(message) {
+        statusBox.textContent = message;
+      }
+
+      async function request(path, options = {}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            ...(options.headers || {}),
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || "请求失败");
+        }
+        return payload;
+      }
+
+      async function init() {
+        if (!token) {
+          setStatus("请先登录账号，再上传校园卡。");
+          return;
+        }
+
+        try {
+          const payload = await request("/api/auth/me");
+          setStatus(`${payload.data.user.nickname || payload.data.user.email}，现在可以上传校园卡了`);
+        } catch (error) {
+          setStatus(error.message);
+        }
+      }
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        selectedData = "";
+        selectedType = "";
+        submit.disabled = true;
+        result.style.display = "none";
+
+        if (!file) {
+          preview.style.display = "none";
+          empty.style.display = "block";
+          return;
+        }
+
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+          setStatus("只支持 JPG、PNG 或 WebP 图片");
+          return;
+        }
+
+        if (file.size > 3 * 1024 * 1024) {
+          setStatus("图片不能超过 3MB");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          selectedData = String(reader.result || "");
+          selectedType = file.type;
+          preview.src = selectedData;
+          preview.style.display = "block";
+          empty.style.display = "none";
+          submit.disabled = !token;
+          setStatus(file.name);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      submit.addEventListener("click", async () => {
+        if (!selectedData || !selectedType) {
+          return;
+        }
+
+        submit.disabled = true;
+        setStatus("正在上传，请稍等...");
+
+        try {
+          const payload = await request("/api/uploads/campus-card", {
+            method: "POST",
+            body: JSON.stringify({
+              contentType: selectedType,
+              data: selectedData,
+            }),
+          });
+          result.style.display = "block";
+          result.textContent = "已收到你的校园卡，我们会尽快完成认证。";
+          setStatus(payload.message || "校园卡已上传，正在等待认证。");
+        } catch (error) {
+          setStatus(error.message);
+        } finally {
+          submit.disabled = false;
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>

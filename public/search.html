@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>搜索同学 - 校园匹配</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: #f8fbff;
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(129, 173, 255, 0.22), transparent 24%),
+          radial-gradient(circle at 86% 12%, rgba(255, 183, 213, 0.18), transparent 22%),
+          linear-gradient(180deg, #070d17, #0b1220 44%, #0a111c);
+      }
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2.2rem, 6vw, 4.8rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+      .muted { color: rgba(248, 251, 255, 0.68); line-height: 1.7; }
+      a, button {
+        border: 0;
+        border-radius: 999px;
+        min-height: 46px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #07111f;
+        font-weight: 700;
+        text-decoration: none;
+        background: linear-gradient(180deg, #fff, #d7e5ff 62%, #ffd8e5);
+        cursor: pointer;
+      }
+      .toolbar, .card {
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(22px);
+      }
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(120px, 1fr)) auto;
+        gap: 12px;
+        padding: 14px;
+        margin-bottom: 18px;
+      }
+      input, select {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        padding: 0 14px;
+        color: #f8fbff;
+        background: rgba(255, 255, 255, 0.09);
+        outline: none;
+      }
+      option { color: #111827; }
+      .status { min-height: 24px; margin: 10px 2px 18px; color: rgba(248, 251, 255, 0.72); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .card { padding: 18px; }
+      .topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+        margin-bottom: 12px;
+      }
+      h2 { margin: 0; font-size: 1.2rem; }
+      .badge {
+        flex-shrink: 0;
+        border-radius: 999px;
+        padding: 4px 10px;
+        color: #dff7ff;
+        background: rgba(89, 177, 255, 0.18);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+      .tag {
+        border-radius: 999px;
+        padding: 5px 10px;
+        color: rgba(248, 251, 255, 0.78);
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 12px;
+      }
+      .card p { margin: 0; }
+      .card button { width: 100%; margin-top: 16px; }
+      @media (max-width: 900px) {
+        .toolbar, .grid { grid-template-columns: 1fr; }
+        header { align-items: start; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+      <div>
+        <h1>搜索同学</h1>
+        <p class="muted">按兴趣、专业、学院或常去的地方，找更合拍的同校同学。</p>
+      </div>
+        <a href="/">返回首页</a>
+      </header>
+
+      <section class="toolbar">
+        <input id="q" placeholder="输入关键词，比如 夜跑、法学、图书馆" />
+        <select id="school">
+          <option value="">全部学校</option>
+          <option>北京大学</option>
+          <option>清华大学</option>
+          <option>复旦大学</option>
+          <option>上海交通大学</option>
+          <option>浙江大学</option>
+        </select>
+        <input id="major" placeholder="专业" />
+        <select id="grade">
+          <option value="">全部年级</option>
+          <option>大一</option>
+          <option>大二</option>
+          <option>大三</option>
+          <option>大四</option>
+          <option>研一</option>
+          <option>研二</option>
+        </select>
+        <button id="search" type="button">搜索</button>
+      </section>
+
+      <div id="status" class="status">正在检查登录状态...</div>
+      <section id="results" class="grid"></section>
+    </main>
+
+    <script>
+      const token = localStorage.getItem("token");
+      const statusBox = document.querySelector("#status");
+      const results = document.querySelector("#results");
+
+      function setStatus(message) {
+        statusBox.textContent = message;
+      }
+
+      async function request(path, options = {}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            ...(options.headers || {}),
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || "请求失败");
+        }
+        return payload;
+      }
+
+      function render(users) {
+        results.innerHTML = "";
+        if (!users.length) {
+          setStatus("暂时没找到合适的同学，换个关键词试试。");
+          return;
+        }
+
+        setStatus(`找到 ${users.length} 位同学`);
+        users.forEach((user) => {
+          const card = document.createElement("article");
+          card.className = "card";
+          const tags = [...(user.sceneTags || []), ...(user.matchModes || [])].slice(0, 5);
+          card.innerHTML = `
+            <div class="topline">
+              <div>
+                <h2>${escapeHtml(user.nickname || "未命名用户")}</h2>
+                <p class="muted">${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · "))}</p>
+              </div>
+              <span class="badge">${user.isVerified ? "已认证" : "待认证"}</span>
+            </div>
+                <p class="muted">${escapeHtml(user.bio || "这个同学还没写简介，先从标签了解一下吧。")}</p>
+            <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
+            <button type="button" data-id="${escapeHtml(user.id || user._id)}">喜欢</button>
+          `;
+          card.querySelector("button").addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            button.textContent = "正在送出喜欢...";
+            try {
+              await request(`/api/matches/like/${button.dataset.id}`, { method: "POST" });
+              button.textContent = "已表达喜欢";
+            } catch (error) {
+              button.textContent = error.message;
+              setTimeout(() => {
+                button.disabled = false;
+                button.textContent = "喜欢";
+              }, 1800);
+            }
+          });
+          results.appendChild(card);
+        });
+      }
+
+      async function runSearch() {
+        if (!token) {
+          setStatus("请先登录账号，再搜索同学。");
+          return;
+        }
+
+        const params = new URLSearchParams({
+          q: document.querySelector("#q").value.trim(),
+          school: document.querySelector("#school").value,
+          major: document.querySelector("#major").value.trim(),
+          grade: document.querySelector("#grade").value,
+          limit: "24",
+        });
+
+        setStatus("正在帮你找同学...");
+        try {
+          const payload = await request(`/api/users/search?${params}`);
+          render(payload.data.users || []);
+        } catch (error) {
+          setStatus(error.message);
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value || "").replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        }[char]));
+      }
+
+      document.querySelector("#search").addEventListener("click", runSearch);
+      document.querySelectorAll("input, select").forEach((node) => {
+        node.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            runSearch();
+          }
+        });
+        node.addEventListener("change", () => {
+          if (node.tagName === "SELECT") {
+            runSearch();
+          }
+        });
+      });
+
+      runSearch();
+    </script>
+  </body>
+</html>

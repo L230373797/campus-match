@@ -1,0 +1,1564 @@
+import { getDeployStore, getStore } from "@netlify/blobs";
+import { neon } from "@netlify/neon";
+import crypto from "node:crypto";
+import nodemailer from "nodemailer";
+import { createDataStore } from "./_shared/mysql-store.mjs";
+
+const STORE_NAME = "campus-match-data";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const EMAIL_CODE_TTL_MS = 1000 * 60 * 10;
+const EMAIL_CODE_RESEND_MS = 1000 * 60;
+const MEMBERSHIP_PLAN_LIBRARY = {
+  free: {
+    id: "free",
+    name: "免费用户",
+    description: "先用基础功能体验真实校园连接。",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    features: [
+      "每日 12 条推荐",
+      "基础同校匹配",
+      "校园认证与资料完善",
+    ],
+    limits: {
+      recommendationWindow: 12,
+      advancedFilters: false,
+      spotlight: false,
+    },
+  },
+  plus: {
+    id: "plus",
+    name: "校园会员",
+    description: "适合开始认真使用校园匹配的活跃用户。",
+    monthlyPrice: 19,
+    yearlyPrice: 168,
+    features: [
+      "每日 30 条推荐",
+      "更高资料曝光",
+      "高级筛选",
+      "优先出现在同校推荐里",
+    ],
+    limits: {
+      recommendationWindow: 30,
+      advancedFilters: true,
+      spotlight: false,
+    },
+  },
+  premium: {
+    id: "premium",
+    name: "高级会员",
+    description: "适合希望获得最高曝光和更快撮合反馈的用户。",
+    monthlyPrice: 39,
+    yearlyPrice: 328,
+    features: [
+      "推荐浏览近乎无限",
+      "超级曝光位",
+      "高级筛选",
+      "认证审核优先",
+      "专属会员身份标识",
+    ],
+    limits: {
+      recommendationWindow: 99,
+      advancedFilters: true,
+      spotlight: true,
+    },
+  },
+};
+const MEMBERSHIP_PLAN_ORDER = ["free", "plus", "premium"];
+let sqlClient;
+let dbReady = false;
+
+export default async (req, context) => {
+  const store = await getDataStore(context);
+
+  try {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(/^\/api/, "") || "/";
+    const segments = path.split("/").filter(Boolean);
+
+    if (req.method === "GET" && path === "/health") {
+      return json({ success: true, data: { status: "ok" } });
+    }
+
+    if (segments[0] === "auth") {
+      return await handleAuth(req, store, segments);
+    }
+
+    if (segments[0] === "admin") {
+      return await handleAdmin(req, store, segments);
+    }
+
+    if (segments[0] === "membership") {
+      return await handleMembership(req, store, segments);
+    }
+
+    if (segments[0] === "users") {
+      return await handleUsers(req, store, segments, url);
+    }
+
+    if (segments[0] === "uploads") {
+      return await handleUploads(req, store, segments);
+    }
+
+    if (segments[0] === "matches") {
+      return await handleMatches(req, store, segments);
+    }
+
+    if (segments[0] === "messages") {
+      return await handleMessages(req, store, segments, url);
+    }
+
+    return json({ success: false, message: "接口不存在" }, 404);
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    const message = status === 500 ? "服务器暂时不可用" : error.message;
+    if (status === 500) {
+      console.error(error);
+    }
+    return json({ success: false, message }, status);
+  }
+};
+
+export const config = {
+  path: "/api/*",
+};
+
+async function getDataStore(context) {
+  const blobStore = context?.blobStore || (
+    context?.deploy?.context === "production"
+      ? getStore(STORE_NAME, { consistency: "strong" })
+      : getDeployStore(STORE_NAME)
+  );
+
+  return createDataStore({ blobStore, env: getEnv });
+}
+
+async function handleAuth(req, store, segments) {
+  if (segments[1] === "send-code" && req.method === "POST") {
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+
+    if (!isAllowedRegistrationEmail(email)) {
+      throw httpError("请使用 QQ 邮箱注册，例如 123456@qq.com", 400);
+    }
+
+    const existingUser = await findUserByEmail(store, email);
+    if (existingUser) {
+      throw httpError("这个邮箱已经注册过了", 409);
+    }
+
+    const verification = await createEmailVerification(store, email);
+    await sendVerificationEmail(email, verification.code);
+
+    const debugCode = getEnv("EMAIL_VERIFICATION_DEBUG") === "true" ? verification.code : undefined;
+    return json({
+      success: true,
+      message: "验证码已发送，请查收 QQ 邮箱",
+      data: { expiresIn: EMAIL_CODE_TTL_MS / 1000, debugCode },
+    });
+  }
+
+  if (segments[1] === "register" && req.method === "POST") {
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+    const emailCode = text(body.emailCode || body.code);
+
+    if (!email || !password) {
+      throw httpError("请填写邮箱和密码", 400);
+    }
+
+    if (!isAllowedRegistrationEmail(email)) {
+      throw httpError("请使用 QQ 邮箱注册，例如 123456@qq.com", 400);
+    }
+
+    if (password.length < 6) {
+      throw httpError("密码至少需要 6 位", 400);
+    }
+
+    const existingUser = await findUserByEmail(store, email);
+    if (existingUser) {
+      throw httpError("这个邮箱已经注册过了", 409);
+    }
+
+    if (isEmailVerificationActive()) {
+      await verifyEmailCode(store, email, emailCode);
+    }
+
+    const now = new Date().toISOString();
+    const passwordRecord = hashPassword(password);
+    const school = text(body.school) || "未设置学校";
+    const user = {
+      id: makeId("user"),
+      email,
+      studentId: text(body.studentId),
+      nickname: text(body.nickname) || email.split("@")[0],
+      school,
+      grade: text(body.grade),
+      major: text(body.major),
+      college: text(body.college),
+      campusZone: text(body.campusZone),
+      dormArea: text(body.dormArea),
+      bio: text(body.bio) || "刚加入校园匹配，期待遇见同校同频的人。",
+      tags: arrayOfText(body.tags),
+      sceneTags: arrayOfText(body.sceneTags),
+      matchModes: arrayOfText(body.matchModes),
+      schedule: text(body.schedule),
+      idealScene: text(body.idealScene),
+      relationshipGoal: text(body.relationshipGoal) || "先低压力认识彼此",
+      allowAnonymousMatch: body.allowAnonymousMatch !== false,
+      allowOfflineEvents: body.allowOfflineEvents !== false,
+      campusCardImage: text(body.campusCardImage),
+      avatar: text(body.avatar),
+      isVerified: false,
+      verificationStatus: body.campusCardImage ? "pending" : "unverified",
+      verificationBadge: body.campusCardImage ? `${school} 认证审核中` : "",
+      verificationRequestedAt: body.campusCardImage ? now : null,
+      verificationNotes: "",
+      membership: createDefaultMembership(now),
+      stats: { matches: 0, likes: 0, views: 0 },
+      skippedIds: [],
+      createdAt: now,
+      updatedAt: now,
+      ...passwordRecord,
+    };
+
+    await saveUser(store, user);
+    const token = await createSession(store, user.id);
+    return json({ success: true, message: "注册成功", data: { token, user: publicUser(user) } }, 201);
+  }
+
+  if (segments[1] === "login" && req.method === "POST") {
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+    const user = await findUserByEmail(store, email);
+
+    if (!user || !verifyPassword(password, user)) {
+      throw httpError("邮箱或密码不正确", 401);
+    }
+
+    const token = await createSession(store, user.id);
+    return json({ success: true, message: "登录成功", data: { token, user: publicUser(user) } });
+  }
+
+  if (segments[1] === "me" && req.method === "GET") {
+    const user = await requireUser(req, store);
+    return json({ success: true, data: { user: publicUser(user) } });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleAdmin(req, store, segments) {
+  const user = await requireUser(req, store);
+  requireAdmin(user);
+
+  if (segments[1] === "export" && req.method === "GET") {
+    const [users, matches, messages] = await Promise.all([
+      listUsers(store),
+      listMatches(store),
+      listAllMessages(store),
+    ]);
+
+    return json({
+      success: true,
+      data: {
+        exportedAt: new Date().toISOString(),
+        counts: {
+          users: users.length,
+          matches: matches.length,
+          messages: messages.length,
+        },
+        users: users.map(adminExportUser),
+        matches,
+        messages,
+      },
+    });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleMembership(req, store, segments) {
+  const user = await requireUser(req, store);
+
+  if (segments.length === 1 && req.method === "GET") {
+    return json({
+      success: true,
+      data: buildMembershipPayload(user),
+    });
+  }
+
+  if (segments[1] === "subscribe" && req.method === "POST") {
+    const body = await readBody(req);
+    const planId = text(body.planId || body.type).toLowerCase();
+    const billingCycle = text(body.billingCycle).toLowerCase() === "yearly" ? "yearly" : "monthly";
+
+    if (!MEMBERSHIP_PLAN_LIBRARY[planId]) {
+      throw httpError("会员方案不存在", 400);
+    }
+
+    const updatedUser = {
+      ...user,
+      membership: activateMembershipPlan(user.membership, planId, billingCycle),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: planId === "free" ? "已切换为免费用户" : `已开通${updatedUser.membership.title}`,
+      data: {
+        ...buildMembershipPayload(updatedUser),
+        user: publicUser(updatedUser),
+      },
+    });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleUsers(req, store, segments, url) {
+  const user = await requireUser(req, store);
+
+  if (segments[1] === "profile" && req.method === "GET") {
+    return json({ success: true, data: { user: publicUser(user) } });
+  }
+
+  if (segments[1] === "profile" && req.method === "PUT") {
+    const body = await readBody(req);
+    const allowedFields = [
+      "nickname",
+      "bio",
+      "tags",
+      "sceneTags",
+      "grade",
+      "major",
+      "college",
+      "campusCardImage",
+      "dormArea",
+      "campusZone",
+      "schedule",
+      "idealScene",
+      "relationshipGoal",
+      "matchModes",
+      "allowAnonymousMatch",
+      "allowOfflineEvents",
+      "avatar",
+    ];
+
+    const updatedUser = { ...user };
+    for (const field of allowedFields) {
+      if (Object.hasOwn(body, field)) {
+        updatedUser[field] = Array.isArray(body[field]) ? arrayOfText(body[field]) : body[field];
+      }
+    }
+
+    updatedUser.updatedAt = new Date().toISOString();
+    await saveUser(store, updatedUser);
+    return json({ success: true, message: "资料更新成功", data: { user: publicUser(updatedUser) } });
+  }
+
+  if (segments[1] === "verification" && segments[2] === "request" && req.method === "POST") {
+    if (!user.campusCardImage) {
+      throw httpError("请先填写校园卡图片地址，再提交认证申请", 400);
+    }
+
+    const updatedUser = {
+      ...user,
+      verificationStatus: "pending",
+      verificationBadge: `${user.school || "校园"} 认证审核中`,
+      verificationRequestedAt: new Date().toISOString(),
+      verificationNotes: "",
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+    return json({ success: true, message: "认证申请已提交", data: { user: publicUser(updatedUser) } });
+  }
+
+  if (segments[1] === "verification" && segments[2] === "pending" && req.method === "GET") {
+    requireAdmin(user);
+
+    const users = await listUsers(store);
+    const pendingUsers = users
+      .filter((item) => item.verificationStatus === "pending")
+      .sort((a, b) => String(b.verificationRequestedAt || "").localeCompare(String(a.verificationRequestedAt || "")))
+      .map(publicUser);
+
+    return json({ success: true, data: { users: pendingUsers } });
+  }
+
+  if (segments[1] === "verification" && segments[2] === "review" && req.method === "POST") {
+    requireAdmin(user);
+
+    const body = await readBody(req);
+    const targetUser = await getUser(store, text(body.userId));
+    if (!targetUser) {
+      throw httpError("用户不存在", 404);
+    }
+
+    const approved = body.action === "approve";
+    const updatedUser = {
+      ...targetUser,
+      isVerified: approved,
+      verificationStatus: approved ? "approved" : "rejected",
+      verificationBadge: approved ? `${targetUser.school || "校园"} 认证` : "",
+      verificationNotes: text(body.notes),
+      verificationReviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: approved ? "认证已通过" : "认证已驳回",
+      data: { user: publicUser(updatedUser) },
+    });
+  }
+
+  if (segments[1] === "recommendations" && req.method === "GET") {
+    const membership = normalizeMembershipRecord(user.membership, user.createdAt);
+    const recommendationWindow = membership.limits?.recommendationWindow || 12;
+    const limit = clampNumber(
+      url.searchParams.get("limit"),
+      1,
+      recommendationWindow,
+      Math.min(10, recommendationWindow),
+    );
+    const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
+    const skipped = new Set(user.skippedIds || []);
+    const allUsers = (await listUsers(store))
+      .map(publicUser)
+      .filter((item) => item.id !== user.id && !skipped.has(item.id));
+    const recommendations = [...allUsers, ...seedProfiles().filter((item) => !skipped.has(item.id))];
+    const start = (page - 1) * limit;
+
+    return json({
+      success: true,
+      data: {
+        users: recommendations.slice(start, start + limit),
+        pagination: { page, limit, total: recommendations.length },
+      },
+    });
+  }
+
+  if (segments[1] === "search" && req.method === "GET") {
+    const result = await searchUsers(store, user, url);
+    return json({ success: true, data: result });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleUploads(req, store, segments) {
+  if (req.method === "GET" && segments.length >= 2) {
+    const key = segments.slice(1).join("/");
+    if (!key.startsWith("campus-cards/")) {
+      throw httpError("文件不存在", 404);
+    }
+
+    const image = await store.get(`uploads/${key}`, { type: "arrayBuffer" });
+    if (!image) {
+      throw httpError("文件不存在", 404);
+    }
+
+    return new Response(image, {
+      headers: {
+        "Cache-Control": "private, max-age=300",
+        "Content-Type": contentTypeFromKey(key),
+      },
+    });
+  }
+
+  if (segments[1] === "campus-card" && req.method === "POST") {
+    const user = await requireUser(req, store);
+    const body = await readBody(req);
+    const contentType = text(body.contentType).toLowerCase();
+    const data = text(body.data);
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+      throw httpError("只支持 JPG、PNG 或 WebP 图片", 400);
+    }
+
+    const base64 = data.includes(",") ? data.split(",").pop() : data;
+    const buffer = Buffer.from(base64, "base64");
+    if (!buffer.length) {
+      throw httpError("图片内容为空", 400);
+    }
+
+    if (buffer.length > 3 * 1024 * 1024) {
+      throw httpError("图片不能超过 3MB", 400);
+    }
+
+    const extension = extensionFromContentType(contentType);
+    const fileId = makeId("card");
+    const key = `uploads/campus-cards/${user.id}/${fileId}.${extension}`;
+    await store.set(key, buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+
+    const campusCardImage = `/api/uploads/campus-cards/${user.id}/${fileId}.${extension}`;
+    const updatedUser = {
+      ...user,
+      campusCardImage,
+      verificationStatus: "pending",
+      verificationBadge: `${user.school || "校园"} 认证审核中`,
+      verificationRequestedAt: new Date().toISOString(),
+      verificationNotes: "",
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "校园卡已上传，认证申请已提交",
+      data: { imageUrl: campusCardImage, user: publicUser(updatedUser) },
+    }, 201);
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleMatches(req, store, segments) {
+  const user = await requireUser(req, store);
+
+  if (segments.length === 1 && req.method === "GET") {
+    const matches = await listMatchesForUser(store, user.id);
+    return json({ success: true, data: { matches } });
+  }
+
+  if (segments[1] === "like" && segments[2] && req.method === "POST") {
+    const target = await findPublicProfile(store, segments[2]);
+    if (!target) {
+      throw httpError("用户不存在", 404);
+    }
+
+    const match = await upsertMatch(store, user, target);
+    return json({
+      success: true,
+      data: {
+        isNewMatch: true,
+        message: "匹配成功！",
+        match,
+      },
+    });
+  }
+
+  if (segments[1] === "skip" && segments[2] && req.method === "POST") {
+    const skippedIds = new Set(user.skippedIds || []);
+    skippedIds.add(segments[2]);
+    await saveUser(store, { ...user, skippedIds: [...skippedIds], updatedAt: new Date().toISOString() });
+    return json({ success: true, message: "已跳过" });
+  }
+
+  if (segments[1] && segments[2] === "reveal" && req.method === "POST") {
+    const match = await getMatch(store, segments[1]);
+    if (!match || !match.participants.includes(user.id)) {
+      throw httpError("匹配不存在", 404);
+    }
+
+    const requests = new Set(match.revealRequests || []);
+    requests.add(user.id);
+    const bothRevealed = match.participants.every((participant) => requests.has(participant));
+    const updatedMatch = {
+      ...match,
+      identityRevealed: bothRevealed,
+      revealRequests: [...requests],
+      updatedAt: new Date().toISOString(),
+    };
+    await saveMatch(store, updatedMatch);
+
+    return json({
+      success: true,
+      data: {
+        bothRevealed,
+        message: bothRevealed ? "双方已确认，可以互相查看真实身份" : "申请已发送，等待对方确认",
+      },
+    });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleMessages(req, store, segments, url) {
+  const user = await requireUser(req, store);
+  const matchId = segments[1];
+
+  if (!matchId) {
+    return json({ success: false, message: "接口不存在" }, 404);
+  }
+
+  const match = await getMatch(store, matchId);
+  if (!match || !match.participants.includes(user.id)) {
+    throw httpError("匹配不存在", 404);
+  }
+
+  if (req.method === "GET") {
+    const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
+    const limit = clampNumber(url.searchParams.get("limit"), 1, 100, 20);
+    const messages = await getMessages(store, matchId);
+    const start = Math.max(messages.length - page * limit, 0);
+    const end = messages.length - (page - 1) * limit;
+
+    return json({
+      success: true,
+      data: {
+        messages: messages.slice(start, end),
+        pagination: { page, limit, total: messages.length },
+      },
+    });
+  }
+
+  if (req.method === "POST") {
+    const body = await readBody(req);
+    const content = text(body.content);
+    if (!content) {
+      throw httpError("消息内容不能为空", 400);
+    }
+
+    const now = new Date().toISOString();
+    const messageId = makeId("msg");
+    const message = {
+      _id: messageId,
+      id: messageId,
+      match: matchId,
+      sender: publicUser(user),
+      content,
+      type: text(body.type) || "text",
+      createdAt: now,
+    };
+    const messages = await getMessages(store, matchId);
+    messages.push(message);
+    await store.setJSON(`messages/${matchId}`, messages);
+    await saveMatch(store, { ...match, lastMessageAt: now, updatedAt: now });
+
+    return json({ success: true, data: { message } }, 201);
+  }
+
+  if (req.method === "DELETE") {
+    await store.delete(`messages/${matchId}`);
+    return json({ success: true, message: "聊天记录已清空" });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function upsertMatch(store, user, target) {
+  const pairKey = [user.id, target.id].sort().join("__");
+  const existing = await store.get(`match-pairs/${pairKey}`, { type: "json" });
+  if (existing?.matchId) {
+    const match = await getMatch(store, existing.matchId);
+    if (match) {
+      return serializeMatch(match, user.id, target);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const match = {
+    id: makeId("match"),
+    participants: [user.id, target.id],
+    userSnapshots: {
+      [user.id]: publicUser(user),
+      [target.id]: target,
+    },
+    matchedAt: now,
+    lastMessageAt: now,
+    identityRevealed: false,
+    revealRequests: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await saveMatch(store, match);
+  await store.setJSON(`match-pairs/${pairKey}`, { matchId: match.id });
+  await saveUser(store, bumpStat(user, "matches"));
+  return serializeMatch(match, user.id, target);
+}
+
+async function listMatchesForUser(store, userId) {
+  const matches = [];
+
+  for (const match of await listMatches(store)) {
+    if (match?.participants?.includes(userId)) {
+      const otherId = match.participants.find((participant) => participant !== userId);
+      const otherProfile = await findPublicProfile(store, otherId, match.userSnapshots?.[otherId]);
+      matches.push(serializeMatch(match, userId, otherProfile));
+    }
+  }
+
+  return matches.sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")));
+}
+
+async function findPublicProfile(store, id, fallback = null) {
+  const user = await getUser(store, id);
+  if (user) {
+    return publicUser(user);
+  }
+
+  return seedProfiles().find((item) => item.id === id || item._id === id) || fallback;
+}
+
+async function getUser(store, userId) {
+  if (!userId) {
+    return null;
+  }
+
+  return normalizeUserRecord(await store.get(`users/${userId}`, { type: "json" }));
+}
+
+async function saveUser(store, user) {
+  const normalizedUser = {
+    ...user,
+    membership: normalizeMembershipRecord(user.membership, user.createdAt),
+    stats: normalizeUserStats(user.stats),
+    tags: arrayOfText(user.tags),
+    sceneTags: arrayOfText(user.sceneTags),
+    matchModes: arrayOfText(user.matchModes),
+    skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    isAdmin: hasAdminAccess(user),
+  };
+  await store.setJSON(`users/${normalizedUser.id}`, normalizedUser);
+  await store.setJSON(`email/${encodeURIComponent(normalizedUser.email)}`, { userId: normalizedUser.id });
+  await indexUserInDatabase(normalizedUser);
+}
+
+async function listUsers(store) {
+  return (await listJsonRecords(store, "users/")).map(normalizeUserRecord).filter(Boolean);
+}
+
+async function listMatches(store) {
+  return listJsonRecords(store, "matches/");
+}
+
+async function listAllMessages(store) {
+  const threads = await listJsonRecordEntries(store, "messages/");
+  return threads.flatMap(({ key, value }) => {
+    const matchId = key.replace(/^messages\//, "");
+    return (Array.isArray(value) ? value : []).map((message) => ({
+      ...message,
+      matchId: message.matchId || matchId,
+    }));
+  });
+}
+
+async function listJsonRecords(store, prefix) {
+  const records = await listJsonRecordEntries(store, prefix);
+  return records.map((record) => record.value);
+}
+
+async function listJsonRecordEntries(store, prefix) {
+  const records = [];
+  let cursor;
+
+  do {
+    const page = await store.list({ prefix, cursor });
+    for (const blob of page.blobs || []) {
+      const value = await store.get(blob.key, { type: "json" });
+      if (value) {
+        records.push({ key: blob.key, value });
+      }
+    }
+    cursor = page.cursor;
+  } while (cursor);
+
+  return records;
+}
+
+async function findUserByEmail(store, email) {
+  if (!email) {
+    return null;
+  }
+
+  const record = await store.get(`email/${encodeURIComponent(email)}`, { type: "json" });
+  if (!record?.userId) {
+    return null;
+  }
+
+  return getUser(store, record.userId);
+}
+
+async function createSession(store, userId) {
+  const token = crypto.randomBytes(32).toString("hex");
+  await store.setJSON(`sessions/${token}`, {
+    token,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+    createdAt: new Date().toISOString(),
+  });
+  return token;
+}
+
+async function requireUser(req, store) {
+  const header = req.headers.get("authorization") || "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    throw httpError("请先登录", 401);
+  }
+
+  const session = await store.get(`sessions/${token}`, { type: "json" });
+  if (!session?.userId || Date.parse(session.expiresAt) < Date.now()) {
+    throw httpError("登录已过期，请重新登录", 401);
+  }
+
+  const user = await getUser(store, session.userId);
+  if (!user) {
+    throw httpError("用户不存在", 401);
+  }
+
+  return user;
+}
+
+async function getMatch(store, matchId) {
+  return store.get(`matches/${matchId}`, { type: "json" });
+}
+
+async function saveMatch(store, match) {
+  await store.setJSON(`matches/${match.id}`, match);
+}
+
+async function getMessages(store, matchId) {
+  return (await store.get(`messages/${matchId}`, { type: "json" })) || [];
+}
+
+function serializeMatch(match, viewerId, otherProfile) {
+  return {
+    id: match.id,
+    _id: match.id,
+    matchedAt: match.matchedAt,
+    identityRevealed: Boolean(match.identityRevealed),
+    lastMessageAt: match.lastMessageAt,
+    user: otherProfile || null,
+  };
+}
+
+function publicUser(user) {
+  const normalizedUser = normalizeUserRecord(user);
+  const { passwordHash, passwordSalt, skippedIds, ...safeUser } = normalizedUser;
+
+  return {
+    ...safeUser,
+    id: normalizedUser.id,
+    _id: normalizedUser.id,
+    isAdmin: hasAdminAccess(normalizedUser),
+  };
+}
+
+function adminExportUser(user) {
+  const normalizedUser = normalizeUserRecord(user);
+  const { passwordHash, passwordSalt, skippedIds, ...safeUser } = normalizedUser;
+  return {
+    ...safeUser,
+    id: normalizedUser.id,
+    _id: normalizedUser.id,
+    isAdmin: hasAdminAccess(normalizedUser),
+  };
+}
+
+function requireAdmin(user) {
+  if (!hasAdminAccess(user)) {
+    throw httpError("没有管理员权限", 403);
+  }
+}
+
+function hasAdminAccess(user) {
+  return Boolean(user?.isAdmin) || isAdminEmail(user?.email);
+}
+
+function isAdminEmail(email) {
+  const adminEmails = getEnv("CAMPUS_ADMIN_EMAILS")
+    .split(",")
+    .map((item) => normalizeEmail(item))
+    .filter(Boolean);
+
+  return adminEmails.includes(normalizeEmail(email));
+}
+
+function getEnv(name) {
+  return globalThis.Netlify?.env?.get(name) || process.env[name] || "";
+}
+
+function buildMembershipPayload(user) {
+  const membership = normalizeMembershipRecord(user?.membership, user?.createdAt);
+  return {
+    membership,
+    plans: getMembershipPlans(),
+    recommendedPlan: membership.planId === "free" ? "plus" : "premium",
+  };
+}
+
+function getMembershipPlans() {
+  return MEMBERSHIP_PLAN_ORDER.map((planId) => {
+    const plan = MEMBERSHIP_PLAN_LIBRARY[planId];
+    return {
+      id: plan.id,
+      name: plan.name,
+      description: plan.description,
+      monthlyPrice: plan.monthlyPrice,
+      yearlyPrice: plan.yearlyPrice,
+      features: [...plan.features],
+      limits: { ...plan.limits },
+    };
+  });
+}
+
+function createDefaultMembership(now = new Date().toISOString()) {
+  const plan = MEMBERSHIP_PLAN_LIBRARY.free;
+  return {
+    type: plan.id,
+    planId: plan.id,
+    title: plan.name,
+    status: "active",
+    billingCycle: null,
+    price: 0,
+    currency: "CNY",
+    startedAt: now,
+    expiresAt: null,
+    renewedAt: now,
+    autoRenew: false,
+    description: plan.description,
+    features: [...plan.features],
+    limits: { ...plan.limits },
+  };
+}
+
+function activateMembershipPlan(rawMembership, planId, billingCycle) {
+  const now = new Date().toISOString();
+  if (planId === "free") {
+    return createDefaultMembership(now);
+  }
+
+  const plan = MEMBERSHIP_PLAN_LIBRARY[planId];
+  const cycle = billingCycle === "yearly" ? "yearly" : "monthly";
+  const months = cycle === "yearly" ? 12 : 1;
+  const currentMembership = normalizeMembershipRecord(rawMembership, now);
+  const shouldExtendSamePlan = currentMembership.planId === planId
+    && currentMembership.expiresAt
+    && Date.parse(currentMembership.expiresAt) > Date.now();
+  const anchor = shouldExtendSamePlan ? currentMembership.expiresAt : now;
+  const startedAt = shouldExtendSamePlan ? currentMembership.startedAt || now : now;
+
+  return normalizeMembershipRecord({
+    type: plan.id,
+    planId: plan.id,
+    status: "active",
+    billingCycle: cycle,
+    price: cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice,
+    startedAt,
+    expiresAt: addMonths(anchor, months),
+    renewedAt: now,
+    autoRenew: false,
+  }, startedAt);
+}
+
+function normalizeMembershipRecord(rawMembership, fallbackStartedAt = new Date().toISOString()) {
+  if (!rawMembership || (!rawMembership.planId && !rawMembership.type) || text(rawMembership.planId || rawMembership.type).toLowerCase() === "free") {
+    const membership = createDefaultMembership(rawMembership?.startedAt || fallbackStartedAt);
+    return {
+      ...membership,
+      status: rawMembership?.status === "expired" ? "expired" : "active",
+      renewedAt: rawMembership?.renewedAt || membership.renewedAt,
+    };
+  }
+
+  const planId = text(rawMembership.planId || rawMembership.type).toLowerCase();
+  const plan = MEMBERSHIP_PLAN_LIBRARY[planId];
+  if (!plan) {
+    return createDefaultMembership(fallbackStartedAt);
+  }
+
+  const billingCycle = text(rawMembership.billingCycle).toLowerCase() === "yearly" ? "yearly" : "monthly";
+  const startedAt = rawMembership.startedAt || fallbackStartedAt;
+  const expiresAt = rawMembership.expiresAt || addMonths(startedAt, billingCycle === "yearly" ? 12 : 1);
+
+  if (Date.parse(expiresAt) <= Date.now()) {
+    return {
+      ...createDefaultMembership(fallbackStartedAt),
+      status: "expired",
+      previousPlanId: plan.id,
+      previousTitle: plan.name,
+      expiredAt: expiresAt,
+    };
+  }
+
+  return {
+    type: plan.id,
+    planId: plan.id,
+    title: plan.name,
+    status: rawMembership.status || "active",
+    billingCycle,
+    price: Number.isFinite(Number(rawMembership.price))
+      ? Number(rawMembership.price)
+      : (billingCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice),
+    currency: "CNY",
+    startedAt,
+    expiresAt,
+    renewedAt: rawMembership.renewedAt || rawMembership.updatedAt || startedAt,
+    autoRenew: Boolean(rawMembership.autoRenew),
+    description: plan.description,
+    features: [...plan.features],
+    limits: { ...plan.limits },
+  };
+}
+
+function normalizeUserRecord(user) {
+  if (!user) {
+    return null;
+  }
+
+  return {
+    ...user,
+    membership: normalizeMembershipRecord(user.membership, user.createdAt),
+    stats: normalizeUserStats(user.stats),
+    tags: arrayOfText(user.tags),
+    sceneTags: arrayOfText(user.sceneTags),
+    matchModes: arrayOfText(user.matchModes),
+    skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+  };
+}
+
+function normalizeUserStats(stats) {
+  return {
+    matches: 0,
+    likes: 0,
+    views: 0,
+    ...(stats || {}),
+  };
+}
+
+async function createEmailVerification(store, email) {
+  const key = `email-codes/${encodeURIComponent(email)}`;
+  const existing = await store.get(key, { type: "json" });
+  if (existing?.requestedAt && Date.now() - Date.parse(existing.requestedAt) < EMAIL_CODE_RESEND_MS) {
+    throw httpError("验证码发送太频繁，请稍后再试", 429);
+  }
+
+  const code = String(crypto.randomInt(100000, 1000000));
+  const now = new Date().toISOString();
+  await store.setJSON(key, {
+    email,
+    codeHash: hashEmailCode(email, code),
+    requestedAt: now,
+    expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS).toISOString(),
+    attempts: 0,
+  });
+
+  return { code };
+}
+
+async function verifyEmailCode(store, email, code) {
+  if (!code) {
+    throw httpError("请填写邮箱验证码", 400);
+  }
+
+  const key = `email-codes/${encodeURIComponent(email)}`;
+  const record = await store.get(key, { type: "json" });
+  if (!record) {
+    throw httpError("请先获取邮箱验证码", 400);
+  }
+
+  if (Date.parse(record.expiresAt) < Date.now()) {
+    await store.delete(key);
+    throw httpError("验证码已过期，请重新获取", 400);
+  }
+
+  if ((record.attempts || 0) >= 5) {
+    await store.delete(key);
+    throw httpError("验证码错误次数过多，请重新获取", 400);
+  }
+
+  if (record.codeHash !== hashEmailCode(email, code)) {
+    await store.setJSON(key, { ...record, attempts: (record.attempts || 0) + 1 });
+    throw httpError("验证码不正确", 400);
+  }
+
+  await store.delete(key);
+}
+
+async function sendVerificationEmail(email, code) {
+  const config = getSmtpConfig();
+  if (!config) {
+    if (getEnv("EMAIL_VERIFICATION_DEBUG") === "true") {
+      return;
+    }
+
+    throw httpError("邮件服务还未配置，请先设置 QQ 邮箱 SMTP 授权码", 503);
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: config.from,
+    to: email,
+    subject: "校园匹配注册验证码",
+    text: `你的校园匹配注册验证码是：${code}。10 分钟内有效。`,
+    html: `<p>你的校园匹配注册验证码是：</p><p style="font-size:24px;font-weight:700;letter-spacing:4px;">${code}</p><p>10 分钟内有效。</p>`,
+  });
+}
+
+function getSmtpConfig() {
+  const user = getEnv("QQ_SMTP_USER") || getEnv("SMTP_USER");
+  const pass = getEnv("QQ_SMTP_AUTH_CODE") || getEnv("SMTP_PASS");
+  if (!user || !pass) {
+    return null;
+  }
+
+  const port = Number(getEnv("SMTP_PORT") || 465);
+  return {
+    host: getEnv("SMTP_HOST") || "smtp.qq.com",
+    port,
+    secure: getEnv("SMTP_SECURE") ? getEnv("SMTP_SECURE") !== "false" : port === 465,
+    user,
+    pass,
+    from: getEnv("SMTP_FROM") || `校园匹配 <${user}>`,
+  };
+}
+
+function isEmailVerificationActive() {
+  return Boolean(getSmtpConfig()) || getEnv("EMAIL_VERIFICATION_DEBUG") === "true" || getEnv("EMAIL_VERIFICATION_REQUIRED") === "true";
+}
+
+function isAllowedRegistrationEmail(email) {
+  if (!email) {
+    return false;
+  }
+
+  if (email.endsWith("@qq.com") || email.endsWith("@foxmail.com")) {
+    return true;
+  }
+
+  return isAdminEmail(email) || getEnv("ALLOW_NON_QQ_EMAILS") === "true";
+}
+
+function hashEmailCode(email, code) {
+  const secret = getEnv("EMAIL_CODE_SECRET") || "campus-match-email-code";
+  return crypto.createHash("sha256").update(`${normalizeEmail(email)}:${text(code)}:${secret}`).digest("hex");
+}
+
+async function searchUsers(store, viewer, url) {
+  const query = text(url.searchParams.get("q"));
+  const school = text(url.searchParams.get("school"));
+  const major = text(url.searchParams.get("major"));
+  const grade = text(url.searchParams.get("grade"));
+  const limit = clampNumber(url.searchParams.get("limit"), 1, 50, 12);
+  const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
+  const offset = (page - 1) * limit;
+  const skipped = new Set(viewer.skippedIds || []);
+
+  const databaseUsers = await searchUsersInDatabase({ viewer, query, school, major, grade, limit, offset });
+  const rows = databaseUsers?.length ? databaseUsers : await searchUsersInBlobs(store, { viewer, query, school, major, grade });
+  const merged = [...rows, ...filterSeedProfiles({ query, school, major, grade })]
+    .filter((item) => item.id !== viewer.id && !skipped.has(item.id));
+
+  return {
+    users: uniqueById(merged).slice(0, limit),
+    pagination: { page, limit, total: uniqueById(merged).length },
+    query: { q: query, school, major, grade },
+    source: databaseUsers?.length ? "database" : store.kind === "mysql" ? "mysql" : "blobs",
+  };
+}
+
+async function searchUsersInDatabase({ viewer, query, school, major, grade, limit, offset }) {
+  try {
+    const sql = await getSql();
+    if (!sql) {
+      return null;
+    }
+
+    await ensureDatabase(sql);
+    const like = `%${query}%`;
+    const rows = await sql`
+      SELECT id, email, nickname, school, major, college, grade, bio, campus_zone, dorm_area,
+             verification_status, verification_badge, is_verified, scene_tags, match_modes, updated_at
+      FROM campus_users
+      WHERE id <> ${viewer.id}
+        AND (${query} = '' OR searchable_text ILIKE ${like})
+        AND (${school} = '' OR school = ${school})
+        AND (${major} = '' OR major ILIKE ${`%${major}%`})
+        AND (${grade} = '' OR grade = ${grade})
+      ORDER BY is_verified DESC, updated_at DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+
+    return rows.map(publicUserFromDatabase);
+  } catch (error) {
+    console.warn("Database search unavailable", error);
+    return null;
+  }
+}
+
+async function searchUsersInBlobs(store, filters) {
+  const users = (await listUsers(store)).map(publicUser);
+  return users.filter((user) => matchesSearchFilters(user, filters));
+}
+
+function filterSeedProfiles(filters) {
+  return seedProfiles().filter((user) => matchesSearchFilters(user, filters));
+}
+
+function matchesSearchFilters(user, { viewer, query, school, major, grade }) {
+  if (viewer && user.id === viewer.id) {
+    return false;
+  }
+
+  if (school && user.school !== school) {
+    return false;
+  }
+
+  if (major && !String(user.major || "").includes(major)) {
+    return false;
+  }
+
+  if (grade && user.grade !== grade) {
+    return false;
+  }
+
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    user.nickname,
+    user.school,
+    user.major,
+    user.college,
+    user.grade,
+    user.bio,
+    ...(user.tags || []),
+    ...(user.sceneTags || []),
+    ...(user.matchModes || []),
+  ].join(" ").toLowerCase();
+
+  return haystack.includes(query.toLowerCase());
+}
+
+async function indexUserInDatabase(user) {
+  try {
+    const sql = await getSql();
+    if (!sql) {
+      return;
+    }
+
+    await ensureDatabase(sql);
+    const safe = publicUser(user);
+    const searchableText = [
+      safe.nickname,
+      safe.email,
+      safe.school,
+      safe.major,
+      safe.college,
+      safe.grade,
+      safe.bio,
+      ...(safe.tags || []),
+      ...(safe.sceneTags || []),
+      ...(safe.matchModes || []),
+    ].join(" ");
+
+    await sql`
+      INSERT INTO campus_users (
+        id, email, nickname, school, major, college, grade, bio, campus_zone, dorm_area,
+        verification_status, verification_badge, is_verified, scene_tags, match_modes, searchable_text, updated_at, created_at
+      ) VALUES (
+        ${safe.id}, ${safe.email}, ${safe.nickname || ""}, ${safe.school || ""}, ${safe.major || ""},
+        ${safe.college || ""}, ${safe.grade || ""}, ${safe.bio || ""}, ${safe.campusZone || ""},
+        ${safe.dormArea || ""}, ${safe.verificationStatus || ""}, ${safe.verificationBadge || ""},
+        ${Boolean(safe.isVerified)}, CAST(${JSON.stringify(safe.sceneTags || [])} AS jsonb), CAST(${JSON.stringify(safe.matchModes || [])} AS jsonb),
+        ${searchableText}, NOW(), ${safe.createdAt || new Date().toISOString()}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        nickname = EXCLUDED.nickname,
+        school = EXCLUDED.school,
+        major = EXCLUDED.major,
+        college = EXCLUDED.college,
+        grade = EXCLUDED.grade,
+        bio = EXCLUDED.bio,
+        campus_zone = EXCLUDED.campus_zone,
+        dorm_area = EXCLUDED.dorm_area,
+        verification_status = EXCLUDED.verification_status,
+        verification_badge = EXCLUDED.verification_badge,
+        is_verified = EXCLUDED.is_verified,
+        scene_tags = EXCLUDED.scene_tags,
+        match_modes = EXCLUDED.match_modes,
+        searchable_text = EXCLUDED.searchable_text,
+        updated_at = NOW()
+    `;
+  } catch (error) {
+    console.warn("Database user index unavailable", error);
+  }
+}
+
+async function getSql() {
+  if (sqlClient) {
+    return sqlClient;
+  }
+
+  if (!getEnv("NETLIFY_DATABASE_URL")) {
+    return null;
+  }
+
+  try {
+    sqlClient = neon();
+    return sqlClient;
+  } catch (error) {
+    console.warn("Database client unavailable", error);
+    return null;
+  }
+}
+
+async function ensureDatabase(sql) {
+  if (dbReady) {
+    return;
+  }
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS campus_users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      nickname TEXT,
+      school TEXT,
+      major TEXT,
+      college TEXT,
+      grade TEXT,
+      bio TEXT,
+      campus_zone TEXT,
+      dorm_area TEXT,
+      verification_status TEXT,
+      verification_badge TEXT,
+      is_verified BOOLEAN DEFAULT FALSE,
+      scene_tags JSONB DEFAULT '[]'::jsonb,
+      match_modes JSONB DEFAULT '[]'::jsonb,
+      searchable_text TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS campus_users_searchable_idx ON campus_users USING gin (to_tsvector('simple', coalesce(searchable_text, '')))`;
+  await sql`CREATE INDEX IF NOT EXISTS campus_users_school_idx ON campus_users (school)`;
+  await sql`CREATE INDEX IF NOT EXISTS campus_users_major_idx ON campus_users (major)`;
+  await sql`CREATE INDEX IF NOT EXISTS campus_users_grade_idx ON campus_users (grade)`;
+  dbReady = true;
+}
+
+function publicUserFromDatabase(row) {
+  return {
+    id: row.id,
+    _id: row.id,
+    email: row.email,
+    nickname: row.nickname,
+    school: row.school,
+    major: row.major,
+    college: row.college,
+    grade: row.grade,
+    campusZone: row.campus_zone,
+    dormArea: row.dorm_area,
+    bio: row.bio,
+    verificationStatus: row.verification_status,
+    verificationBadge: row.verification_badge,
+    isVerified: row.is_verified,
+    sceneTags: row.scene_tags || [],
+    matchModes: row.match_modes || [],
+    avatar: null,
+    updatedAt: row.updated_at,
+    stats: { matches: 0, likes: 0, views: 0 },
+  };
+}
+
+function uniqueById(users) {
+  const seen = new Set();
+  return users.filter((user) => {
+    const id = user.id || user._id;
+    if (!id || seen.has(id)) {
+      return false;
+    }
+
+    seen.add(id);
+    return true;
+  });
+}
+
+function extensionFromContentType(contentType) {
+  return {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+  }[contentType] || "bin";
+}
+
+function contentTypeFromKey(key) {
+  if (key.endsWith(".jpg") || key.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (key.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (key.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  return "application/octet-stream";
+}
+
+function bumpStat(user, statName) {
+  return {
+    ...user,
+    stats: {
+      matches: 0,
+      likes: 0,
+      views: 0,
+      ...(user.stats || {}),
+      [statName]: ((user.stats || {})[statName] || 0) + 1,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function seedProfiles() {
+  return [
+    {
+      id: "seed-library-ning",
+      _id: "seed-library-ning",
+      nickname: "图书馆阿宁",
+      school: "北京大学",
+      major: "法学",
+      college: "法学院",
+      grade: "大三",
+      campusZone: "本部",
+      dormArea: "燕南园",
+      bio: "常驻图书馆，想找一起学习和散步的人。",
+      verificationBadge: "北京大学 认证",
+      verificationStatus: "approved",
+      isVerified: true,
+      matchModes: ["学习搭子", "散步搭子"],
+      sceneTags: ["图书馆", "自习"],
+      avatar: null,
+      stats: { matches: 8, likes: 31, views: 126 },
+    },
+    {
+      id: "seed-runner-zhou",
+      _id: "seed-runner-zhou",
+      nickname: "夜跑小周",
+      school: "北京大学",
+      major: "新闻学",
+      college: "新闻与传播学院",
+      grade: "大二",
+      campusZone: "本部",
+      dormArea: "畅春园",
+      bio: "晚上喜欢操场夜跑，也爱轻松聊天。",
+      verificationBadge: "北京大学 认证",
+      verificationStatus: "approved",
+      isVerified: true,
+      matchModes: ["运动搭子", "散步搭子"],
+      sceneTags: ["夜跑", "操场"],
+      avatar: null,
+      stats: { matches: 5, likes: 19, views: 88 },
+    },
+    {
+      id: "seed-food-senior",
+      _id: "seed-food-senior",
+      nickname: "干饭学姐",
+      school: "北京大学",
+      major: "经济学",
+      college: "经济学院",
+      grade: "研一",
+      campusZone: "本部",
+      dormArea: "万柳",
+      bio: "研究食堂地图，也愿意一起探店。",
+      verificationBadge: "北京大学 认证",
+      verificationStatus: "approved",
+      isVerified: true,
+      matchModes: ["干饭搭子", "探店搭子"],
+      sceneTags: ["食堂", "探店"],
+      avatar: null,
+      stats: { matches: 12, likes: 44, views: 173 },
+    },
+  ];
+}
+
+async function readBody(req) {
+  try {
+    return await req.json();
+  } catch {
+    return {};
+  }
+}
+
+function json(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
+}
+
+function httpError(message, status) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function hashPassword(password) {
+  const passwordSalt = crypto.randomBytes(16).toString("hex");
+  const passwordHash = crypto.scryptSync(password, passwordSalt, 64).toString("hex");
+  return { passwordHash, passwordSalt };
+}
+
+function verifyPassword(password, user) {
+  if (!password || !user?.passwordHash || !user?.passwordSalt) {
+    return false;
+  }
+
+  const expected = Buffer.from(user.passwordHash, "hex");
+  const actual = crypto.scryptSync(password, user.passwordSalt, 64);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function makeId(prefix) {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function text(value) {
+  return String(value || "").trim();
+}
+
+function arrayOfText(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(text).filter(Boolean);
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(Math.floor(number), min), max);
+}
+
+function addMonths(value, months) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString();
+  }
+
+  const copy = new Date(date);
+  copy.setUTCMonth(copy.getUTCMonth() + months);
+  return copy.toISOString();
+}

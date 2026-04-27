@@ -2579,6 +2579,7 @@
     await refreshUser();
     tagResponsiveRouteSections();
     ensureProfileEnhancements();
+    window.CampusUniversityOptions?.populateSelects?.(document);
     rewriteAudienceCopy();
   }
 

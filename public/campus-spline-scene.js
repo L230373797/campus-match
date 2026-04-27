@@ -1,7 +1,9 @@
 import * as THREE from "./assets/vendor/three.module.js";
 
-const ACTIVE_ROUTES = new Set(["/login", "/", "/search.html"]);
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const coarsePointer = window.matchMedia("(pointer: coarse)");
+const lowPowerDevice = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+const lowDetail = coarsePointer.matches || lowPowerDevice;
 
 let stage;
 let renderer;
@@ -18,16 +20,68 @@ let particles;
 let resizeObserver;
 let matchFocus = 0;
 let matchFocusTarget = 0;
+let resizeRafId = 0;
+let lastFrameTime = 0;
+let scrollProgress = 0;
 
 const pointer = new THREE.Vector2(0, 0);
 const targetPointer = new THREE.Vector2(0, 0);
 const viewport = { width: 1, height: 1 };
+
+function ensureStageStyles() {
+  if (document.querySelector("style[data-campus-spline-style='true']")) {
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.dataset.campusSplineStyle = "true";
+  style.textContent = `
+    #campus-spline-stage {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      contain: strict;
+      background: linear-gradient(135deg, #050711, #0a1024 42%, #171126);
+      transition: opacity .42s ease;
+    }
+    #campus-spline-stage.is-active { opacity: 1; }
+    #campus-spline-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      transform: translateZ(0);
+    }
+    #campus-spline-stage::after,
+    .campus-spline-fallback::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(84, 188, 255, .18), transparent 28%),
+        radial-gradient(circle at 82% 18%, rgba(255, 141, 214, .14), transparent 26%),
+        linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .36));
+    }
+    body[data-campus-spline="active"] {
+      background: #050711 !important;
+    }
+    body[data-campus-spline="active"] > main,
+    body[data-campus-spline="active"] #root {
+      position: relative;
+      z-index: 2;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 function createStage() {
   if (stage) {
     return stage;
   }
 
+  ensureStageStyles();
   stage = document.createElement("div");
   stage.id = "campus-spline-stage";
   stage.setAttribute("aria-hidden", "true");
@@ -41,9 +95,10 @@ function createStage() {
     renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
+      antialias: !lowDetail,
+      preserveDrawingBuffer: false,
       powerPreference: "high-performance",
+      precision: lowDetail ? "mediump" : "highp",
     });
   } catch {
     stage.classList.add("campus-spline-fallback");
@@ -51,7 +106,6 @@ function createStage() {
   }
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x000000, 0);
 
   scene = new THREE.Scene();
@@ -62,11 +116,13 @@ function createStage() {
   buildScene();
   resizeScene();
 
-  window.addEventListener("resize", resizeScene, { passive: true });
+  window.addEventListener("resize", requestResizeScene, { passive: true });
   window.addEventListener("pointermove", handlePointerMove, { passive: true });
   window.addEventListener("scroll", handleScroll, { passive: true });
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
 
-  resizeObserver = new ResizeObserver(resizeScene);
+  resizeObserver = new ResizeObserver(requestResizeScene);
   resizeObserver.observe(document.documentElement);
 
   return stage;
@@ -93,10 +149,8 @@ function buildScene() {
 
   const glassMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xc7f1ff,
-    metalness: 0.06,
-    roughness: 0.18,
-    transmission: 0.35,
-    thickness: 0.7,
+    metalness: 0.08,
+    roughness: 0.2,
     transparent: true,
     opacity: 0.86,
     clearcoat: 1,
@@ -135,36 +189,37 @@ function buildScene() {
     opacity: 0.78,
   });
 
-  heroMesh = new THREE.Mesh(new THREE.TorusKnotGeometry(1.55, 0.34, 180, 26), glassMaterial);
+  heroMesh = new THREE.Mesh(new THREE.TorusKnotGeometry(1.55, 0.34, lowDetail ? 96 : 128, lowDetail ? 14 : 20), glassMaterial);
   heroMesh.position.set(1.72, 0.05, 0);
   heroMesh.rotation.set(0.62, 0.08, -0.18);
   rootGroup.add(heroMesh);
 
-  ringMesh = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.025, 10, 160), lineMaterial);
+  ringMesh = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.025, 8, lowDetail ? 88 : 120), lineMaterial);
   ringMesh.position.set(1.64, 0.02, -0.18);
   ringMesh.rotation.set(1.12, 0.42, 0.16);
   rootGroup.add(ringMesh);
 
-  const ringTwo = new THREE.Mesh(new THREE.TorusGeometry(2.62, 0.018, 10, 160), lineMaterial.clone());
+  const ringTwo = new THREE.Mesh(new THREE.TorusGeometry(2.62, 0.018, 8, lowDetail ? 88 : 120), lineMaterial.clone());
   ringTwo.material.opacity = 0.34;
   ringTwo.position.set(1.62, 0.02, -0.28);
   ringTwo.rotation.set(1.36, -0.42, 0.88);
   rootGroup.add(ringTwo);
 
-  companionMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.92, 2), violetMaterial);
+  companionMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.92, lowDetail ? 1 : 2), violetMaterial);
   companionMesh.position.set(-2.48, -0.76, -0.32);
   companionMesh.rotation.set(0.3, 0.4, 0.2);
   rootGroup.add(companionMesh);
 
-  const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.4, 18, 32), pinkMaterial);
+  const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.4, lowDetail ? 10 : 14, lowDetail ? 18 : 24), pinkMaterial);
   capsule.position.set(-1.3, 1.58, -0.72);
   capsule.rotation.set(0.42, 0.12, -0.72);
   rootGroup.add(capsule);
 
-  for (let i = 0; i < 18; i += 1) {
+  const dotCount = lowDetail ? 10 : 14;
+  for (let i = 0; i < dotCount; i += 1) {
     const size = 0.055 + (i % 4) * 0.018;
     const dot = new THREE.Mesh(
-      new THREE.SphereGeometry(size, 18, 18),
+      new THREE.SphereGeometry(size, lowDetail ? 10 : 14, lowDetail ? 8 : 12),
       new THREE.MeshStandardMaterial({
         color: i % 3 === 0 ? 0xffffff : i % 3 === 1 ? 0x8bd3ff : 0xffa6d8,
         emissive: i % 3 === 0 ? 0x96d8ff : 0x2c8cff,
@@ -185,7 +240,7 @@ function buildScene() {
 }
 
 function createParticleField() {
-  const count = 150;
+  const count = lowDetail ? 72 : 110;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
 
@@ -221,14 +276,45 @@ function createParticleField() {
 }
 
 function handlePointerMove(event) {
+  if (!active || coarsePointer.matches || document.hidden) {
+    return;
+  }
+
   targetPointer.x = (event.clientX / viewport.width - 0.5) * 2;
   targetPointer.y = (event.clientY / viewport.height - 0.5) * -2;
 }
 
 function handleScroll() {
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  const progress = Math.min(1, Math.max(0, window.scrollY / max));
-  document.documentElement.style.setProperty("--campus-spline-scroll", progress.toFixed(3));
+  scrollProgress = Math.min(1, Math.max(0, window.scrollY / max));
+  document.documentElement.style.setProperty("--campus-spline-scroll", scrollProgress.toFixed(3));
+
+  if (active && prefersReducedMotion.matches) {
+    renderFrame(performance.now());
+  }
+}
+
+function pixelRatioForViewport() {
+  const base = Math.min(window.devicePixelRatio || 1, viewport.width < 640 ? 1.35 : 1.6);
+  return lowDetail ? Math.min(base, 1.15) : base;
+}
+
+function frameBudget() {
+  return lowDetail ? 1000 / 30 : 1000 / 45;
+}
+
+function requestResizeScene() {
+  if (resizeRafId) {
+    return;
+  }
+
+  resizeRafId = requestAnimationFrame(() => {
+    resizeRafId = 0;
+    resizeScene();
+    if (active) {
+      renderFrame(performance.now());
+    }
+  });
 }
 
 function resizeScene() {
@@ -238,6 +324,7 @@ function resizeScene() {
 
   viewport.width = Math.max(1, window.innerWidth);
   viewport.height = Math.max(1, window.innerHeight);
+  renderer.setPixelRatio(pixelRatioForViewport());
   renderer.setSize(viewport.width, viewport.height, false);
   camera.aspect = viewport.width / viewport.height;
   camera.fov = viewport.width < 640 ? 43 : 36;
@@ -245,22 +332,20 @@ function resizeScene() {
   camera.updateProjectionMatrix();
 }
 
-function animate() {
+function renderFrame(now) {
   if (!active || !renderer || !scene || !camera) {
-    rafId = 0;
     return;
   }
 
-  const time = clock.getElapsedTime();
+  const time = now / 1000;
   const delta = Math.min(clock.getDelta(), 0.05);
   const reduced = prefersReducedMotion.matches;
 
   pointer.lerp(targetPointer, reduced ? 0.04 : 0.075);
   matchFocus += (matchFocusTarget - matchFocus) * (reduced ? 0.08 : 0.045);
-  const scroll = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--campus-spline-scroll")) || 0;
 
   rootGroup.rotation.y = pointer.x * 0.18 + matchFocus * 0.24;
-  rootGroup.rotation.x = pointer.y * 0.1 - scroll * 0.08 + matchFocus * 0.08;
+  rootGroup.rotation.x = pointer.y * 0.1 - scrollProgress * 0.08 + matchFocus * 0.08;
   rootGroup.position.y = (viewport.width < 640 ? -0.2 : 0.02) + matchFocus * 0.08;
   rootGroup.position.x = (viewport.width < 640 ? 0.34 : 0.62) - matchFocus * 0.18;
   rootGroup.scale.setScalar(1 + matchFocus * 0.12);
@@ -279,6 +364,29 @@ function animate() {
   camera.lookAt(0.25, 0.05, 0);
 
   renderer.render(scene, camera);
+}
+
+function animate(now = performance.now()) {
+  if (!active || !renderer || !scene || !camera || document.hidden || prefersReducedMotion.matches) {
+    rafId = 0;
+    return;
+  }
+
+  if (now - lastFrameTime >= frameBudget()) {
+    lastFrameTime = now;
+    renderFrame(now);
+  }
+
+  rafId = requestAnimationFrame(animate);
+}
+
+function scheduleAnimation() {
+  if (!active || rafId || document.hidden || prefersReducedMotion.matches) {
+    return;
+  }
+
+  lastFrameTime = 0;
+  clock?.getDelta();
   rafId = requestAnimationFrame(animate);
 }
 
@@ -287,10 +395,8 @@ function start() {
   active = true;
   stage?.classList.add("is-active");
   handleScroll();
-  if (!rafId) {
-    clock?.getDelta();
-    rafId = requestAnimationFrame(animate);
-  }
+  renderFrame(performance.now());
+  scheduleAnimation();
 }
 
 function stop() {
@@ -302,17 +408,53 @@ function stop() {
   }
 }
 
+function routeFocus(route) {
+  if (route === "/search.html") {
+    return 1;
+  }
+
+  if (route === "/upload.html") {
+    return 0.46;
+  }
+
+  return route === "/login" ? 0.16 : 0;
+}
+
+function handleVisibilityChange() {
+  if (!active) {
+    return;
+  }
+
+  if (document.hidden) {
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    return;
+  }
+
+  renderFrame(performance.now());
+  scheduleAnimation();
+}
+
+function handleMotionPreferenceChange() {
+  if (!active) {
+    return;
+  }
+
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  renderFrame(performance.now());
+  scheduleAnimation();
+}
+
 function setRoute(route) {
   const normalized = route || window.location.pathname;
-  const shouldShow = ACTIVE_ROUTES.has(normalized);
-  matchFocusTarget = normalized === "/search.html" ? 1 : 0;
-  document.body.dataset.campusSpline = shouldShow ? "active" : "inactive";
-
-  if (shouldShow) {
-    start();
-  } else {
-    stop();
-  }
+  matchFocusTarget = routeFocus(normalized);
+  document.body.dataset.campusSpline = "active";
+  start();
 }
 
 window.addEventListener("campus:route", (event) => {
@@ -326,11 +468,17 @@ window.CampusSplineScene = {
   focusMatch() {
     matchFocusTarget = 1;
   },
+  renderNow() {
+    renderFrame(performance.now());
+  },
   inspect() {
     return {
       active,
       hasRenderer: Boolean(renderer),
       canvasPixels: renderer ? renderer.domElement.width * renderer.domElement.height : 0,
+      lowDetail,
+      pixelRatio: renderer?.getPixelRatio?.() || 0,
+      frameBudget: frameBudget(),
     };
   },
 };

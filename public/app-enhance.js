@@ -1510,6 +1510,17 @@
       body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-700"] {
         color: rgba(255,255,255,.96) !important;
       }
+      body[data-campus-spline="active"][data-campus-route="/"] h1 {
+        line-height: 1.02 !important;
+        text-wrap: balance;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] .campus-home-hero-card h2 {
+        max-width: 10ch !important;
+        font-size: clamp(2.35rem, 4.6vw, 4.45rem) !important;
+        line-height: 1.04 !important;
+        letter-spacing: 0 !important;
+        text-wrap: balance;
+      }
       body[data-campus-spline="active"][data-campus-route="/"] p,
       body[data-campus-spline="active"][data-campus-route="/"] span,
       body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-600"],
@@ -1694,10 +1705,9 @@
 
   function ensureSplineScene() {
     const route = window.location.pathname;
-    const shouldUseSpline = route === "/login" || route === "/";
-    document.body.dataset.campusSpline = shouldUseSpline ? "active" : "inactive";
+    document.body.dataset.campusSpline = "active";
 
-    if (shouldUseSpline && !document.querySelector('script[data-campus-spline-scene="true"]')) {
+    if (!document.querySelector('script[data-campus-spline-scene="true"]')) {
       const script = document.createElement("script");
       script.type = "module";
       script.src = "/campus-spline-scene.js";

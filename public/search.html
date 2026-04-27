@@ -112,6 +112,36 @@
         .toolbar, .grid { grid-template-columns: 1fr; }
         header { align-items: start; flex-direction: column; }
       }
+      @media (max-width: 520px) {
+        main {
+          width: min(100% - 24px, 420px);
+          padding: 22px 0 34px;
+        }
+        h1 {
+          font-size: 2.35rem;
+          line-height: 1.06;
+        }
+        .muted {
+          font-size: 0.95rem;
+        }
+        a, button {
+          min-height: 44px;
+          padding: 0 16px;
+        }
+        .toolbar {
+          gap: 10px;
+          padding: 12px;
+          border-radius: 24px;
+        }
+        input, select {
+          min-height: 44px;
+          border-radius: 16px;
+        }
+        .card {
+          border-radius: 22px;
+          padding: 16px;
+        }
+      }
     </style>
   </head>
   <body>

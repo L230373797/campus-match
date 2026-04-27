@@ -532,7 +532,7 @@
       }
       .campus-membership-banner p {
         margin: 0;
-        color: rgba(38,48,72,.76);
+        color: rgba(226,238,255,.76);
         line-height: 1.7;
       }
       .campus-membership-button {
@@ -553,21 +553,152 @@
         }
       }
       @media (max-width: 640px) {
-        .campus-code-panel { grid-template-columns: 1fr; }
-        .campus-quick-actions {
-          left: 16px;
-          right: 16px;
-          justify-content: center;
+        html,
+        body {
+          overflow-x: hidden;
         }
-        .campus-quick-actions a { flex: 1 1 120px; }
+        .liquid-orb {
+          display: none !important;
+        }
+        .campus-login-story {
+          min-height: 220vh;
+        }
+        .campus-login-hero,
+        .campus-login-band,
+        .campus-login-bottom {
+          width: min(100% - 20px, 420px);
+        }
+        .campus-login-hero {
+          min-height: auto;
+          padding: 22px 0 34px;
+          gap: 18px;
+          align-items: start;
+        }
+        .campus-login-hero-copy {
+          gap: 14px;
+        }
+        .campus-login-kicker {
+          font-size: 11px;
+          letter-spacing: .12em;
+        }
+        .campus-login-hero h1 {
+          font-size: 2.16rem;
+          line-height: 1.08;
+          max-width: 100%;
+          word-break: normal;
+          overflow-wrap: anywhere;
+        }
+        .campus-login-hero p,
+        .campus-login-bottom p {
+          font-size: .95rem;
+          line-height: 1.72;
+        }
+        .campus-login-actions {
+          gap: 10px;
+        }
+        .campus-login-actions .campus-login-open {
+          min-height: 44px;
+          padding: 0 18px;
+        }
+        .campus-login-secondary {
+          font-size: .92rem;
+        }
+        .campus-login-visual {
+          width: 100%;
+          min-height: 44vh;
+          border-radius: 26px;
+        }
+        .campus-login-visual-copy {
+          left: 18px;
+          right: 18px;
+          bottom: 18px;
+        }
+        .campus-login-strip {
+          padding: 14px;
+          border-radius: 22px;
+          gap: 12px;
+        }
+        .campus-login-strip strong {
+          font-size: 1.08rem;
+        }
+        .campus-story-carousel {
+          margin-left: -2px;
+          margin-right: -2px;
+          padding-bottom: 34px;
+        }
+        .campus-story-carousel:not(.swiper-initialized) .swiper-slide {
+          flex-basis: min(82vw, 320px);
+        }
+        .campus-login-card,
+        .campus-plan-card {
+          border-radius: 22px;
+          padding: 18px;
+        }
+        .campus-login-card h3,
+        .campus-plan-card h3,
+        .campus-membership-current h3 {
+          font-size: 1.08rem;
+        }
+        .campus-plan-price strong {
+          font-size: 1.7rem;
+        }
+        .campus-plan-features {
+          gap: 6px;
+        }
+        .campus-login-bottom {
+          min-height: 58vh;
+          padding-bottom: 18vh;
+        }
+        .campus-login-bottom h2 {
+          font-size: 2.2rem;
+          line-height: 1.06;
+        }
+        body[data-campus-route="/login"] #root > div {
+          padding: 12px;
+          align-items: end;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+          width: min(100%, 390px);
+          max-width: min(100%, 390px);
+          max-height: calc(100vh - 24px);
+          border-radius: 28px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .text-center.mb-8 {
+          margin-bottom: 14px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .w-28.h-28 {
+          width: 64px !important;
+          height: 64px !important;
+          margin-bottom: 12px !important;
+        }
+        .campus-quick-actions {
+          display: none !important;
+        }
+        .campus-code-panel { grid-template-columns: 1fr; }
+        .campus-code-panel button,
+        .campus-code-panel input {
+          min-height: 44px;
+        }
         .campus-membership-head,
         .campus-membership-body,
         .campus-membership-dialog {
           padding-left: 16px;
           padding-right: 16px;
         }
+        .campus-membership-dialog {
+          max-height: calc(100vh - 18px);
+          border-radius: 28px;
+        }
         .campus-membership-body { padding-bottom: 16px; }
         .campus-plan-actions { grid-template-columns: 1fr; }
+        .campus-membership-banner {
+          margin: 12px 0;
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-membership-banner .campus-membership-button {
+          width: 100%;
+        }
       }
     `;
     document.head.appendChild(style);

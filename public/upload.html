@@ -154,6 +154,40 @@
           grid-template-columns: 1fr;
         }
       }
+      @media (max-width: 520px) {
+        main {
+          width: min(100% - 24px, 420px);
+          min-height: auto;
+          padding: 22px 0 34px;
+          gap: 22px;
+        }
+        .headline h1 {
+          font-size: 2.35rem;
+          line-height: 1.06;
+        }
+        .headline p {
+          margin-top: 12px;
+          font-size: 0.95rem;
+        }
+        .panel {
+          padding: 18px;
+          border-radius: 24px;
+        }
+        .preview {
+          border-radius: 20px;
+        }
+        button,
+        a.button {
+          min-height: 44px;
+          padding: 0 16px;
+        }
+        input[type="file"] {
+          border-radius: 16px;
+        }
+        .nav {
+          gap: 10px;
+        }
+      }
     </style>
   </head>
   <body>

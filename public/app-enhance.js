@@ -110,6 +110,85 @@
       }
       .campus-code-panel button:disabled { opacity: .55; cursor: not-allowed; }
       .campus-code-message { grid-column: 1 / -1; min-height: 18px; color: rgba(255,255,255,.66); font-size: 12px; padding-left: 4px; }
+      .campus-school-native-wrap {
+        display: none !important;
+      }
+      .campus-school-picker {
+        position: relative;
+        z-index: 12;
+      }
+      .campus-school-picker input {
+        width: 100%;
+      }
+      .campus-school-help {
+        margin: 8px 0 0 4px;
+        color: rgba(83, 97, 116, .72);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .campus-school-suggestions {
+        position: static;
+        margin-top: 8px;
+        display: none;
+        max-height: 286px;
+        overflow-y: auto;
+        padding: 8px;
+        border: 1px solid rgba(255, 255, 255, .58);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .96);
+        box-shadow: 0 22px 56px rgba(15, 23, 42, .2);
+        backdrop-filter: blur(20px) saturate(1.24);
+        -webkit-backdrop-filter: blur(20px) saturate(1.24);
+      }
+      .campus-school-picker.is-open .campus-school-suggestions {
+        display: grid;
+        gap: 6px;
+      }
+      .campus-school-option,
+      .campus-school-empty {
+        width: 100%;
+        border: 0;
+        border-radius: 16px;
+        padding: 11px 12px;
+        text-align: left;
+        background: transparent;
+        color: #0b1220;
+      }
+      .campus-school-option {
+        cursor: pointer;
+      }
+      .campus-school-option:hover,
+      .campus-school-option.is-active {
+        background: rgba(0, 122, 255, .1);
+      }
+      .campus-school-option strong,
+      .campus-school-option span,
+      .campus-school-empty {
+        display: block;
+      }
+      .campus-school-option strong {
+        font-size: 14px;
+      }
+      .campus-school-option span,
+      .campus-school-empty {
+        margin-top: 4px;
+        color: rgba(83, 97, 116, .78);
+        font-size: 12px;
+      }
+      body[data-campus-route="/login"] .campus-school-option strong {
+        color: #0b1220 !important;
+      }
+      body[data-campus-route="/login"] .campus-school-option span,
+      body[data-campus-route="/login"] .campus-school-empty {
+        color: rgba(83, 97, 116, .86) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md .campus-school-option strong {
+        color: #0b1220 !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md .campus-school-option span,
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md .campus-school-empty {
+        color: rgba(83, 97, 116, .88) !important;
+      }
       .campus-quick-actions {
         position: fixed;
         right: 16px;
@@ -2463,6 +2542,183 @@
     });
   }
 
+  function enhanceRegisterSchoolInput() {
+    if (window.location.pathname !== "/login") {
+      return;
+    }
+
+    const schools = Array.isArray(window.CAMPUS_CHINA_UNIVERSITIES)
+      ? window.CAMPUS_CHINA_UNIVERSITIES
+      : [];
+    if (!schools.length) {
+      return;
+    }
+
+    document.querySelectorAll("select").forEach((select) => {
+      const firstLabel = select.options?.[0]?.textContent?.trim();
+      if (firstLabel !== "选择学校") {
+        return;
+      }
+
+      window.CampusUniversityOptions?.populateSelect?.(select);
+      const selectWrap = select.parentElement;
+      if (!selectWrap || selectWrap.parentElement?.querySelector(":scope > .campus-school-picker")) {
+        return;
+      }
+
+      select.required = false;
+      select.tabIndex = -1;
+      select.setAttribute("aria-hidden", "true");
+      selectWrap.classList.add("campus-school-native-wrap");
+
+      const picker = document.createElement("div");
+      picker.className = "campus-school-picker";
+      picker.innerHTML = `
+        <input
+          class="apple-input campus-school-input"
+          type="text"
+          autocomplete="off"
+          required
+          role="combobox"
+          aria-expanded="false"
+          placeholder="输入学校名称，例如 北京大学"
+        />
+        <div class="campus-school-suggestions" role="listbox"></div>
+        <p class="campus-school-help">输入学校名称，下面会自动筛选高校；点一下学校即可选中。</p>
+      `;
+      selectWrap.insertAdjacentElement("afterend", picker);
+
+      const input = picker.querySelector("input");
+      const suggestions = picker.querySelector(".campus-school-suggestions");
+      let currentMatches = [];
+      let activeIndex = -1;
+
+      const closeSuggestions = () => {
+        picker.classList.remove("is-open");
+        input.setAttribute("aria-expanded", "false");
+        activeIndex = -1;
+      };
+
+      const syncSelect = (schoolName) => {
+        if (!Array.from(select.options).some((option) => option.value === schoolName)) {
+          select.add(new Option(schoolName, schoolName));
+        }
+        select.value = schoolName;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        input.setCustomValidity("");
+      };
+
+      const selectSchool = (school) => {
+        input.value = school.name;
+        syncSelect(school.name);
+        closeSuggestions();
+      };
+
+      const validateTypedValue = () => {
+        const value = input.value.trim();
+        const exact = schools.find((school) => school.name === value);
+        if (exact) {
+          syncSelect(exact.name);
+          return;
+        }
+
+        select.value = "";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        input.setCustomValidity(value ? "请从下方高校列表中选择学校" : "请输入学校名称");
+      };
+
+      const renderSuggestions = () => {
+        const query = input.value.trim();
+        suggestions.innerHTML = "";
+
+        if (!query) {
+          suggestions.innerHTML = `<div class="campus-school-empty">开始输入学校名称，例如“北京”或“南京大学”。</div>`;
+          picker.classList.add("is-open");
+          input.setAttribute("aria-expanded", "true");
+          return;
+        }
+
+        currentMatches = schools
+          .filter((school) => school.name.includes(query))
+          .slice(0, 10);
+
+        if (!currentMatches.length) {
+          suggestions.innerHTML = `<div class="campus-school-empty">暂时没有找到相关高校，换个关键词试试。</div>`;
+          picker.classList.add("is-open");
+          input.setAttribute("aria-expanded", "true");
+          return;
+        }
+
+        currentMatches.forEach((school, index) => {
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "campus-school-option";
+          option.setAttribute("role", "option");
+          option.innerHTML = `
+            <strong>${escapeHtml(school.name)}</strong>
+            <span>${escapeHtml([school.province, school.city, school.level].filter(Boolean).join(" · "))}</span>
+          `;
+          option.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            selectSchool(school);
+          });
+          option.addEventListener("mouseenter", () => {
+            activeIndex = index;
+            updateActiveOption();
+          });
+          suggestions.appendChild(option);
+        });
+
+        picker.classList.add("is-open");
+        input.setAttribute("aria-expanded", "true");
+      };
+
+      const updateActiveOption = () => {
+        suggestions.querySelectorAll(".campus-school-option").forEach((option, index) => {
+          option.classList.toggle("is-active", index === activeIndex);
+        });
+      };
+
+      input.addEventListener("input", () => {
+        validateTypedValue();
+        renderSuggestions();
+      });
+      input.addEventListener("focus", renderSuggestions);
+      input.addEventListener("blur", () => {
+        validateTypedValue();
+        setTimeout(closeSuggestions, 120);
+      });
+      input.addEventListener("keydown", (event) => {
+        if (!picker.classList.contains("is-open") && (event.key === "ArrowDown" || event.key === "Enter")) {
+          renderSuggestions();
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          activeIndex = Math.min(currentMatches.length - 1, activeIndex + 1);
+          updateActiveOption();
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          activeIndex = Math.max(0, activeIndex - 1);
+          updateActiveOption();
+        } else if (event.key === "Enter" && currentMatches[activeIndex]) {
+          event.preventDefault();
+          selectSchool(currentMatches[activeIndex]);
+        } else if (event.key === "Escape") {
+          closeSuggestions();
+        }
+      });
+
+      const current = select.value;
+      if (current) {
+        input.value = current;
+        input.setCustomValidity("");
+      } else {
+        input.setCustomValidity("请输入学校名称");
+      }
+    });
+  }
+
   function tagResponsiveRouteSections() {
     const homeHeader = document.querySelector("#root header");
     const homeHero = document.querySelector("#root h2")?.closest(".apple-card");
@@ -2580,6 +2836,7 @@
     tagResponsiveRouteSections();
     ensureProfileEnhancements();
     window.CampusUniversityOptions?.populateSelects?.(document);
+    enhanceRegisterSchoolInput();
     rewriteAudienceCopy();
   }
 

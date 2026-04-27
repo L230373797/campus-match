@@ -56,6 +56,7 @@
     enhanceQueued: false,
     swiperPromise: null,
     loginSwipers: [],
+    loginMotionCleanup: null,
   };
 
   injectStyles();
@@ -873,6 +874,336 @@
           }
         }
       }
+
+      body[data-campus-route="/login"] {
+        --campus-ios-ink: #0b1220;
+        --campus-ios-muted: #536174;
+        --campus-ios-blue: #007aff;
+        --campus-login-shift: 0px;
+        background:
+          radial-gradient(circle at 13% 14%, rgba(90, 200, 250, .40), transparent 32vw),
+          radial-gradient(circle at 88% 10%, rgba(255, 159, 206, .34), transparent 28vw),
+          linear-gradient(145deg, #f6fbff 0%, #eef7ff 45%, #fff6fb 100%) !important;
+      }
+      body[data-campus-route="/login"]::before,
+      body[data-campus-route="/login"]::after {
+        content: "";
+        position: fixed;
+        z-index: 0;
+        pointer-events: none;
+        border-radius: 999px;
+        filter: blur(56px);
+        opacity: .72;
+        transform: translate3d(0, var(--campus-login-shift), 0);
+      }
+      body[data-campus-route="/login"]::before {
+        width: 340px;
+        height: 340px;
+        left: -120px;
+        top: 92px;
+        background: rgba(90, 200, 250, .38);
+        animation: campus-ios-drift 8s ease-in-out infinite alternate;
+      }
+      body[data-campus-route="/login"]::after {
+        width: 320px;
+        height: 320px;
+        right: -110px;
+        top: 42px;
+        background: rgba(191, 144, 255, .28);
+        animation: campus-ios-drift 9s ease-in-out infinite alternate-reverse;
+      }
+      body[data-campus-route="/login"] #root,
+      body[data-campus-route="/login"] .campus-login-story {
+        position: relative;
+        z-index: 1;
+      }
+      body[data-campus-route="/login"] .campus-login-story {
+        color: var(--campus-ios-ink);
+      }
+      body[data-campus-route="/login"] .campus-login-hero,
+      body[data-campus-route="/login"] .campus-login-band,
+      body[data-campus-route="/login"] .campus-login-bottom {
+        position: relative;
+      }
+      body[data-campus-route="/login"] .campus-login-kicker {
+        color: rgba(0, 122, 255, .78);
+        font-weight: 800;
+      }
+      body[data-campus-route="/login"] .campus-login-hero h1,
+      body[data-campus-route="/login"] .campus-login-bottom h2 {
+        color: var(--campus-ios-ink);
+        text-wrap: balance;
+      }
+      body[data-campus-route="/login"] .campus-login-hero h1 {
+        max-width: 660px;
+        font-size: clamp(2.8rem, 4.6vw, 4rem);
+        line-height: 1.08;
+      }
+      body[data-campus-route="/login"] .campus-login-hero p,
+      body[data-campus-route="/login"] .campus-login-bottom p,
+      body[data-campus-route="/login"] .campus-login-secondary {
+        color: var(--campus-ios-muted);
+      }
+      body[data-campus-route="/login"] .campus-login-open {
+        min-height: 52px;
+        padding: 0 22px;
+        color: #fff;
+        background: rgba(11, 18, 32, .92);
+        border: 1px solid rgba(255, 255, 255, .72);
+        box-shadow: 0 18px 44px rgba(11, 18, 32, .18), inset 0 1px rgba(255, 255, 255, .25);
+        transition: transform .22s cubic-bezier(.2, 1, .22, 1), box-shadow .22s ease, background .22s ease;
+      }
+      body[data-campus-route="/login"] .campus-login-open:hover {
+        transform: translateY(-2px) scale(1.015);
+        box-shadow: 0 24px 54px rgba(11, 18, 32, .22), inset 0 1px rgba(255, 255, 255, .3);
+      }
+      body[data-campus-route="/login"] .campus-login-open:active {
+        transform: translateY(1px) scale(.985);
+      }
+      body[data-campus-route="/login"] .campus-login-visual {
+        min-height: 68vh;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .02)),
+          linear-gradient(135deg, rgba(90, 200, 250, .58), rgba(175, 82, 222, .50) 54%, rgba(255, 159, 10, .30)),
+          url("/dingfang-example.jpg") center/cover no-repeat;
+        border: 1px solid rgba(255, 255, 255, .62);
+        border-radius: 36px;
+        box-shadow: 0 34px 90px rgba(31, 55, 90, .22), inset 0 1px rgba(255, 255, 255, .62);
+        transform: perspective(900px) rotateX(var(--campus-tilt-y, 0deg)) rotateY(var(--campus-tilt-x, 0deg)) translate3d(0, var(--campus-login-visual-shift, 0px), 0);
+        transform-style: preserve-3d;
+        transition: transform .35s cubic-bezier(.2, 1, .22, 1), box-shadow .35s ease;
+      }
+      body[data-campus-route="/login"] .campus-login-visual::after {
+        background:
+          radial-gradient(circle at 24% 20%, rgba(255,255,255,.50), transparent 21%),
+          linear-gradient(180deg, rgba(255,255,255,.12), transparent 42%, rgba(13, 24, 42, .44));
+      }
+      body[data-campus-route="/login"] .campus-login-visual-copy {
+        left: 20px;
+        right: 20px;
+        bottom: 20px;
+        z-index: 2;
+        padding: 18px;
+        border: 1px solid rgba(255,255,255,.58);
+        border-radius: 26px;
+        color: #0b1220;
+        background: rgba(255,255,255,.56);
+        backdrop-filter: blur(24px) saturate(1.24);
+        -webkit-backdrop-filter: blur(24px) saturate(1.24);
+        box-shadow: 0 18px 46px rgba(31,55,90,.16), inset 0 1px rgba(255,255,255,.72);
+      }
+      body[data-campus-route="/login"] .campus-login-visual-copy strong {
+        color: #0b1220;
+      }
+      body[data-campus-route="/login"] .campus-login-visual-copy p {
+        color: rgba(83,97,116,.92);
+      }
+      .campus-ios-preview {
+        position: absolute;
+        inset: 28px 24px auto;
+        z-index: 2;
+        display: grid;
+        gap: 14px;
+        max-width: 360px;
+        transform: translateZ(50px);
+      }
+      .campus-ios-preview-card {
+        border: 1px solid rgba(255,255,255,.58);
+        border-radius: 28px;
+        padding: 18px;
+        color: #0b1220;
+        background: rgba(255,255,255,.56);
+        backdrop-filter: blur(28px) saturate(1.36);
+        -webkit-backdrop-filter: blur(28px) saturate(1.36);
+        box-shadow: 0 20px 46px rgba(31,55,90,.18), inset 0 1px rgba(255,255,255,.74);
+        animation: campus-ios-float 5.4s ease-in-out infinite;
+      }
+      .campus-ios-preview-card:nth-child(2) {
+        width: 78%;
+        justify-self: end;
+        animation-delay: -1.8s;
+      }
+      .campus-ios-preview-card strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 1rem;
+      }
+      .campus-ios-preview-card span {
+        display: block;
+        color: rgba(83,97,116,.92);
+        font-size: .88rem;
+        line-height: 1.55;
+      }
+      .campus-ios-metric-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .campus-ios-metric {
+        border-radius: 18px;
+        padding: 10px;
+        background: rgba(255,255,255,.46);
+        text-align: center;
+      }
+      .campus-ios-metric b,
+      .campus-ios-metric small {
+        display: block;
+      }
+      .campus-ios-metric b {
+        color: #007aff;
+        font-size: 1.15rem;
+      }
+      .campus-ios-metric small {
+        color: rgba(83,97,116,.86);
+        font-size: .72rem;
+      }
+      body[data-campus-route="/login"] .campus-login-strip,
+      body[data-campus-route="/login"] .campus-login-card,
+      body[data-campus-route="/login"] .campus-plan-card {
+        color: var(--campus-ios-ink);
+        border: 1px solid rgba(255,255,255,.68);
+        background: rgba(255,255,255,.48);
+        backdrop-filter: blur(28px) saturate(1.28);
+        -webkit-backdrop-filter: blur(28px) saturate(1.28);
+        box-shadow: 0 24px 68px rgba(31,55,90,.16), inset 0 1px rgba(255,255,255,.72);
+      }
+      body[data-campus-route="/login"] .campus-login-strip span,
+      body[data-campus-route="/login"] .campus-login-card p,
+      body[data-campus-route="/login"] .campus-plan-card p,
+      body[data-campus-route="/login"] .campus-plan-card li,
+      body[data-campus-route="/login"] .campus-plan-price span {
+        color: rgba(83,97,116,.92);
+      }
+      body[data-campus-route="/login"] .campus-story-carousel .swiper-pagination-bullet {
+        background: rgba(11,18,32,.18);
+      }
+      body[data-campus-route="/login"] .campus-story-carousel .swiper-pagination-bullet-active {
+        background: #007aff;
+      }
+      body[data-campus-route="/login"] #root > div {
+        background: rgba(244, 248, 255, 0);
+        transition: opacity .28s ease, background .28s ease, backdrop-filter .28s ease;
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+        position: relative;
+        border: 1px solid rgba(255,255,255,.78) !important;
+        border-radius: 36px !important;
+        background: rgba(255,255,255,.66) !important;
+        backdrop-filter: blur(34px) saturate(1.32);
+        -webkit-backdrop-filter: blur(34px) saturate(1.32);
+        box-shadow: 0 34px 96px rgba(31,55,90,.24), inset 0 1px rgba(255,255,255,.78) !important;
+        transform: translate3d(0, 104px, 0) scale(.96);
+        opacity: .6;
+        transition: transform .52s cubic-bezier(.18, 1.16, .22, 1), opacity .28s ease;
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 13px;
+        width: 72px;
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(11,18,32,.18);
+        transform: translateX(-50%);
+      }
+      body[data-campus-route="/login"][data-campus-login-overlay="open"] #root > div {
+        background: rgba(246, 250, 255, .48);
+        backdrop-filter: blur(18px) saturate(1.18);
+        -webkit-backdrop-filter: blur(18px) saturate(1.18);
+      }
+      body[data-campus-route="/login"][data-campus-login-overlay="open"] #root > div > .w-full.max-w-md {
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: 1;
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md input {
+        min-height: 56px;
+        border-radius: 22px !important;
+        border: 1px solid rgba(255,255,255,.72) !important;
+        background: rgba(255,255,255,.44) !important;
+        color: #0b1220 !important;
+        -webkit-text-fill-color: #0b1220;
+        box-shadow: inset 0 1px rgba(255,255,255,.56);
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md input::placeholder {
+        color: rgba(83,97,116,.68) !important;
+        -webkit-text-fill-color: rgba(83,97,116,.68);
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md button[type="submit"],
+      body[data-campus-route="/login"] #campus-send-code {
+        border-radius: 999px !important;
+        transition: transform .18s cubic-bezier(.2, 1, .22, 1), filter .18s ease;
+      }
+      body[data-campus-route="/login"] #root > div > .w-full.max-w-md button[type="submit"]:active,
+      body[data-campus-route="/login"] #campus-send-code:active {
+        transform: scale(.985);
+      }
+      body[data-campus-route="/login"] .campus-code-panel input {
+        background: rgba(255,255,255,.44) !important;
+        color: #0b1220 !important;
+        -webkit-text-fill-color: #0b1220;
+        border-color: rgba(255,255,255,.72) !important;
+      }
+      body[data-campus-route="/login"] .campus-code-panel input::placeholder {
+        color: rgba(83,97,116,.68);
+        -webkit-text-fill-color: rgba(83,97,116,.68);
+      }
+      body[data-campus-route="/login"] .campus-code-message {
+        color: rgba(83,97,116,.86);
+      }
+      @keyframes campus-ios-float {
+        0%, 100% { transform: translate3d(0, 0, 0); }
+        50% { transform: translate3d(0, -10px, 0); }
+      }
+      @keyframes campus-ios-drift {
+        0% { transform: translate3d(-8px, var(--campus-login-shift), 0) scale(1); }
+        100% { transform: translate3d(14px, calc(var(--campus-login-shift) + 22px), 0) scale(1.06); }
+      }
+      @media (max-width: 640px) {
+        body[data-campus-route="/login"] .campus-login-story {
+          min-height: 228vh;
+        }
+        body[data-campus-route="/login"] .campus-login-hero {
+          min-height: 92vh;
+          padding-top: 20px;
+        }
+        body[data-campus-route="/login"] .campus-login-hero h1 {
+          font-size: 2.16rem;
+          line-height: 1.08;
+        }
+        body[data-campus-route="/login"] .campus-login-visual {
+          min-height: 56vh;
+          border-radius: 32px;
+        }
+        .campus-ios-preview {
+          inset: 18px 16px auto;
+          gap: 10px;
+        }
+        .campus-ios-preview-card {
+          border-radius: 24px;
+          padding: 14px;
+        }
+        .campus-ios-preview-card:nth-child(2) {
+          width: 84%;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+          border-radius: 34px !important;
+          max-height: calc(100vh - 18px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        body[data-campus-route="/login"]::before,
+        body[data-campus-route="/login"]::after,
+        .campus-ios-preview-card {
+          animation: none !important;
+        }
+        body[data-campus-route="/login"] .campus-login-visual,
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md,
+        body[data-campus-route="/login"] .campus-login-open {
+          transition-duration: .18s !important;
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1252,6 +1583,7 @@
       state.loginObserver.observe(trigger);
     }
 
+    ensureLoginMotion(story);
     ensureLoginSwipers();
   }
 
@@ -1266,11 +1598,71 @@
     state.loginSwipers = [];
     document.querySelector("#campus-login-story")?.remove();
     delete document.body.dataset.campusLoginOverlay;
+    state.loginMotionCleanup?.();
+    state.loginMotionCleanup = null;
     if (state.loginObserver) {
       state.loginObserver.disconnect();
       state.loginObserver = null;
     }
     updateScrollLock();
+  }
+
+  function ensureLoginMotion(story) {
+    if (!story || story.dataset.campusMotionBound === "true") {
+      return;
+    }
+
+    story.dataset.campusMotionBound = "true";
+    const visual = story.querySelector(".campus-login-visual");
+    let rafId = 0;
+
+    const updateScrollMotion = () => {
+      if (rafId) {
+        return;
+      }
+
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        const max = Math.max(1, story.scrollHeight - window.innerHeight);
+        const progress = Math.min(1, Math.max(0, window.scrollY / max));
+        const shift = `${Math.round(progress * 42)}px`;
+        const visualShift = `${Math.round(progress * -12)}px`;
+        document.body.style.setProperty("--campus-login-shift", shift);
+        document.body.style.setProperty("--campus-login-visual-shift", visualShift);
+      });
+    };
+
+    const updateTilt = (event) => {
+      if (!visual || window.matchMedia("(pointer: coarse)").matches) {
+        return;
+      }
+      const rect = visual.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width - .5;
+      const y = (event.clientY - rect.top) / rect.height - .5;
+      visual.style.setProperty("--campus-tilt-x", `${(x * 5).toFixed(2)}deg`);
+      visual.style.setProperty("--campus-tilt-y", `${(-y * 4).toFixed(2)}deg`);
+    };
+
+    const resetTilt = () => {
+      visual?.style.setProperty("--campus-tilt-x", "0deg");
+      visual?.style.setProperty("--campus-tilt-y", "0deg");
+    };
+
+    updateScrollMotion();
+    window.addEventListener("scroll", updateScrollMotion, { passive: true });
+    window.addEventListener("resize", updateScrollMotion, { passive: true });
+    visual?.addEventListener("pointermove", updateTilt);
+    visual?.addEventListener("pointerleave", resetTilt);
+
+    state.loginMotionCleanup = () => {
+      window.removeEventListener("scroll", updateScrollMotion);
+      window.removeEventListener("resize", updateScrollMotion);
+      visual?.removeEventListener("pointermove", updateTilt);
+      visual?.removeEventListener("pointerleave", resetTilt);
+      cancelAnimationFrame(rafId);
+      document.body.style.removeProperty("--campus-login-shift");
+      document.body.style.removeProperty("--campus-login-visual-shift");
+    };
   }
 
   function ensureSwiperAssets() {
@@ -1410,6 +1802,21 @@
           </div>
         </div>
         <div class="campus-login-visual">
+          <div class="campus-ios-preview" aria-hidden="true">
+            <div class="campus-ios-preview-card">
+              <strong>今日推荐</strong>
+              <span>按同校、兴趣和在线状态，为你保留更自然的开场。</span>
+              <div class="campus-ios-metric-row">
+                <div class="campus-ios-metric"><b>12</b><small>新推荐</small></div>
+                <div class="campus-ios-metric"><b>92%</b><small>合拍度</small></div>
+                <div class="campus-ios-metric"><b>3</b><small>共同兴趣</small></div>
+              </div>
+            </div>
+            <div class="campus-ios-preview-card">
+              <strong>摄影搭子</strong>
+              <span>同校 · 周末有空 · 喜欢城市漫步</span>
+            </div>
+          </div>
           <div class="campus-login-visual-copy">
             <strong>同校优先，先聊熟，再决定要不要认识</strong>
             <p>慢慢往下滑就好，看到最后时，登录和注册会自然出现。</p>

@@ -108,6 +108,49 @@
         justify-content: center;
         white-space: nowrap;
       }
+      @media (prefers-reduced-motion: no-preference) {
+        html {
+          scroll-behavior: smooth;
+        }
+      }
+      .apple-card,
+      .apple-btn,
+      .apple-btn-secondary,
+      .ios-nav-btn,
+      .ios-tab-item,
+      .campus-code-panel button,
+      .campus-quick-actions a,
+      .campus-membership-button,
+      .campus-login-open {
+        -webkit-tap-highlight-color: transparent;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+      .apple-card {
+        transition: transform .22s cubic-bezier(.16, 1, .3, 1), box-shadow .22s ease, border-color .22s ease, background .22s ease, opacity .18s ease !important;
+        will-change: transform;
+      }
+      .apple-btn,
+      .apple-btn-secondary,
+      .ios-nav-btn,
+      .ios-tab-item,
+      .campus-code-panel button,
+      .campus-quick-actions a,
+      .campus-membership-button,
+      .campus-login-open {
+        transition: transform .16s cubic-bezier(.16, 1, .3, 1), box-shadow .2s ease, background .2s ease, color .18s ease, opacity .18s ease, filter .18s ease !important;
+        will-change: transform;
+      }
+      .apple-btn:active,
+      .apple-btn-secondary:active,
+      .ios-nav-btn:active,
+      .ios-tab-item:active,
+      .campus-code-panel button:active,
+      .campus-quick-actions a:active,
+      .campus-membership-button:active,
+      .campus-login-open:active {
+        transform: translate3d(0, 1px, 0) scale(.985);
+      }
       .campus-code-panel button:disabled { opacity: .55; cursor: not-allowed; }
       .campus-code-message { grid-column: 1 / -1; min-height: 18px; color: rgba(255,255,255,.66); font-size: 12px; padding-left: 4px; }
       .campus-school-native-wrap {
@@ -1059,7 +1102,10 @@
         box-shadow: 0 34px 90px rgba(31, 55, 90, .22), inset 0 1px rgba(255, 255, 255, .62);
         transform: perspective(900px) rotateX(var(--campus-tilt-y, 0deg)) rotateY(var(--campus-tilt-x, 0deg)) translate3d(0, var(--campus-login-visual-shift, 0px), 0);
         transform-style: preserve-3d;
-        transition: transform .35s cubic-bezier(.2, 1, .22, 1), box-shadow .35s ease;
+        transition: transform .28s cubic-bezier(.16, 1, .3, 1), box-shadow .28s ease;
+        will-change: transform;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
       body[data-campus-route="/login"] .campus-login-visual::after {
         background:
@@ -1172,6 +1218,7 @@
       body[data-campus-route="/login"] #root > div {
         background: rgba(244, 248, 255, 0);
         transition: opacity .28s ease, background .28s ease, backdrop-filter .28s ease;
+        will-change: opacity, background, backdrop-filter;
       }
       body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
         position: relative;
@@ -1183,7 +1230,12 @@
         box-shadow: 0 34px 96px rgba(31,55,90,.24), inset 0 1px rgba(255,255,255,.78) !important;
         transform: translate3d(0, 104px, 0) scale(.96);
         opacity: .6;
-        transition: transform .52s cubic-bezier(.18, 1.16, .22, 1), opacity .28s ease;
+        transition: transform .44s cubic-bezier(.16, 1, .3, 1), opacity .24s ease;
+        will-change: transform, opacity;
+        contain: paint;
+        overscroll-behavior: contain;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
       body[data-campus-route="/login"] #root > div > .w-full.max-w-md::before {
         content: "";
@@ -1221,7 +1273,7 @@
       body[data-campus-route="/login"] #root > div > .w-full.max-w-md button[type="submit"],
       body[data-campus-route="/login"] #campus-send-code {
         border-radius: 999px !important;
-        transition: transform .18s cubic-bezier(.2, 1, .22, 1), filter .18s ease;
+        transition: transform .16s cubic-bezier(.16, 1, .3, 1), filter .18s ease;
       }
       body[data-campus-route="/login"] #root > div > .w-full.max-w-md button[type="submit"]:active,
       body[data-campus-route="/login"] #campus-send-code:active {
@@ -1489,7 +1541,9 @@
           rgba(4, 7, 17, .18);
         backdrop-filter: blur(0px);
         -webkit-backdrop-filter: blur(0px);
-        animation: campus-route-backdrop .82s cubic-bezier(.2, 1, .22, 1) forwards;
+        animation: campus-route-backdrop .68s cubic-bezier(.16, 1, .3, 1) forwards;
+        contain: layout paint;
+        will-change: opacity, backdrop-filter;
       }
       .campus-route-transition::before,
       .campus-route-transition::after {
@@ -1508,7 +1562,8 @@
         box-shadow:
           0 0 80px rgba(105,195,255,.44),
           inset 0 0 42px rgba(255,255,255,.32);
-        animation: campus-route-ring .82s cubic-bezier(.2, 1, .22, 1) forwards;
+        animation: campus-route-ring .68s cubic-bezier(.16, 1, .3, 1) forwards;
+        will-change: transform, opacity;
       }
       .campus-route-transition::after {
         width: 54vw;
@@ -1519,7 +1574,8 @@
           conic-gradient(from 160deg, rgba(90,200,250,.08), rgba(255,151,215,.30), rgba(255,255,255,.18), rgba(90,200,250,.08));
         filter: blur(10px);
         opacity: .82;
-        animation: campus-route-orbit .82s cubic-bezier(.2, 1, .22, 1) forwards;
+        animation: campus-route-orbit .68s cubic-bezier(.16, 1, .3, 1) forwards;
+        will-change: transform, opacity;
       }
       .campus-route-transition-card {
         position: relative;
@@ -1537,7 +1593,10 @@
         backdrop-filter: blur(28px) saturate(1.36);
         -webkit-backdrop-filter: blur(28px) saturate(1.36);
         transform-origin: center;
-        animation: campus-route-card .82s cubic-bezier(.2, 1, .22, 1) forwards;
+        animation: campus-route-card .68s cubic-bezier(.16, 1, .3, 1) forwards;
+        will-change: transform, opacity;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
       .campus-route-transition-card strong {
         display: block;
@@ -1555,7 +1614,7 @@
       }
       body.campus-route-transitioning #root,
       body.campus-route-transitioning .campus-login-story {
-        animation: campus-route-page-out .82s cubic-bezier(.2, 1, .22, 1) forwards;
+        animation: campus-route-page-out .68s cubic-bezier(.16, 1, .3, 1) forwards;
       }
       @keyframes campus-route-backdrop {
         0% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
@@ -1578,7 +1637,7 @@
       }
       @keyframes campus-route-page-out {
         0% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
-        100% { opacity: .18; transform: scale(.94) translateY(-18px); filter: blur(12px); }
+        100% { opacity: .22; transform: scale(.96) translateY(-12px); filter: blur(8px); }
       }
     `;
     document.head.appendChild(style);
@@ -1684,6 +1743,7 @@
 
     const source = options.source || "home-to-match";
     const title = options.title || "Match Deck";
+    const transitionMs = 640;
     const text = options.text || "进入 3D 匹配卡组";
 
     sessionStorage.setItem("campus-route-transition", source);
@@ -1705,7 +1765,7 @@
 
     setTimeout(() => {
       window.location.assign("/search.html");
-    }, 760);
+    }, transitionMs);
   }
 
   function queueEnhance() {
@@ -2090,7 +2150,10 @@
 
     story.dataset.campusMotionBound = "true";
     const visual = story.querySelector(".campus-login-visual");
+    const coarsePointer = window.matchMedia?.("(pointer: coarse)");
     let rafId = 0;
+    let tiltRafId = 0;
+    let pendingTilt = null;
 
     const updateScrollMotion = () => {
       if (rafId) {
@@ -2109,17 +2172,37 @@
     };
 
     const updateTilt = (event) => {
-      if (!visual || window.matchMedia("(pointer: coarse)").matches) {
+      if (!visual || coarsePointer?.matches) {
         return;
       }
       const rect = visual.getBoundingClientRect();
       const x = (event.clientX - rect.left) / rect.width - .5;
       const y = (event.clientY - rect.top) / rect.height - .5;
-      visual.style.setProperty("--campus-tilt-x", `${(x * 5).toFixed(2)}deg`);
-      visual.style.setProperty("--campus-tilt-y", `${(-y * 4).toFixed(2)}deg`);
+      pendingTilt = {
+        x: `${(x * 5).toFixed(2)}deg`,
+        y: `${(-y * 4).toFixed(2)}deg`,
+      };
+
+      if (tiltRafId) {
+        return;
+      }
+
+      tiltRafId = requestAnimationFrame(() => {
+        tiltRafId = 0;
+        if (!pendingTilt) {
+          return;
+        }
+
+        visual.style.setProperty("--campus-tilt-x", pendingTilt.x);
+        visual.style.setProperty("--campus-tilt-y", pendingTilt.y);
+        pendingTilt = null;
+      });
     };
 
     const resetTilt = () => {
+      pendingTilt = null;
+      cancelAnimationFrame(tiltRafId);
+      tiltRafId = 0;
       visual?.style.setProperty("--campus-tilt-x", "0deg");
       visual?.style.setProperty("--campus-tilt-y", "0deg");
     };
@@ -2127,7 +2210,7 @@
     updateScrollMotion();
     window.addEventListener("scroll", updateScrollMotion, { passive: true });
     window.addEventListener("resize", updateScrollMotion, { passive: true });
-    visual?.addEventListener("pointermove", updateTilt);
+    visual?.addEventListener("pointermove", updateTilt, { passive: true });
     visual?.addEventListener("pointerleave", resetTilt);
 
     state.loginMotionCleanup = () => {
@@ -2136,8 +2219,11 @@
       visual?.removeEventListener("pointermove", updateTilt);
       visual?.removeEventListener("pointerleave", resetTilt);
       cancelAnimationFrame(rafId);
+      cancelAnimationFrame(tiltRafId);
       document.body.style.removeProperty("--campus-login-shift");
       document.body.style.removeProperty("--campus-login-visual-shift");
+      visual?.style.removeProperty("--campus-tilt-x");
+      visual?.style.removeProperty("--campus-tilt-y");
     };
   }
 

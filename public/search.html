@@ -119,6 +119,14 @@
         text-decoration: none;
         background: linear-gradient(180deg, #fff, #d7e5ff 62%, #ffd8e5);
         cursor: pointer;
+        transition: transform .16s cubic-bezier(.16, 1, .3, 1), box-shadow .2s ease, background .2s ease, opacity .18s ease;
+        -webkit-tap-highlight-color: transparent;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+      a:active,
+      button:active {
+        transform: translate3d(0, 1px, 0) scale(.985);
       }
       .toolbar, .card {
         border: 1px solid rgba(255, 255, 255, 0.18);
@@ -308,6 +316,7 @@
         min-height: 510px;
         perspective: 1400px;
         touch-action: pan-y;
+        overscroll-behavior: contain;
       }
       .match-deck {
         position: relative;
@@ -315,6 +324,7 @@
         min-height: 510px;
         display: block;
         transform-style: preserve-3d;
+        contain: layout paint;
       }
       .match-card {
         position: absolute;
@@ -335,12 +345,24 @@
           rotateZ(var(--drag-rotate, 0deg))
           rotateY(var(--stack-rotate, 0deg))
           scale(var(--stack-scale, 1));
-        transition: transform .42s cubic-bezier(.2, 1, .22, 1), opacity .28s ease, filter .28s ease;
+        transform-origin: center;
+        transition: transform .36s cubic-bezier(.16, 1, .3, 1), opacity .24s ease, filter .24s ease;
         will-change: transform;
+        contain: layout paint;
+        user-select: none;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
       .match-card.is-dragging {
         transition: none;
         cursor: grabbing;
+        touch-action: none;
+      }
+      .match-card.is-exiting-right,
+      .match-card.is-exiting-up,
+      .match-card.is-exiting-left {
+        pointer-events: none;
+        transition: transform .32s cubic-bezier(.16, 1, .3, 1), opacity .22s ease, filter .22s ease;
       }
       .match-card.is-exiting-right {
         transform: translate3d(130%, -8%, 0) rotateZ(18deg) rotateY(-10deg) scale(.96);
@@ -352,7 +374,7 @@
         filter: brightness(1.35) saturate(1.2);
       }
       .match-card.is-returning {
-        animation: return-card .48s cubic-bezier(.2, 1, .22, 1) both;
+        animation: return-card .42s cubic-bezier(.16, 1, .3, 1) both;
       }
       .match-card.is-exiting-left {
         transform: translate3d(-130%, 8%, 0) rotateZ(-18deg) rotateY(10deg) scale(.96);
@@ -831,6 +853,39 @@
         renderDeck();
       }
 
+      function dragCue(x, y) {
+        if (y < -80 && Math.abs(x) < 132) {
+          return "super";
+        }
+
+        if (x > 68) {
+          return "like";
+        }
+
+        return x < -68 ? "skip" : "";
+      }
+
+      function renderDrag(card) {
+        if (!dragState) {
+          return;
+        }
+
+        dragState.rafId = 0;
+        const rotate = Math.max(-16, Math.min(16, dragState.x / 14));
+        card.style.setProperty("--drag-x", `${dragState.x}px`);
+        card.style.setProperty("--drag-y", `${dragState.y}px`);
+        card.style.setProperty("--drag-rotate", `${rotate}deg`);
+        card.dataset.swipe = dragCue(dragState.x, dragState.y);
+      }
+
+      function queueDrag(card) {
+        if (!dragState || dragState.rafId) {
+          return;
+        }
+
+        dragState.rafId = requestAnimationFrame(() => renderDrag(card));
+      }
+
       function bindDrag(card) {
         card.addEventListener("pointerdown", (event) => {
           if (event.target.closest("button, a, input, select")) {
@@ -843,6 +898,7 @@
             x: 0,
             y: 0,
             pointerId: event.pointerId,
+            rafId: 0,
           };
           card.classList.add("is-dragging");
         });
@@ -853,13 +909,10 @@
           }
           dragState.x = event.clientX - dragState.startX;
           dragState.y = event.clientY - dragState.startY;
-          const rotate = Math.max(-16, Math.min(16, dragState.x / 14));
-          card.style.setProperty("--drag-x", `${dragState.x}px`);
-          card.style.setProperty("--drag-y", `${dragState.y}px`);
-          card.style.setProperty("--drag-rotate", `${rotate}deg`);
-          card.dataset.swipe = dragState.y < -80 && Math.abs(dragState.x) < 132
-            ? "super"
-            : dragState.x > 68 ? "like" : dragState.x < -68 ? "skip" : "";
+          if (Math.abs(dragState.x) > 8 || dragState.y < -8) {
+            event.preventDefault();
+          }
+          queueDrag(card);
         });
 
         card.addEventListener("pointerup", (event) => finishDrag(card, event.pointerId));
@@ -873,7 +926,17 @@
         const direction = dragState.y < -124 && Math.abs(dragState.x) < 128
           ? "up"
           : dragState.x > 96 ? "right" : dragState.x < -96 ? "left" : "";
+        if (dragState.rafId) {
+          cancelAnimationFrame(dragState.rafId);
+        }
         dragState = null;
+        try {
+          if (card.hasPointerCapture?.(pointerId)) {
+            card.releasePointerCapture(pointerId);
+          }
+        } catch {
+          // Some browsers release capture automatically on pointerup.
+        }
         card.classList.remove("is-dragging");
         card.dataset.swipe = "";
         card.style.removeProperty("--drag-x");
@@ -912,7 +975,7 @@
             setStatus(lockedPreview ? "登录后可以发送超级喜欢。" : "已发送超级喜欢");
           }
           renderDeck();
-        }, 260);
+        }, 300);
       }
 
       function restorePreviousCard() {

@@ -1016,7 +1016,12 @@
 
           const exact = schools.find((school) => school.name === query);
           syncSchool(exact ? exact.name : "");
-          matches = schools.filter((school) => school.name.includes(query)).slice(0, 10);
+          const searchSchools = window.CampusUniversityOptions?.searchSchools;
+          matches = typeof searchSchools === "function"
+            ? searchSchools(query, 10)
+            : schools
+                .filter((school) => school.name.includes(query) || (school.abbr || "").includes(query.toLowerCase()))
+                .slice(0, 10);
 
           if (!matches.length) {
             suggestions.innerHTML = `<div class="school-empty">没有找到相关高校，换个关键词试试。</div>`;

@@ -2639,9 +2639,12 @@
           return;
         }
 
-        currentMatches = schools
-          .filter((school) => school.name.includes(query))
-          .slice(0, 10);
+        const searchSchools = window.CampusUniversityOptions?.searchSchools;
+        currentMatches = typeof searchSchools === "function"
+          ? searchSchools(query, 10)
+          : schools
+              .filter((school) => school.name.includes(query) || (school.abbr || "").includes(query.toLowerCase()))
+              .slice(0, 10);
 
         if (!currentMatches.length) {
           suggestions.innerHTML = `<div class="campus-school-empty">暂时没有找到相关高校，换个关键词试试。</div>`;

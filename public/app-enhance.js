@@ -1204,6 +1204,188 @@
           transition-duration: .18s !important;
         }
       }
+
+      #campus-spline-stage {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: 0;
+        background:
+          linear-gradient(135deg, #050711 0%, #0a1024 36%, #171126 68%, #07121e 100%);
+        transition: opacity .45s ease;
+      }
+      #campus-spline-stage.is-active {
+        opacity: 1;
+      }
+      #campus-spline-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .campus-spline-fallback::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          conic-gradient(from 210deg at 62% 46%, rgba(99,191,255,.35), rgba(195,126,255,.28), rgba(255,156,204,.26), rgba(99,191,255,.35)),
+          linear-gradient(135deg, #050711, #0d152c 50%, #171126);
+      }
+      body[data-campus-spline="active"] {
+        background: #050711 !important;
+      }
+      body[data-campus-spline="active"]::before,
+      body[data-campus-spline="active"]::after {
+        display: none !important;
+      }
+      body[data-campus-spline="active"] #root,
+      body[data-campus-spline="active"] .campus-login-story {
+        position: relative;
+        z-index: 2;
+      }
+      body[data-campus-spline="active"] .liquid-orb {
+        display: none !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-story {
+        color: rgba(255,255,255,.92);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-kicker {
+        color: rgba(133,213,255,.92);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-hero h1,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-bottom h2 {
+        color: rgba(255,255,255,.96);
+        text-shadow: 0 24px 90px rgba(109,196,255,.24);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-hero p,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-bottom p,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-secondary {
+        color: rgba(224,238,255,.78);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-open {
+        color: #04111f;
+        background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(142,220,255,.9) 52%, rgba(255,174,217,.92));
+        box-shadow: 0 24px 70px rgba(93,185,255,.28), inset 0 1px rgba(255,255,255,.82);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-visual {
+        background:
+          linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.04)),
+          linear-gradient(180deg, rgba(95,180,255,.12), rgba(255,135,205,.10));
+        border-color: rgba(255,255,255,.24);
+        box-shadow: 0 34px 110px rgba(0,0,0,.36), inset 0 1px rgba(255,255,255,.28);
+        backdrop-filter: blur(20px) saturate(1.25);
+        -webkit-backdrop-filter: blur(20px) saturate(1.25);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-visual::after {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.08), transparent 42%, rgba(2,7,16,.18)),
+          linear-gradient(90deg, rgba(90,200,250,.16), transparent 34%, rgba(255,159,206,.14));
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-ios-preview-card,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-visual-copy,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-strip,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-card,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-plan-card {
+        color: rgba(255,255,255,.94);
+        border-color: rgba(255,255,255,.22);
+        background: rgba(10, 18, 36, .48);
+        backdrop-filter: blur(28px) saturate(1.35);
+        -webkit-backdrop-filter: blur(28px) saturate(1.35);
+        box-shadow: 0 26px 80px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.22);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-ios-preview-card strong,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-visual-copy strong,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-card h3,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-plan-card h3,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-strip strong {
+        color: rgba(255,255,255,.96);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-ios-preview-card span,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-visual-copy p,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-strip span,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-login-card p,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-plan-card p,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-plan-card li,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-plan-price span {
+        color: rgba(224,238,255,.74);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-ios-metric {
+        background: rgba(255,255,255,.12);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-ios-metric small {
+        color: rgba(224,238,255,.82);
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md {
+        color: rgba(255,255,255,.94);
+        border-color: rgba(255,255,255,.24) !important;
+        background: rgba(9, 16, 32, .72) !important;
+        box-shadow: 0 38px 110px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.26) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md h1,
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md label,
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-900"],
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-800"],
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-700"] {
+        color: rgba(255,255,255,.96) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md p,
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md span,
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-600"],
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-500"],
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-ios-gray-400"] {
+        color: rgba(224,238,255,.78) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md input,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-code-panel input {
+        color: rgba(255,255,255,.96) !important;
+        -webkit-text-fill-color: rgba(255,255,255,.96);
+        border-color: rgba(255,255,255,.18) !important;
+        background: rgba(255,255,255,.08) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/login"] #root > div > .w-full.max-w-md input::placeholder,
+      body[data-campus-spline="active"][data-campus-route="/login"] .campus-code-panel input::placeholder {
+        color: rgba(224,238,255,.58) !important;
+        -webkit-text-fill-color: rgba(224,238,255,.58);
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] main {
+        position: relative;
+        z-index: 2;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] .campus-home-header,
+      body[data-campus-spline="active"][data-campus-route="/"] .campus-home-hero-card,
+      body[data-campus-spline="active"][data-campus-route="/"] .apple-card,
+      body[data-campus-spline="active"][data-campus-route="/"] .liquid-glass {
+        border-color: rgba(255,255,255,.20) !important;
+        background: rgba(9, 16, 32, .48) !important;
+        backdrop-filter: blur(28px) saturate(1.36) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(1.36) !important;
+        box-shadow: 0 26px 90px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.20) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] h1,
+      body[data-campus-spline="active"][data-campus-route="/"] h2,
+      body[data-campus-spline="active"][data-campus-route="/"] h3,
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-900"],
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-800"],
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-700"] {
+        color: rgba(255,255,255,.96) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] p,
+      body[data-campus-spline="active"][data-campus-route="/"] span,
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-600"],
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-500"],
+      body[data-campus-spline="active"][data-campus-route="/"] [class*="text-ios-gray-400"] {
+        color: rgba(224,238,255,.74) !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] .ios-tabbar-wrap {
+        z-index: 8 !important;
+      }
+      body[data-campus-spline="active"][data-campus-route="/"] .ios-tabbar {
+        border-color: rgba(255,255,255,.18) !important;
+        background: rgba(9, 16, 32, .58) !important;
+        backdrop-filter: blur(28px) saturate(1.36) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(1.36) !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1242,6 +1424,24 @@
 
   function setRouteState() {
     document.body.dataset.campusRoute = window.location.pathname;
+  }
+
+  function ensureSplineScene() {
+    const route = window.location.pathname;
+    const shouldUseSpline = route === "/login" || route === "/";
+    document.body.dataset.campusSpline = shouldUseSpline ? "active" : "inactive";
+
+    if (shouldUseSpline && !document.querySelector('script[data-campus-spline-scene="true"]')) {
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = "/campus-spline-scene.js";
+      script.dataset.campusSplineScene = "true";
+      document.head.appendChild(script);
+    }
+
+    window.dispatchEvent(new CustomEvent("campus:route", {
+      detail: { route },
+    }));
   }
 
   function queueEnhance() {
@@ -2175,6 +2375,7 @@
 
   async function enhance() {
     setRouteState();
+    ensureSplineScene();
     ensureQuickActions();
     enhanceAuthPage();
     ensureLoginStory();

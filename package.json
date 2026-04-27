@@ -14,7 +14,8 @@
     "@netlify/blobs": "^10.0.11",
     "@netlify/neon": "^0.1.2",
     "mysql2": "^3.22.2",
-    "nodemailer": "^8.0.5"
+    "nodemailer": "^8.0.5",
+    "three": "^0.165.0"
   },
   "devDependencies": {
     "netlify-cli": "^25.2.0"

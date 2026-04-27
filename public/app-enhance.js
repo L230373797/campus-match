@@ -30,6 +30,14 @@
   ];
   const MEMBERSHIP_LABELS = new Set(["免费用户", "校园会员", "高级会员", "会员已过期"]);
   const AUDIENCE_COPY_REPLACEMENTS = new Map([
+    ["01 / 业务定位", "01 / 为什么这里不同"],
+    ["不是一起全抛出来，而是边滑边看到重点", "先确认感觉，再慢慢了解彼此"],
+    ["校园匹配不是泛社交广场，而是校内真实连接平台。首页改成随滚动逐段出现信息，让用户先抓到核心，再继续往下理解产品逻辑。", "这里不急着把所有人推到你面前，而是先根据同校认证、兴趣场景和相处节奏，帮你更轻松地判断谁值得认识。"],
+    ["02 / 三步机制", "02 / 认识方式"],
+    ["03 / 为什么这样做", "03 / 为什么安心"],
+    ["04 / 适合谁", "04 / 适合你吗"],
+    ["05 / 滑到底了，就开始吧", "05 / 准备好就开始"],
+    ["现在首页的信息会随着滚动一段一段出现，看到最后再给注册按钮，不再一上来把所有内容一次性展示完。", "准备好了就注册账号，先从校内认证开始，再去遇见同校、同频、同节奏的人。"],
     ["像 Apple 一样轻盈顺滑地开始一段校园连接。", "轻松一点，认识更合拍的同校新朋友。"],
     ["保持业务逻辑不变，只把资料编辑区做成更统一的 Apple 风格。", "在这里完善你的资料，会更容易遇到合适的同校同学。"],
     ["用于后续线下闭环与真实连接", "聊得合适时，也愿意进一步线下见面"],
@@ -1512,7 +1520,20 @@
           // Keep the original request body.
         }
       }
-      return originalFetch(input, init);
+      return originalFetch(input, init).then((response) => {
+        if (response.ok && /\/api\/auth\/(login|register)$/.test(url)) {
+          setTimeout(() => {
+            if (window.location.pathname === "/login" && currentToken()) {
+              startHomeToMatchTransition({
+                source: "login-to-match",
+                title: "登录成功",
+                text: "进入你的 3D 匹配卡组",
+              });
+            }
+          }, 220);
+        }
+        return response;
+      });
     };
   }
 
@@ -1577,12 +1598,16 @@
     startHomeToMatchTransition();
   }
 
-  function startHomeToMatchTransition() {
+  function startHomeToMatchTransition(options = {}) {
     if (document.querySelector("#campus-route-transition")) {
       return;
     }
 
-    sessionStorage.setItem("campus-route-transition", "home-to-match");
+    const source = options.source || "home-to-match";
+    const title = options.title || "Match Deck";
+    const text = options.text || "进入 3D 匹配卡组";
+
+    sessionStorage.setItem("campus-route-transition", source);
     document.body.classList.add("campus-route-transitioning");
     window.CampusSplineScene?.focusMatch?.();
 
@@ -1592,8 +1617,8 @@
     overlay.innerHTML = `
       <div class="campus-route-transition-card">
         <div>
-          <strong>Match Deck</strong>
-          <span>进入 3D 匹配卡组</span>
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(text)}</span>
         </div>
       </div>
     `;
@@ -1665,6 +1690,7 @@
       return;
     }
 
+    const hadToken = Boolean(state.token);
     state.token = token;
     state.checkedAt = Date.now();
 
@@ -1675,6 +1701,17 @@
       document.body.dataset.campusAuthenticated = "true";
       document.body.dataset.campusAdmin = state.user?.isAdmin ? "true" : "false";
       document.body.dataset.campusMembership = state.membership.planId;
+      if (!hadToken && (window.location.pathname === "/login" || window.location.pathname === "/")) {
+        setTimeout(() => {
+          if (currentToken()) {
+            startHomeToMatchTransition({
+              source: "login-to-match",
+              title: "登录成功",
+              text: "进入你的 3D 匹配卡组",
+            });
+          }
+        }, 260);
+      }
     } catch {
       state.user = null;
       state.membership = normalizeMembership(null);

@@ -258,7 +258,7 @@
         backdrop-filter: blur(28px) saturate(1.35);
         -webkit-backdrop-filter: blur(28px) saturate(1.35);
         transform:
-          translate3d(calc(var(--drag-x, 0px) + var(--stack-x, 0px)), var(--stack-y, 0px), var(--stack-z, 0px))
+          translate3d(calc(var(--drag-x, 0px) + var(--stack-x, 0px)), calc(var(--drag-y, 0px) + var(--stack-y, 0px)), var(--stack-z, 0px))
           rotateZ(var(--drag-rotate, 0deg))
           rotateY(var(--stack-rotate, 0deg))
           scale(var(--stack-scale, 1));
@@ -272,6 +272,14 @@
       .match-card.is-exiting-right {
         transform: translate3d(130%, -8%, 0) rotateZ(18deg) rotateY(-10deg) scale(.96);
         opacity: 0;
+      }
+      .match-card.is-exiting-up {
+        transform: translate3d(0, -132%, 0) rotateZ(0deg) rotateX(20deg) scale(.9);
+        opacity: 0;
+        filter: brightness(1.35) saturate(1.2);
+      }
+      .match-card.is-returning {
+        animation: return-card .48s cubic-bezier(.2, 1, .22, 1) both;
       }
       .match-card.is-exiting-left {
         transform: translate3d(-130%, 8%, 0) rotateZ(-18deg) rotateY(10deg) scale(.96);
@@ -354,7 +362,7 @@
       }
       .match-actions {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: .82fr .9fr 1.12fr;
         gap: 12px;
         margin-top: 18px;
       }
@@ -366,6 +374,16 @@
         color: rgba(240, 246, 255, .92);
         background: rgba(255, 255, 255, .1);
         border: 1px solid rgba(255, 255, 255, .16);
+      }
+      .match-actions .back {
+        color: rgba(240, 246, 255, .82);
+        background: rgba(255, 255, 255, .08);
+        border: 1px solid rgba(255, 255, 255, .14);
+      }
+      .match-actions .super {
+        color: #07111f;
+        background: linear-gradient(135deg, #ffffff, #b8ecff 48%, #ffcfeb);
+        box-shadow: 0 18px 40px rgba(111, 208, 255, .2);
       }
       .swipe-label {
         position: absolute;
@@ -384,10 +402,23 @@
       }
       .swipe-like { right: 24px; }
       .swipe-skip { left: 24px; }
+      .swipe-super {
+        left: 50%;
+        transform: translate(-50%, -8px);
+        background: rgba(135, 216, 255, .28);
+      }
       .match-card[data-swipe="like"] .swipe-like,
-      .match-card[data-swipe="skip"] .swipe-skip {
+      .match-card[data-swipe="skip"] .swipe-skip,
+      .match-card[data-swipe="super"] .swipe-super {
         opacity: 1;
         transform: translateY(0);
+      }
+      .match-card[data-swipe="super"] .swipe-super {
+        transform: translate(-50%, 0);
+      }
+      @keyframes return-card {
+        0% { transform: translate3d(-42%, 16%, 0) rotateZ(-12deg) scale(.86); opacity: 0; }
+        100% { opacity: 1; }
       }
       @media (max-width: 900px) {
         .toolbar, .grid, .match-board { grid-template-columns: 1fr; }
@@ -446,6 +477,14 @@
         .match-content {
           padding: 20px;
         }
+        .match-actions {
+          grid-template-columns: 1fr 1fr;
+        }
+        .match-actions .back {
+          grid-column: 1 / -1;
+          order: 3;
+          min-height: 46px;
+        }
         .match-visual {
           min-height: 214px;
         }
@@ -497,7 +536,8 @@
           <div class="match-hints">
             <span>左滑跳过</span>
             <span>右滑喜欢</span>
-            <span>松手自动吸附</span>
+            <span>上滑超级喜欢</span>
+            <span>可回退上一张</span>
           </div>
         </div>
         <div class="deck-wrap">
@@ -508,7 +548,8 @@
 
     <script type="module" src="/campus-spline-scene.js"></script>
     <script>
-      if (sessionStorage.getItem("campus-route-transition") === "home-to-match") {
+      const routeTransitionSource = sessionStorage.getItem("campus-route-transition");
+      if (routeTransitionSource === "home-to-match" || routeTransitionSource === "login-to-match") {
         sessionStorage.removeItem("campus-route-transition");
         document.body.classList.add("from-home");
         window.addEventListener("load", () => {
@@ -560,6 +601,7 @@
       let activeIndex = 0;
       let dragState = null;
       let lockedPreview = false;
+      let deckHistory = [];
 
       function setStatus(message) {
         statusBox.textContent = message;
@@ -601,6 +643,7 @@
         return `
           <span class="swipe-label swipe-skip">跳过</span>
           <span class="swipe-label swipe-like">喜欢</span>
+          <span class="swipe-label swipe-super">超级喜欢</span>
           <div class="match-visual" style="--card-a:${cardA};--card-b:${cardB}">
             <div class="match-initial">${escapeHtml(initials(user.nickname))}</div>
           </div>
@@ -615,8 +658,9 @@
             <p class="match-bio">${escapeHtml(user.bio || "这个同学还没写简介，先从标签了解一下吧。")}</p>
             <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
             <div class="match-actions">
+              <button class="back" type="button" data-back ${deckHistory.length ? "" : "disabled"}>回退</button>
               <button class="skip" type="button" data-skip="${index}">跳过</button>
-              <button type="button" data-id="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后喜欢" : "喜欢"}</button>
+              <button class="super" type="button" data-super="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后解锁" : "超级喜欢"}</button>
             </div>
           </div>
         `;
@@ -656,32 +700,35 @@
           const stackIndex = visible.length - 1 - reversedIndex;
           const card = document.createElement("article");
           card.className = "match-card";
+          card.dataset.index = String(activeIndex + stackIndex);
           card.dataset.stack = String(stackIndex);
           card.innerHTML = cardHtml(user, stackIndex, lockedPreview);
-          const likeButton = card.querySelector("[data-id]");
+          const likeButton = card.querySelector("[data-super]");
           const skipButton = card.querySelector("[data-skip]");
+          const backButton = card.querySelector("[data-back]");
 
           likeButton?.addEventListener("click", async (event) => {
             const button = event.currentTarget;
             if (lockedPreview) {
-              setStatus("登录后就可以把喜欢送给真实同学。");
+              setStatus("登录后就可以把超级喜欢送给真实同学。");
               return;
             }
             button.disabled = true;
-            button.textContent = "正在送出喜欢...";
+            button.textContent = "正在点亮...";
             try {
               await request(`/api/matches/like/${button.dataset.id}`, { method: "POST" });
-              button.textContent = "已表达喜欢";
-              swipeTopCard("right", { alreadyLiked: true });
+              button.textContent = "已超级喜欢";
+              swipeTopCard("up", { alreadyLiked: true });
             } catch (error) {
               button.textContent = error.message;
               setTimeout(() => {
                 button.disabled = false;
-                button.textContent = "喜欢";
+                button.textContent = "超级喜欢";
               }, 1800);
             }
           });
           skipButton?.addEventListener("click", () => swipeTopCard("left"));
+          backButton?.addEventListener("click", restorePreviousCard);
 
           if (stackIndex === 0) {
             bindDrag(card);
@@ -693,6 +740,7 @@
       function render(users, options = {}) {
         deckUsers = users;
         activeIndex = 0;
+        deckHistory = [];
         lockedPreview = Boolean(options.locked);
 
         if (!users.length) {
@@ -728,8 +776,11 @@
           dragState.y = event.clientY - dragState.startY;
           const rotate = Math.max(-16, Math.min(16, dragState.x / 14));
           card.style.setProperty("--drag-x", `${dragState.x}px`);
+          card.style.setProperty("--drag-y", `${dragState.y}px`);
           card.style.setProperty("--drag-rotate", `${rotate}deg`);
-          card.dataset.swipe = dragState.x > 68 ? "like" : dragState.x < -68 ? "skip" : "";
+          card.dataset.swipe = dragState.y < -80 && Math.abs(dragState.x) < 132
+            ? "super"
+            : dragState.x > 68 ? "like" : dragState.x < -68 ? "skip" : "";
         });
 
         card.addEventListener("pointerup", (event) => finishDrag(card, event.pointerId));
@@ -740,11 +791,14 @@
         if (!dragState || dragState.pointerId !== pointerId) {
           return;
         }
-        const direction = dragState.x > 96 ? "right" : dragState.x < -96 ? "left" : "";
+        const direction = dragState.y < -124 && Math.abs(dragState.x) < 128
+          ? "up"
+          : dragState.x > 96 ? "right" : dragState.x < -96 ? "left" : "";
         dragState = null;
         card.classList.remove("is-dragging");
         card.dataset.swipe = "";
         card.style.removeProperty("--drag-x");
+        card.style.removeProperty("--drag-y");
         card.style.removeProperty("--drag-rotate");
 
         if (direction) {
@@ -758,10 +812,13 @@
           return;
         }
 
-        card.classList.add(direction === "right" ? "is-exiting-right" : "is-exiting-left");
+        const currentIndex = Number(card.dataset.index || activeIndex);
+        card.classList.add(direction === "right"
+          ? "is-exiting-right"
+          : direction === "up" ? "is-exiting-up" : "is-exiting-left");
 
-        if (direction === "right" && !lockedPreview && !options.alreadyLiked) {
-          const id = card.querySelector("[data-id]")?.dataset.id;
+        if ((direction === "right" || direction === "up") && !lockedPreview && !options.alreadyLiked) {
+          const id = card.querySelector("[data-super]")?.dataset.id;
           if (id) {
             request(`/api/matches/like/${id}`, { method: "POST" }).catch((error) => {
               setStatus(error.message || "喜欢没有送出，可以再点一次。");
@@ -770,9 +827,28 @@
         }
 
         setTimeout(() => {
+          deckHistory.push(currentIndex);
           activeIndex += 1;
+          if (direction === "up") {
+            setStatus(lockedPreview ? "登录后可以发送超级喜欢。" : "已发送超级喜欢");
+          }
           renderDeck();
         }, 260);
+      }
+
+      function restorePreviousCard() {
+        const previous = deckHistory.pop();
+        if (previous === undefined) {
+          setStatus("现在还没有可以回退的卡片。");
+          return;
+        }
+
+        activeIndex = Math.max(0, previous);
+        renderDeck();
+        const card = results.querySelector('.match-card[data-stack="0"]');
+        card?.classList.add("is-returning");
+        setTimeout(() => card?.classList.remove("is-returning"), 520);
+        setStatus(lockedPreview ? "已回到上一张预览卡。" : "已回到上一张卡片。");
       }
 
       async function runSearch() {

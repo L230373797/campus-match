@@ -1,6 +1,6 @@
 import * as THREE from "./assets/vendor/three.module.js";
 
-const ACTIVE_ROUTES = new Set(["/login", "/"]);
+const ACTIVE_ROUTES = new Set(["/login", "/", "/search.html"]);
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 let stage;

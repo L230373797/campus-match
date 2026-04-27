@@ -15,23 +15,57 @@
           radial-gradient(circle at 12% 10%, rgba(129, 173, 255, 0.22), transparent 24%),
           radial-gradient(circle at 86% 12%, rgba(255, 183, 213, 0.18), transparent 22%),
           linear-gradient(180deg, #070d17, #0b1220 44%, #0a111c);
+        overflow-x: hidden;
+      }
+      #campus-spline-stage {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: 1;
+        background: linear-gradient(135deg, #050711, #0a1024 42%, #171126);
+      }
+      #campus-spline-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #campus-spline-stage::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 18% 22%, rgba(84, 188, 255, .18), transparent 28%),
+          radial-gradient(circle at 82% 18%, rgba(255, 141, 214, .14), transparent 26%),
+          linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .36));
       }
       main {
         width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 28px 0 48px;
+        min-height: 100vh;
+        padding: 28px 0 64px;
+        position: relative;
+        z-index: 2;
       }
       header {
         display: flex;
         align-items: end;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 22px;
+        margin-bottom: 18px;
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 28px;
+        background: rgba(8, 15, 31, 0.54);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.26), inset 0 1px rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(28px) saturate(1.36);
+        -webkit-backdrop-filter: blur(28px) saturate(1.36);
       }
       h1 {
         margin: 0;
-        font-size: clamp(2.2rem, 6vw, 4.8rem);
-        line-height: 0.98;
+        font-size: clamp(2.35rem, 6vw, 5rem);
+        line-height: 0.96;
         letter-spacing: 0;
       }
       .muted { color: rgba(248, 251, 255, 0.68); line-height: 1.7; }
@@ -52,16 +86,18 @@
       .toolbar, .card {
         border: 1px solid rgba(255, 255, 255, 0.18);
         border-radius: 8px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
+        background: rgba(8, 15, 31, 0.48);
         box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
-        backdrop-filter: blur(22px);
+        backdrop-filter: blur(26px) saturate(1.32);
+        -webkit-backdrop-filter: blur(26px) saturate(1.32);
       }
       .toolbar {
         display: grid;
         grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(120px, 1fr)) auto;
         gap: 12px;
         padding: 14px;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
+        border-radius: 28px;
       }
       input, select {
         width: 100%;
@@ -108,9 +144,220 @@
       }
       .card p { margin: 0; }
       .card button { width: 100%; margin-top: 16px; }
+      .match-board {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+        gap: 18px;
+        align-items: stretch;
+      }
+      .match-copy {
+        min-height: 510px;
+        display: flex;
+        flex-direction: column;
+        justify-content: end;
+        gap: 14px;
+        padding: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 30px;
+        background: rgba(8, 15, 31, 0.38);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.22), inset 0 1px rgba(255, 255, 255, 0.16);
+        backdrop-filter: blur(24px) saturate(1.28);
+        -webkit-backdrop-filter: blur(24px) saturate(1.28);
+      }
+      .match-copy strong {
+        display: block;
+        color: rgba(141, 219, 255, .95);
+        font-size: 0.82rem;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+      }
+      .match-copy h2 {
+        max-width: 560px;
+        font-size: clamp(2rem, 4vw, 3.9rem);
+        line-height: 1.02;
+      }
+      .match-copy p {
+        max-width: 520px;
+      }
+      .match-hints {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .match-hints span {
+        border: 1px solid rgba(255, 255, 255, .14);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: rgba(232, 242, 255, .82);
+        background: rgba(255, 255, 255, .08);
+        font-size: .84rem;
+      }
+      .deck-wrap {
+        position: relative;
+        min-height: 510px;
+        perspective: 1400px;
+        touch-action: pan-y;
+      }
+      .match-deck {
+        position: relative;
+        height: min(64vh, 560px);
+        min-height: 510px;
+        display: block;
+        transform-style: preserve-3d;
+      }
+      .match-card {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-rows: minmax(190px, .92fr) auto;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 34px;
+        color: rgba(255, 255, 255, .94);
+        background: rgba(9, 16, 32, .62);
+        box-shadow: 0 30px 100px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .2);
+        backdrop-filter: blur(28px) saturate(1.35);
+        -webkit-backdrop-filter: blur(28px) saturate(1.35);
+        transform:
+          translate3d(calc(var(--drag-x, 0px) + var(--stack-x, 0px)), var(--stack-y, 0px), var(--stack-z, 0px))
+          rotateZ(var(--drag-rotate, 0deg))
+          rotateY(var(--stack-rotate, 0deg))
+          scale(var(--stack-scale, 1));
+        transition: transform .42s cubic-bezier(.2, 1, .22, 1), opacity .28s ease, filter .28s ease;
+        will-change: transform;
+      }
+      .match-card.is-dragging {
+        transition: none;
+        cursor: grabbing;
+      }
+      .match-card.is-exiting-right {
+        transform: translate3d(130%, -8%, 0) rotateZ(18deg) rotateY(-10deg) scale(.96);
+        opacity: 0;
+      }
+      .match-card.is-exiting-left {
+        transform: translate3d(-130%, 8%, 0) rotateZ(-18deg) rotateY(10deg) scale(.96);
+        opacity: 0;
+      }
+      .match-card[data-stack="1"] { --stack-x: 18px; --stack-y: 18px; --stack-z: -90px; --stack-rotate: -4deg; --stack-scale: .94; filter: saturate(.9) brightness(.92); }
+      .match-card[data-stack="2"] { --stack-x: 34px; --stack-y: 34px; --stack-z: -160px; --stack-rotate: -7deg; --stack-scale: .88; filter: saturate(.78) brightness(.82); }
+      .match-card[data-stack="3"] { --stack-x: 46px; --stack-y: 46px; --stack-z: -230px; --stack-rotate: -9deg; --stack-scale: .82; opacity: .58; }
+      .match-visual {
+        position: relative;
+        overflow: hidden;
+        min-height: 220px;
+        background:
+          radial-gradient(circle at 28% 28%, rgba(255, 255, 255, .42), transparent 18%),
+          linear-gradient(135deg, var(--card-a, #5ac8fa), var(--card-b, #af52de));
+      }
+      .match-visual::before,
+      .match-visual::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        pointer-events: none;
+      }
+      .match-visual::before {
+        width: 220px;
+        height: 220px;
+        right: -64px;
+        top: -48px;
+        border: 34px solid rgba(255, 255, 255, .28);
+        transform: rotate(-24deg);
+      }
+      .match-visual::after {
+        width: 150px;
+        height: 150px;
+        left: 34px;
+        bottom: -58px;
+        background: rgba(255, 255, 255, .18);
+        filter: blur(2px);
+      }
+      .match-initial {
+        position: absolute;
+        left: 28px;
+        bottom: 24px;
+        width: 94px;
+        height: 94px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255,255,255,.32);
+        border-radius: 30px;
+        color: #fff;
+        background: rgba(8, 15, 31, .28);
+        box-shadow: inset 0 1px rgba(255,255,255,.28);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        font-size: 2.8rem;
+        font-weight: 900;
+      }
+      .match-content {
+        padding: 24px;
+      }
+      .match-name-row {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .match-name-row h2 {
+        font-size: clamp(1.6rem, 4vw, 2.5rem);
+        line-height: 1.04;
+      }
+      .match-meta {
+        margin-top: 8px;
+        color: rgba(224, 238, 255, .76);
+      }
+      .match-bio {
+        margin-top: 16px;
+        min-height: 54px;
+        color: rgba(238, 246, 255, .86);
+        line-height: 1.7;
+      }
+      .match-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 18px;
+      }
+      .match-actions button {
+        margin-top: 0;
+        min-height: 52px;
+      }
+      .match-actions .skip {
+        color: rgba(240, 246, 255, .92);
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .16);
+      }
+      .swipe-label {
+        position: absolute;
+        top: 24px;
+        z-index: 2;
+        border: 1px solid rgba(255,255,255,.36);
+        border-radius: 999px;
+        padding: 8px 14px;
+        color: #fff;
+        background: rgba(8,15,31,.32);
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity .2s ease, transform .2s ease;
+        font-weight: 900;
+        letter-spacing: .08em;
+      }
+      .swipe-like { right: 24px; }
+      .swipe-skip { left: 24px; }
+      .match-card[data-swipe="like"] .swipe-like,
+      .match-card[data-swipe="skip"] .swipe-skip {
+        opacity: 1;
+        transform: translateY(0);
+      }
       @media (max-width: 900px) {
-        .toolbar, .grid { grid-template-columns: 1fr; }
+        .toolbar, .grid, .match-board { grid-template-columns: 1fr; }
         header { align-items: start; flex-direction: column; }
+        .match-copy {
+          min-height: auto;
+        }
       }
       @media (max-width: 520px) {
         main {
@@ -141,6 +388,33 @@
           border-radius: 22px;
           padding: 16px;
         }
+        .match-copy {
+          padding: 18px;
+          border-radius: 26px;
+        }
+        .match-copy h2 {
+          font-size: 2.2rem;
+          line-height: 1.04;
+        }
+        .deck-wrap,
+        .match-deck {
+          min-height: 590px;
+        }
+        .match-deck {
+          height: 590px;
+        }
+        .match-card {
+          border-radius: 30px;
+        }
+        .match-content {
+          padding: 20px;
+        }
+        .match-visual {
+          min-height: 214px;
+        }
+        .match-card[data-stack="1"] { --stack-x: 10px; --stack-y: 16px; }
+        .match-card[data-stack="2"] { --stack-x: 18px; --stack-y: 30px; }
+        .match-card[data-stack="3"] { --stack-x: 24px; --stack-y: 40px; }
       }
     </style>
   </head>
@@ -178,13 +452,68 @@
       </section>
 
       <div id="status" class="status">正在检查登录状态...</div>
-      <section id="results" class="grid"></section>
+      <section class="match-board">
+        <div class="match-copy">
+          <strong>3D Match Deck</strong>
+          <h2>像翻动一组漂浮卡片一样，遇见同校新朋友。</h2>
+          <p class="muted">左右滑动切换，喜欢的人会进入匹配流程。也可以用卡片底部按钮轻松操作。</p>
+          <div class="match-hints">
+            <span>左滑跳过</span>
+            <span>右滑喜欢</span>
+            <span>松手自动吸附</span>
+          </div>
+        </div>
+        <div class="deck-wrap">
+          <section id="results" class="match-deck" aria-live="polite"></section>
+        </div>
+      </section>
     </main>
 
+    <script type="module" src="/campus-spline-scene.js"></script>
     <script>
       const token = localStorage.getItem("token");
       const statusBox = document.querySelector("#status");
       const results = document.querySelector("#results");
+      const demoUsers = [
+        {
+          id: "preview-1",
+          nickname: "摄影搭子",
+          school: "同校",
+          major: "周末有空",
+          grade: "城市漫步",
+          isVerified: true,
+          bio: "想找一个一起拍校园、看展、交换修图思路的人。",
+          sceneTags: ["摄影", "看展", "周末"],
+          matchModes: ["轻松认识", "同校优先"],
+        },
+        {
+          id: "preview-2",
+          nickname: "自习搭子",
+          school: "图书馆常驻",
+          major: "计算机",
+          grade: "大三",
+          isVerified: true,
+          bio: "晚上常在图书馆，希望找一个互相督促又不尴尬的学习伙伴。",
+          sceneTags: ["自习", "图书馆", "晚间"],
+          matchModes: ["同频节奏"],
+        },
+        {
+          id: "preview-3",
+          nickname: "羽毛球搭子",
+          school: "同校体育馆",
+          major: "经管",
+          grade: "研一",
+          isVerified: false,
+          bio: "水平普通但很稳定，想约每周一次运动，先从轻松一局开始。",
+          sceneTags: ["运动", "羽毛球", "固定约"],
+          matchModes: ["线下活动"],
+        },
+      ];
+
+      let deckUsers = [];
+      let activeIndex = 0;
+      let dragState = null;
+      let lockedPreview = false;
 
       function setStatus(message) {
         statusBox.textContent = message;
@@ -206,37 +535,98 @@
         return payload;
       }
 
-      function render(users) {
-        results.innerHTML = "";
-        if (!users.length) {
-          setStatus("暂时没找到合适的同学，换个关键词试试。");
-          return;
-        }
+      function initials(name) {
+        return String(name || "同").trim().slice(0, 1).toUpperCase();
+      }
 
-        setStatus(`找到 ${users.length} 位同学`);
-        users.forEach((user) => {
-          const card = document.createElement("article");
-          card.className = "card";
-          const tags = [...(user.sceneTags || []), ...(user.matchModes || [])].slice(0, 5);
-          card.innerHTML = `
-            <div class="topline">
+      function colorPair(index) {
+        return [
+          ["#5ac8fa", "#af52de"],
+          ["#34c759", "#64d2ff"],
+          ["#ff9f0a", "#ff5ea8"],
+          ["#7c5cff", "#2dd4bf"],
+        ][index % 4];
+      }
+
+      function cardHtml(user, index, locked) {
+        const tags = [...(user.sceneTags || []), ...(user.matchModes || [])].slice(0, 5);
+        const [cardA, cardB] = colorPair(activeIndex + index);
+        const userId = escapeHtml(user.id || user._id || "");
+        return `
+          <span class="swipe-label swipe-skip">跳过</span>
+          <span class="swipe-label swipe-like">喜欢</span>
+          <div class="match-visual" style="--card-a:${cardA};--card-b:${cardB}">
+            <div class="match-initial">${escapeHtml(initials(user.nickname))}</div>
+          </div>
+          <div class="match-content">
+            <div class="match-name-row">
               <div>
                 <h2>${escapeHtml(user.nickname || "未命名用户")}</h2>
-                <p class="muted">${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · "))}</p>
+                <p class="match-meta">${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · ") || "同校同学")}</p>
               </div>
               <span class="badge">${user.isVerified ? "已认证" : "待认证"}</span>
             </div>
-                <p class="muted">${escapeHtml(user.bio || "这个同学还没写简介，先从标签了解一下吧。")}</p>
+            <p class="match-bio">${escapeHtml(user.bio || "这个同学还没写简介，先从标签了解一下吧。")}</p>
             <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
-            <button type="button" data-id="${escapeHtml(user.id || user._id)}">喜欢</button>
+            <div class="match-actions">
+              <button class="skip" type="button" data-skip="${index}">跳过</button>
+              <button type="button" data-id="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后喜欢" : "喜欢"}</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderDeck() {
+        results.innerHTML = "";
+        const visible = deckUsers.slice(activeIndex, activeIndex + 4);
+
+        if (!visible.length) {
+          setStatus("暂时没找到合适的同学，换个关键词试试。");
+          const empty = document.createElement("article");
+          empty.className = "match-card";
+          empty.innerHTML = `
+            <div class="match-visual" style="--card-a:#5ac8fa;--card-b:#af52de">
+              <div class="match-initial">新</div>
+            </div>
+            <div class="match-content">
+              <div class="match-name-row">
+                <div>
+                  <h2>换个关键词试试</h2>
+                  <p class="match-meta">也许下一组就有更合拍的人。</p>
+                </div>
+              </div>
+              <p class="match-bio">可以试试兴趣、院系、活动或常去地点，比如图书馆、夜跑、摄影。</p>
+              <div class="match-actions">
+                <button class="skip" type="button" disabled>没有更多</button>
+                <button type="button" disabled>等待新推荐</button>
+              </div>
+            </div>
           `;
-          card.querySelector("button").addEventListener("click", async (event) => {
+          results.appendChild(empty);
+          return;
+        }
+
+        visible.reverse().forEach((user, reversedIndex) => {
+          const stackIndex = visible.length - 1 - reversedIndex;
+          const card = document.createElement("article");
+          card.className = "match-card";
+          card.dataset.stack = String(stackIndex);
+          card.innerHTML = cardHtml(user, stackIndex, lockedPreview);
+          const likeButton = card.querySelector("[data-id]");
+          const skipButton = card.querySelector("[data-skip]");
+
+          likeButton?.addEventListener("click", async (event) => {
             const button = event.currentTarget;
+            if (lockedPreview) {
+              setStatus("登录后就可以把喜欢送给真实同学。");
+              return;
+            }
             button.disabled = true;
             button.textContent = "正在送出喜欢...";
             try {
               await request(`/api/matches/like/${button.dataset.id}`, { method: "POST" });
               button.textContent = "已表达喜欢";
+              swipeTopCard("right", { alreadyLiked: true });
             } catch (error) {
               button.textContent = error.message;
               setTimeout(() => {
@@ -245,13 +635,103 @@
               }, 1800);
             }
           });
+          skipButton?.addEventListener("click", () => swipeTopCard("left"));
+
+          if (stackIndex === 0) {
+            bindDrag(card);
+          }
           results.appendChild(card);
         });
       }
 
+      function render(users, options = {}) {
+        deckUsers = users;
+        activeIndex = 0;
+        lockedPreview = Boolean(options.locked);
+
+        if (!users.length) {
+          renderDeck();
+          return;
+        }
+
+        setStatus(lockedPreview ? "登录后可以查看真实同学，先看看卡片效果。" : `找到 ${users.length} 位同学`);
+        renderDeck();
+      }
+
+      function bindDrag(card) {
+        card.addEventListener("pointerdown", (event) => {
+          if (event.target.closest("button, a, input, select")) {
+            return;
+          }
+          card.setPointerCapture(event.pointerId);
+          dragState = {
+            startX: event.clientX,
+            startY: event.clientY,
+            x: 0,
+            y: 0,
+            pointerId: event.pointerId,
+          };
+          card.classList.add("is-dragging");
+        });
+
+        card.addEventListener("pointermove", (event) => {
+          if (!dragState || dragState.pointerId !== event.pointerId) {
+            return;
+          }
+          dragState.x = event.clientX - dragState.startX;
+          dragState.y = event.clientY - dragState.startY;
+          const rotate = Math.max(-16, Math.min(16, dragState.x / 14));
+          card.style.setProperty("--drag-x", `${dragState.x}px`);
+          card.style.setProperty("--drag-rotate", `${rotate}deg`);
+          card.dataset.swipe = dragState.x > 68 ? "like" : dragState.x < -68 ? "skip" : "";
+        });
+
+        card.addEventListener("pointerup", (event) => finishDrag(card, event.pointerId));
+        card.addEventListener("pointercancel", (event) => finishDrag(card, event.pointerId));
+      }
+
+      function finishDrag(card, pointerId) {
+        if (!dragState || dragState.pointerId !== pointerId) {
+          return;
+        }
+        const direction = dragState.x > 96 ? "right" : dragState.x < -96 ? "left" : "";
+        dragState = null;
+        card.classList.remove("is-dragging");
+        card.dataset.swipe = "";
+        card.style.removeProperty("--drag-x");
+        card.style.removeProperty("--drag-rotate");
+
+        if (direction) {
+          swipeTopCard(direction);
+        }
+      }
+
+      async function swipeTopCard(direction, options = {}) {
+        const card = results.querySelector('.match-card[data-stack="0"]');
+        if (!card) {
+          return;
+        }
+
+        card.classList.add(direction === "right" ? "is-exiting-right" : "is-exiting-left");
+
+        if (direction === "right" && !lockedPreview && !options.alreadyLiked) {
+          const id = card.querySelector("[data-id]")?.dataset.id;
+          if (id) {
+            request(`/api/matches/like/${id}`, { method: "POST" }).catch((error) => {
+              setStatus(error.message || "喜欢没有送出，可以再点一次。");
+            });
+          }
+        }
+
+        setTimeout(() => {
+          activeIndex += 1;
+          renderDeck();
+        }, 260);
+      }
+
       async function runSearch() {
         if (!token) {
-          setStatus("请先登录账号，再搜索同学。");
+          render(demoUsers, { locked: true });
           return;
         }
 

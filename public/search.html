@@ -40,6 +40,43 @@
           radial-gradient(circle at 82% 18%, rgba(255, 141, 214, .14), transparent 26%),
           linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .36));
       }
+      body.from-home main {
+        animation: search-page-enter .72s cubic-bezier(.2, 1, .22, 1) both;
+      }
+      body.from-home .match-card[data-stack="0"] {
+        animation: search-card-enter .78s cubic-bezier(.2, 1, .22, 1) .12s both;
+      }
+      body.from-home .match-copy {
+        animation: search-copy-enter .68s cubic-bezier(.2, 1, .22, 1) .05s both;
+      }
+      body.from-home::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 50% 52%, rgba(150,224,255,.38), transparent 16%),
+          radial-gradient(circle at 50% 52%, rgba(255,160,220,.22), transparent 36%),
+          rgba(4, 7, 17, .32);
+        animation: search-portal-clear .72s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      @keyframes search-page-enter {
+        0% { opacity: 0; transform: translateY(34px) scale(.96); filter: blur(12px); }
+        100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+      }
+      @keyframes search-card-enter {
+        0% { opacity: 0; transform: translate3d(0, 86px, 0) rotateX(24deg) scale(.82); }
+        100% { opacity: 1; }
+      }
+      @keyframes search-copy-enter {
+        0% { opacity: 0; transform: translateX(-34px) scale(.96); }
+        100% { opacity: 1; transform: translateX(0) scale(1); }
+      }
+      @keyframes search-portal-clear {
+        0% { opacity: 1; backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
+        100% { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
+      }
       main {
         width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
@@ -471,6 +508,15 @@
 
     <script type="module" src="/campus-spline-scene.js"></script>
     <script>
+      if (sessionStorage.getItem("campus-route-transition") === "home-to-match") {
+        sessionStorage.removeItem("campus-route-transition");
+        document.body.classList.add("from-home");
+        window.addEventListener("load", () => {
+          window.CampusSplineScene?.focusMatch?.();
+          setTimeout(() => document.body.classList.remove("from-home"), 950);
+        }, { once: true });
+      }
+
       const token = localStorage.getItem("token");
       const statusBox = document.querySelector("#status");
       const results = document.querySelector("#results");

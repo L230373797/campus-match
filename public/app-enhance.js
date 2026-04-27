@@ -66,6 +66,7 @@
 
   window.addEventListener("popstate", queueEnhance);
   document.addEventListener("keydown", handleGlobalKeydown);
+  document.addEventListener("click", handleRouteTransitionClick, true);
 
   function injectStyles() {
     const style = document.createElement("style");
@@ -1386,6 +1387,112 @@
         backdrop-filter: blur(28px) saturate(1.36) !important;
         -webkit-backdrop-filter: blur(28px) saturate(1.36) !important;
       }
+      .campus-route-transition {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        pointer-events: none;
+        color: rgba(255,255,255,.96);
+        background:
+          radial-gradient(circle at 50% 52%, rgba(132,216,255,.32), transparent 18%),
+          radial-gradient(circle at 50% 52%, rgba(255,145,214,.22), transparent 34%),
+          rgba(4, 7, 17, .18);
+        backdrop-filter: blur(0px);
+        -webkit-backdrop-filter: blur(0px);
+        animation: campus-route-backdrop .82s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      .campus-route-transition::before,
+      .campus-route-transition::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .campus-route-transition::before {
+        width: 210px;
+        height: 210px;
+        border: 34px solid rgba(185,226,255,.56);
+        box-shadow:
+          0 0 80px rgba(105,195,255,.44),
+          inset 0 0 42px rgba(255,255,255,.32);
+        animation: campus-route-ring .82s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      .campus-route-transition::after {
+        width: 54vw;
+        height: 54vw;
+        max-width: 720px;
+        max-height: 720px;
+        background:
+          conic-gradient(from 160deg, rgba(90,200,250,.08), rgba(255,151,215,.30), rgba(255,255,255,.18), rgba(90,200,250,.08));
+        filter: blur(10px);
+        opacity: .82;
+        animation: campus-route-orbit .82s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      .campus-route-transition-card {
+        position: relative;
+        z-index: 1;
+        width: min(420px, calc(100vw - 36px));
+        min-height: 180px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 30px;
+        border: 1px solid rgba(255,255,255,.24);
+        border-radius: 34px;
+        background: rgba(9, 16, 32, .52);
+        box-shadow: 0 34px 120px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.24);
+        backdrop-filter: blur(28px) saturate(1.36);
+        -webkit-backdrop-filter: blur(28px) saturate(1.36);
+        transform-origin: center;
+        animation: campus-route-card .82s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      .campus-route-transition-card strong {
+        display: block;
+        margin-bottom: 10px;
+        color: rgba(141,219,255,.96);
+        font-size: .82rem;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+      }
+      .campus-route-transition-card span {
+        display: block;
+        font-size: clamp(1.7rem, 7vw, 3rem);
+        font-weight: 900;
+        line-height: 1.05;
+      }
+      body.campus-route-transitioning #root,
+      body.campus-route-transitioning .campus-login-story {
+        animation: campus-route-page-out .82s cubic-bezier(.2, 1, .22, 1) forwards;
+      }
+      @keyframes campus-route-backdrop {
+        0% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+        45% { opacity: 1; }
+        100% { opacity: 1; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+      }
+      @keyframes campus-route-ring {
+        0% { transform: translate(-50%, -50%) scale(.22) rotate(0deg); opacity: 0; }
+        48% { opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(6.4) rotate(38deg); opacity: .16; }
+      }
+      @keyframes campus-route-orbit {
+        0% { transform: translate(-50%, -50%) scale(.18) rotate(0deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) scale(1.35) rotate(72deg); opacity: .92; }
+      }
+      @keyframes campus-route-card {
+        0% { transform: translateY(36px) scale(.82) rotateX(18deg); opacity: 0; }
+        42% { opacity: 1; }
+        100% { transform: translateY(-8px) scale(1.08) rotateX(0deg); opacity: 0; }
+      }
+      @keyframes campus-route-page-out {
+        0% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        100% { opacity: .18; transform: scale(.94) translateY(-18px); filter: blur(12px); }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1442,6 +1549,59 @@
     window.dispatchEvent(new CustomEvent("campus:route", {
       detail: { route },
     }));
+  }
+
+  function handleRouteTransitionClick(event) {
+    if (window.location.pathname !== "/" || event.defaultPrevented) {
+      return;
+    }
+
+    const target = event.target.closest("a, button");
+    if (!target) {
+      return;
+    }
+
+    const href = target.tagName === "A" ? target.getAttribute("href") || "" : "";
+    const label = (target.textContent || "").trim();
+    const isMatchEntry = href === "/search.html"
+      || href.endsWith("/search.html")
+      || /^(开始匹配|进入发现|去看看推荐|去发现|搜索同学)$/.test(label);
+
+    if (!isMatchEntry) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    startHomeToMatchTransition();
+  }
+
+  function startHomeToMatchTransition() {
+    if (document.querySelector("#campus-route-transition")) {
+      return;
+    }
+
+    sessionStorage.setItem("campus-route-transition", "home-to-match");
+    document.body.classList.add("campus-route-transitioning");
+    window.CampusSplineScene?.focusMatch?.();
+
+    const overlay = document.createElement("div");
+    overlay.id = "campus-route-transition";
+    overlay.className = "campus-route-transition";
+    overlay.innerHTML = `
+      <div class="campus-route-transition-card">
+        <div>
+          <strong>Match Deck</strong>
+          <span>进入 3D 匹配卡组</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      window.location.assign("/search.html");
+    }, 760);
   }
 
   function queueEnhance() {

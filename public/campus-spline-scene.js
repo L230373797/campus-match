@@ -16,6 +16,8 @@ let ringMesh;
 let companionMesh;
 let particles;
 let resizeObserver;
+let matchFocus = 0;
+let matchFocusTarget = 0;
 
 const pointer = new THREE.Vector2(0, 0);
 const targetPointer = new THREE.Vector2(0, 0);
@@ -254,12 +256,14 @@ function animate() {
   const reduced = prefersReducedMotion.matches;
 
   pointer.lerp(targetPointer, reduced ? 0.04 : 0.075);
+  matchFocus += (matchFocusTarget - matchFocus) * (reduced ? 0.08 : 0.045);
   const scroll = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--campus-spline-scroll")) || 0;
 
-  rootGroup.rotation.y = pointer.x * 0.18;
-  rootGroup.rotation.x = pointer.y * 0.1 - scroll * 0.08;
-  rootGroup.position.y = viewport.width < 640 ? -0.2 : 0.02;
-  rootGroup.position.x = viewport.width < 640 ? 0.34 : 0.62;
+  rootGroup.rotation.y = pointer.x * 0.18 + matchFocus * 0.24;
+  rootGroup.rotation.x = pointer.y * 0.1 - scroll * 0.08 + matchFocus * 0.08;
+  rootGroup.position.y = (viewport.width < 640 ? -0.2 : 0.02) + matchFocus * 0.08;
+  rootGroup.position.x = (viewport.width < 640 ? 0.34 : 0.62) - matchFocus * 0.18;
+  rootGroup.scale.setScalar(1 + matchFocus * 0.12);
 
   if (!reduced) {
     heroMesh.rotation.x += delta * 0.18;
@@ -301,6 +305,7 @@ function stop() {
 function setRoute(route) {
   const normalized = route || window.location.pathname;
   const shouldShow = ACTIVE_ROUTES.has(normalized);
+  matchFocusTarget = normalized === "/search.html" ? 1 : 0;
   document.body.dataset.campusSpline = shouldShow ? "active" : "inactive";
 
   if (shouldShow) {
@@ -318,6 +323,9 @@ setRoute(window.location.pathname);
 
 window.CampusSplineScene = {
   setRoute,
+  focusMatch() {
+    matchFocusTarget = 1;
+  },
   inspect() {
     return {
       active,

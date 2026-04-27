@@ -431,7 +431,7 @@ async function handleUsers(req, store, segments, url) {
     const allUsers = (await listUsers(store))
       .map(publicUser)
       .filter((item) => item.id !== user.id && !skipped.has(item.id));
-    const recommendations = [...allUsers, ...seedProfiles().filter((item) => !skipped.has(item.id))];
+    const recommendations = allUsers;
     const start = (page - 1) * limit;
 
     return json({
@@ -1153,7 +1153,7 @@ async function searchUsers(store, viewer, url) {
 
   const databaseUsers = await searchUsersInDatabase({ viewer, query, school, major, grade, limit, offset });
   const rows = databaseUsers?.length ? databaseUsers : await searchUsersInBlobs(store, { viewer, query, school, major, grade });
-  const merged = [...rows, ...filterSeedProfiles({ query, school, major, grade })]
+  const merged = rows
     .filter((item) => item.id !== viewer.id && !skipped.has(item.id));
 
   return {

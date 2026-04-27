@@ -23,10 +23,26 @@ let matchFocusTarget = 0;
 let resizeRafId = 0;
 let lastFrameTime = 0;
 let scrollProgress = 0;
+let orientationListening = false;
+let orientationPromptBound = false;
+let orientationBaseline = null;
+let orientationLastAt = 0;
+let orientationStatus = "unavailable";
 
 const pointer = new THREE.Vector2(0, 0);
 const targetPointer = new THREE.Vector2(0, 0);
 const viewport = { width: 1, height: 1 };
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function angleDelta(value, baseline) {
+  let delta = value - baseline;
+  while (delta > 180) delta -= 360;
+  while (delta < -180) delta += 360;
+  return delta;
+}
 
 function ensureStageStyles() {
   if (document.querySelector("style[data-campus-spline-style='true']")) {
@@ -119,8 +135,11 @@ function createStage() {
   window.addEventListener("resize", requestResizeScene, { passive: true });
   window.addEventListener("pointermove", handlePointerMove, { passive: true });
   window.addEventListener("scroll", handleScroll, { passive: true });
+  window.addEventListener("orientationchange", resetOrientationControl, { passive: true });
+  window.screen?.orientation?.addEventListener?.("change", resetOrientationControl);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
+  setupOrientationControl();
 
   resizeObserver = new ResizeObserver(requestResizeScene);
   resizeObserver.observe(document.documentElement);
@@ -284,6 +303,95 @@ function handlePointerMove(event) {
   targetPointer.y = (event.clientY / viewport.height - 0.5) * -2;
 }
 
+function applyOrientation(betaValue, gammaValue, force = false) {
+  if (!active || document.hidden || (!force && !coarsePointer.matches)) {
+    return;
+  }
+
+  const beta = Number(betaValue);
+  const gamma = Number(gammaValue);
+  if (!Number.isFinite(beta) || !Number.isFinite(gamma)) {
+    return;
+  }
+
+  if (!orientationBaseline) {
+    orientationBaseline = { beta, gamma };
+  }
+
+  orientationLastAt = performance.now();
+  orientationStatus = "active";
+  const x = clamp(angleDelta(gamma, orientationBaseline.gamma) / 24, -1, 1);
+  const y = clamp(-angleDelta(beta, orientationBaseline.beta) / 30, -1, 1);
+  targetPointer.x = x;
+  targetPointer.y = y;
+
+  if (prefersReducedMotion.matches) {
+    renderFrame(performance.now());
+  }
+}
+
+function handleOrientation(event) {
+  applyOrientation(event.beta, event.gamma);
+}
+
+function startOrientationListening() {
+  if (orientationListening || !("DeviceOrientationEvent" in window)) {
+    return;
+  }
+
+  orientationListening = true;
+  orientationStatus = "listening";
+  window.addEventListener("deviceorientation", handleOrientation, { passive: true });
+}
+
+function bindOrientationPrompt() {
+  if (orientationPromptBound) {
+    return;
+  }
+
+  orientationPromptBound = true;
+  const requestOnGesture = async () => {
+    document.removeEventListener("pointerdown", requestOnGesture);
+    document.removeEventListener("touchstart", requestOnGesture);
+
+    try {
+      const response = await window.DeviceOrientationEvent.requestPermission();
+      if (response === "granted") {
+        orientationStatus = "granted";
+        startOrientationListening();
+      } else {
+        orientationStatus = "denied";
+      }
+    } catch {
+      orientationStatus = "denied";
+    }
+  };
+
+  document.addEventListener("pointerdown", requestOnGesture, { passive: true, once: true });
+  document.addEventListener("touchstart", requestOnGesture, { passive: true, once: true });
+}
+
+function setupOrientationControl() {
+  if (!coarsePointer.matches || !("DeviceOrientationEvent" in window)) {
+    orientationStatus = "unavailable";
+    return;
+  }
+
+  orientationStatus = "ready";
+  if (typeof window.DeviceOrientationEvent.requestPermission === "function") {
+    bindOrientationPrompt();
+    return;
+  }
+
+  startOrientationListening();
+}
+
+function resetOrientationControl() {
+  orientationBaseline = null;
+  orientationLastAt = 0;
+  targetPointer.set(0, 0);
+}
+
 function handleScroll() {
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
   scrollProgress = Math.min(1, Math.max(0, window.scrollY / max));
@@ -402,6 +510,7 @@ function start() {
 function stop() {
   active = false;
   stage?.classList.remove("is-active");
+  resetOrientationControl();
   if (rafId) {
     cancelAnimationFrame(rafId);
     rafId = 0;
@@ -471,6 +580,14 @@ window.CampusSplineScene = {
   renderNow() {
     renderFrame(performance.now());
   },
+  simulateOrientation(beta, gamma) {
+    applyOrientation(beta, gamma, true);
+    renderFrame(performance.now());
+  },
+  resetOrientation() {
+    resetOrientationControl();
+    renderFrame(performance.now());
+  },
   inspect() {
     return {
       active,
@@ -479,6 +596,13 @@ window.CampusSplineScene = {
       lowDetail,
       pixelRatio: renderer?.getPixelRatio?.() || 0,
       frameBudget: frameBudget(),
+      orientationStatus,
+      orientationListening,
+      orientationPointer: {
+        x: Number(targetPointer.x.toFixed(3)),
+        y: Number(targetPointer.y.toFixed(3)),
+      },
+      orientationLastAt,
     };
   },
 };

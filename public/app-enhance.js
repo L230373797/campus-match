@@ -699,6 +699,179 @@
         .campus-membership-banner .campus-membership-button {
           width: 100%;
         }
+        .ios-tabbar-wrap {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          padding-bottom: 8px !important;
+        }
+        .ios-tabbar {
+          border-radius: 28px !important;
+          padding: 6px !important;
+        }
+        .ios-tab-item {
+          min-width: 62px !important;
+          padding: 8px 9px !important;
+        }
+        body[data-campus-route="/"] main,
+        body[data-campus-route="/profile"] main {
+          padding-bottom: 132px !important;
+        }
+        body[data-campus-route="/"] [class*="max-w-6xl"],
+        body[data-campus-route="/profile"] [class*="space-y-6"][class*="relative"] {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        body[data-campus-route="/"] .campus-home-header {
+          padding: 14px !important;
+          gap: 12px !important;
+          border-radius: 28px !important;
+        }
+        body[data-campus-route="/"] .campus-home-header h1 {
+          font-size: 1.05rem !important;
+          line-height: 1.2 !important;
+        }
+        body[data-campus-route="/"] .campus-home-header p {
+          display: none;
+        }
+        body[data-campus-route="/"] .campus-home-header .mini-button {
+          min-width: 112px;
+          min-height: 48px !important;
+          padding: 0 15px !important;
+          white-space: nowrap;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card {
+          min-height: auto !important;
+          padding: 24px 22px !important;
+          border-radius: 28px !important;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card h2 {
+          max-width: 100% !important;
+          font-size: 2rem !important;
+          line-height: 1.06 !important;
+          letter-spacing: 0px !important;
+          overflow-wrap: anywhere;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card [class*="tracking-"],
+        body[data-campus-route="/profile"] [class*="tracking-"] {
+          letter-spacing: 0px !important;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card p {
+          font-size: .96rem !important;
+          line-height: 1.72 !important;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card .apple-btn,
+        body[data-campus-route="/"] .campus-home-hero-card .apple-btn-secondary {
+          min-height: 48px !important;
+          padding: 0 18px !important;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card .liquid-glass {
+          padding: 16px !important;
+          border-radius: 24px !important;
+        }
+        body[data-campus-route="/"] .campus-home-hero-card [class*="gap-6"] {
+          gap: 18px !important;
+          flex-wrap: wrap !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card,
+        body[data-campus-route="/profile"] .campus-profile-form-card {
+          width: 100%;
+          border-radius: 28px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card {
+          padding: 22px 20px 20px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card > div:first-child {
+          display: grid !important;
+          grid-template-columns: 82px minmax(0, 1fr);
+          gap: 14px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card [class*="w-24"][class*="h-24"] {
+          width: 82px !important;
+          height: 82px !important;
+          border-radius: 1.6rem !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card [class*="rounded-[1.5rem]"] {
+          border-radius: 1.2rem !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card .ios-nav-btn {
+          position: absolute;
+          top: 22px;
+          right: 20px;
+          width: 38px;
+          height: 38px;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card h1 {
+          padding-right: 44px;
+          font-size: 1.42rem !important;
+          line-height: 1.16 !important;
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card p.truncate,
+        body[data-campus-route="/profile"] .campus-profile-summary-card .truncate {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+          line-height: 1.35 !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card [class*="grid-cols-3"] {
+          gap: 10px !important;
+          margin-top: 18px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-summary-card [class*="grid-cols-3"] > * {
+          min-width: 0;
+          padding: 12px 6px !important;
+          border-radius: 20px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-form-card {
+          padding: 22px 20px !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-form-card [class*="grid-cols"] {
+          grid-template-columns: 1fr !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-form-card input,
+        body[data-campus-route="/profile"] .campus-profile-form-card textarea {
+          min-height: 56px;
+          border-radius: 1.2rem !important;
+          padding-left: 18px !important;
+          padding-right: 18px !important;
+          font-size: 16px !important;
+          color: rgba(255,255,255,.9) !important;
+          -webkit-text-fill-color: rgba(255,255,255,.9);
+          background: rgba(255,255,255,.13) !important;
+          opacity: 1 !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-form-card textarea {
+          min-height: 92px;
+          padding-top: 16px !important;
+        }
+        body[data-campus-route="/profile"] [class*="text-ios-gray-900"],
+        body[data-campus-route="/profile"] [class*="text-ios-gray-800"],
+        body[data-campus-route="/profile"] [class*="text-ios-gray-700"] {
+          color: rgba(255,255,255,.94) !important;
+        }
+        body[data-campus-route="/profile"] [class*="text-ios-gray-600"],
+        body[data-campus-route="/profile"] [class*="text-ios-gray-500"],
+        body[data-campus-route="/profile"] [class*="text-ios-gray-400"] {
+          color: rgba(226,238,255,.72) !important;
+        }
+        body[data-campus-route="/profile"] .campus-profile-form-card input::placeholder,
+        body[data-campus-route="/profile"] .campus-profile-form-card textarea::placeholder {
+          color: rgba(226,238,255,.46) !important;
+        }
+        @media (max-width: 380px) {
+          body[data-campus-route="/"] .campus-home-hero-card h2 {
+            font-size: 1.9rem !important;
+          }
+          body[data-campus-route="/profile"] .campus-profile-summary-card > div:first-child {
+            grid-template-columns: 74px minmax(0, 1fr);
+          }
+          body[data-campus-route="/profile"] .campus-profile-summary-card [class*="w-24"][class*="h-24"] {
+            width: 74px !important;
+            height: 74px !important;
+          }
+        }
       }
     `;
     document.head.appendChild(style);
@@ -1486,6 +1659,30 @@
     });
   }
 
+  function tagResponsiveRouteSections() {
+    const homeHeader = document.querySelector("#root header");
+    const homeHero = document.querySelector("#root h2")?.closest(".apple-card");
+
+    if (window.location.pathname === "/") {
+      homeHeader?.classList.add("campus-home-header");
+      homeHero?.classList.add("campus-home-hero-card");
+    } else {
+      homeHeader?.classList.remove("campus-home-header");
+      homeHero?.classList.remove("campus-home-hero-card");
+    }
+
+    const profileSummary = document.querySelector("#root h1")?.closest(".apple-card");
+    const profileForm = document.querySelector("#root h2")?.closest(".apple-card");
+
+    if (window.location.pathname === "/profile") {
+      profileSummary?.classList.add("campus-profile-summary-card");
+      profileForm?.classList.add("campus-profile-form-card");
+    } else {
+      profileSummary?.classList.remove("campus-profile-summary-card");
+      profileForm?.classList.remove("campus-profile-form-card");
+    }
+  }
+
   function ensureProfileEnhancements() {
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
@@ -1575,6 +1772,7 @@
     enhanceAuthPage();
     ensureLoginStory();
     await refreshUser();
+    tagResponsiveRouteSections();
     ensureProfileEnhancements();
     rewriteAudienceCopy();
   }

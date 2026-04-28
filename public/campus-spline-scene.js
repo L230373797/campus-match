@@ -20,7 +20,6 @@ let scrollProgress = 0;
 let matchFocus = 0;
 let matchFocusTarget = 0;
 let routeName = window.location.pathname;
-let rayOrigin = "top-center";
 let targetPointer = { x: 0.5, y: 0.5 };
 let smoothPointer = { x: 0.5, y: 0.5 };
 let orientationListening = false;
@@ -47,113 +46,71 @@ precision highp float;
 precision mediump float;
 #endif
 
-uniform float iTime;
-uniform vec2 iResolution;
-uniform vec2 rayPos;
-uniform vec2 rayDir;
-uniform vec3 raysColor;
-uniform vec3 accentColor;
-uniform float raysSpeed;
-uniform float lightSpread;
-uniform float rayLength;
-uniform float pulsating;
-uniform float fadeDistance;
-uniform float saturation;
-uniform vec2 mousePos;
-uniform float mouseInfluence;
-uniform float noiseAmount;
-uniform float distortion;
-uniform float rayIntensity;
-uniform float rayOpacity;
-uniform float vignetteStrength;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform vec2 uMouse;
+uniform vec3 uColor;
+uniform vec3 uTintA;
+uniform vec3 uTintB;
+uniform float uAmplitude;
+uniform float uSpeed;
+uniform float uIntensity;
+uniform float uDarkness;
+uniform float uSaturation;
+uniform float uVignette;
+uniform float uScroll;
+uniform float uFocus;
 
 varying vec2 vUv;
 
-float noise(vec2 st) {
-  return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-}
-
-float rayStrength(vec2 raySource, vec2 rayRefDirection, vec2 coord, float seedA, float seedB, float speed) {
-  vec2 sourceToCoord = coord - raySource;
-  vec2 dirNorm = normalize(sourceToCoord);
-  float cosAngle = dot(dirNorm, rayRefDirection);
-  float distortedAngle = cosAngle + distortion * sin(iTime * 2.0 + length(sourceToCoord) * 0.01) * 0.2;
-  float spreadFactor = pow(max(distortedAngle, 0.0), 1.0 / max(lightSpread, 0.001));
-  float distance = length(sourceToCoord);
-  float maxDistance = iResolution.x * rayLength;
-  float lengthFalloff = clamp((maxDistance - distance) / maxDistance, 0.0, 1.0);
-  float fadeFalloff = clamp((iResolution.x * fadeDistance - distance) / (iResolution.x * fadeDistance), 0.5, 1.0);
-  float pulse = pulsating > 0.5 ? (0.82 + 0.18 * sin(iTime * speed * 3.0)) : 1.0;
-  float baseStrength = clamp(
-    (0.45 + 0.15 * sin(distortedAngle * seedA + iTime * speed)) +
-    (0.30 + 0.20 * cos(-distortedAngle * seedB + iTime * speed)),
-    0.0,
-    1.0
-  );
-
-  return baseStrength * lengthFalloff * fadeFalloff * spreadFactor * pulse;
-}
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 coord = vec2(fragCoord.x, iResolution.y - fragCoord.y);
-  vec2 finalRayDir = rayDir;
-
-  if (mouseInfluence > 0.0) {
-    vec2 mouseScreenPos = mousePos * iResolution.xy;
-    vec2 mouseDirection = normalize(mouseScreenPos - rayPos);
-    finalRayDir = normalize(mix(rayDir, mouseDirection, mouseInfluence));
-  }
-
-  vec4 rays1 = vec4(1.0) * rayStrength(rayPos, finalRayDir, coord, 36.2214, 21.11349, 1.5 * raysSpeed);
-  vec4 rays2 = vec4(1.0) * rayStrength(rayPos, finalRayDir, coord, 22.3991, 18.0234, 1.1 * raysSpeed);
-  vec4 rays3 = vec4(1.0) * rayStrength(rayPos + vec2(iResolution.x * 0.18, 0.0), normalize(finalRayDir + vec2(-0.10, 0.04)), coord, 18.174, 31.73, 0.88 * raysSpeed);
-  vec4 rays4 = vec4(1.0) * rayStrength(rayPos - vec2(iResolution.x * 0.24, iResolution.y * 0.03), normalize(finalRayDir + vec2(0.18, 0.02)), coord, 44.73, 12.48, 0.72 * raysSpeed);
-  vec4 rays5 = vec4(1.0) * rayStrength(rayPos + vec2(iResolution.x * 0.36, iResolution.y * 0.02), normalize(finalRayDir + vec2(-0.20, 0.05)), coord, 27.12, 41.91, 0.62 * raysSpeed);
-
-  fragColor = rays1 * 0.56 + rays2 * 0.42 + rays3 * 0.30 + rays4 * 0.22 + rays5 * 0.18;
-
-  if (noiseAmount > 0.0) {
-    float n = noise(coord * 0.01 + iTime * 0.1);
-    fragColor.rgb *= 1.0 - noiseAmount + noiseAmount * n;
-  }
-
-  float topBrightness = 1.0 - (coord.y / iResolution.y);
-  fragColor.x *= 0.12 + topBrightness * 0.82;
-  fragColor.y *= 0.32 + topBrightness * 0.62;
-  fragColor.z *= 0.50 + topBrightness * 0.52;
-
-  if (saturation != 1.0) {
-    float gray = dot(fragColor.rgb, vec3(0.299, 0.587, 0.114));
-    fragColor.rgb = mix(vec3(gray), fragColor.rgb, saturation);
-  }
-
-  float crownGlow = pow(vUv.y, 3.1) * 0.16;
-  float accentMix = smoothstep(0.22, 1.05, vUv.x + vUv.y * 0.34);
-  vec3 finalColor = mix(raysColor, accentColor, accentMix * 0.12);
-  float vignette = 1.0 - distance(vUv, vec2(0.52, 0.50)) * vignetteStrength;
-
-  fragColor.rgb *= finalColor * rayIntensity * max(vignette, 0.2);
-  fragColor.rgb += raysColor * crownGlow * rayIntensity;
-  fragColor.a *= rayOpacity;
+vec3 saturateColor(vec3 color, float amount) {
+  float gray = dot(color, vec3(0.299, 0.587, 0.114));
+  return mix(vec3(gray), color, amount);
 }
 
 void main() {
-  vec4 color;
-  mainImage(color, gl_FragCoord.xy);
-  gl_FragColor = color;
+  float mr = min(uResolution.x, uResolution.y);
+  vec2 frag = gl_FragCoord.xy;
+  vec2 uv = (frag * 2.0 - uResolution.xy) / mr;
+  vec2 screenUv = frag / uResolution.xy;
+
+  vec2 mouseOffset = (uMouse - vec2(0.5)) * uAmplitude;
+  uv += mouseOffset;
+  uv.x += sin(screenUv.y * 4.0 + uTime * 0.18) * 0.025;
+  uv.y += uScroll * 0.28;
+
+  float d = -uTime * 0.5 * uSpeed;
+  float a = 0.0;
+  for (float i = 0.0; i < 8.0; ++i) {
+    a += cos(i - d - a * uv.x);
+    d += sin(uv.y * i + a);
+  }
+  d += uTime * 0.5 * uSpeed;
+
+  vec3 col = vec3(cos(uv * vec2(d, a)) * 0.6 + 0.4, cos(a + d) * 0.5 + 0.5);
+  col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5) * uColor;
+
+  float tintMix = smoothstep(-0.85, 0.95, uv.x + uv.y * 0.28);
+  vec3 tint = mix(uTintA, uTintB, tintMix);
+  col = mix(col, col * tint, 0.34 + uFocus * 0.08);
+  col = saturateColor(col, uSaturation);
+
+  float glow = pow(max(0.0, 1.0 - length(uv - vec2(0.0, 0.18)) * 0.58), 2.2);
+  float edge = smoothstep(1.25, 0.18, length(uv));
+  float topSheen = pow(screenUv.y, 2.6) * 0.2;
+  vec3 base = vec3(0.015, 0.025, 0.055);
+  vec3 sheen = mix(uTintA, uTintB, screenUv.x) * topSheen;
+
+  col = base + col * uIntensity * max(edge, 0.34) + sheen + glow * vec3(0.12, 0.18, 0.24);
+  col = mix(col, base, uDarkness);
+  col *= 1.0 - distance(screenUv, vec2(0.5, 0.52)) * uVignette;
+  col = max(col, base);
+
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function hexToRgb(hex) {
-  const value = hex.replace("#", "");
-  return [
-    parseInt(value.slice(0, 2), 16) / 255,
-    parseInt(value.slice(2, 4), 16) / 255,
-    parseInt(value.slice(4, 6), 16) / 255,
-  ];
 }
 
 function frameBudget() {
@@ -171,81 +128,59 @@ function angleDelta(value, baseline) {
   return delta;
 }
 
-function getAnchorAndDir(origin, width, height) {
-  const outside = 0.2;
-  switch (origin) {
-    case "top-left":
-      return { anchor: [0, -outside * height], dir: [0, 1] };
-    case "top-right":
-      return { anchor: [width, -outside * height], dir: [0, 1] };
-    case "left":
-      return { anchor: [-outside * width, 0.5 * height], dir: [1, 0] };
-    case "right":
-      return { anchor: [(1 + outside) * width, 0.5 * height], dir: [-1, 0] };
-    case "bottom-left":
-      return { anchor: [0, (1 + outside) * height], dir: [0, -1] };
-    case "bottom-center":
-      return { anchor: [0.5 * width, (1 + outside) * height], dir: [0, -1] };
-    case "bottom-right":
-      return { anchor: [width, (1 + outside) * height], dir: [0, -1] };
-    default:
-      return { anchor: [0.5 * width, -outside * height], dir: [0, 1] };
-  }
-}
-
 function routeConfig(route) {
   if (route === "/search.html") {
     return {
-      origin: "top-center",
-      focus: 0.85,
-      color: "#ffffff",
-      accent: "#dcecff",
-      intensity: 1.08,
-      opacity: 0.9,
-      spread: 1.08,
-      speed: 0.92,
-      distortion: 0.026,
+      focus: 0.82,
+      speed: 0.86,
+      amplitude: 0.18,
+      intensity: 0.84,
+      darkness: 0.34,
+      saturation: 1.24,
+      color: [0.92, 0.98, 1],
+      tintA: [0.36, 1, 0.9],
+      tintB: [1, 0.58, 0.92],
     };
   }
 
   if (route === "/upload.html") {
     return {
-      origin: "top-center",
-      focus: 0.5,
-      color: "#ffffff",
-      accent: "#f0e9ff",
-      intensity: 1.1,
-      opacity: 0.9,
-      spread: 1.06,
-      speed: 0.9,
-      distortion: 0.028,
+      focus: 0.46,
+      speed: 0.8,
+      amplitude: 0.17,
+      intensity: 0.82,
+      darkness: 0.35,
+      saturation: 1.2,
+      color: [0.96, 0.96, 1],
+      tintA: [0.46, 0.88, 1],
+      tintB: [1, 0.64, 0.8],
     };
   }
 
   if (route === "/login") {
     return {
-      origin: "top-center",
       focus: 0.18,
-      color: "#ffffff",
-      accent: "#e9f4ff",
-      intensity: 1.08,
-      opacity: 0.88,
-      spread: 1.06,
-      speed: 0.9,
-      distortion: 0.024,
+      speed: 0.78,
+      amplitude: 0.16,
+      intensity: 0.78,
+      darkness: 0.36,
+      saturation: 1.18,
+      color: [0.94, 0.98, 1],
+      tintA: [0.42, 0.94, 1],
+      tintB: [0.98, 0.58, 0.94],
     };
   }
 
   return {
-    origin: "top-center",
     focus: 0,
-    color: "#ffffff",
-    accent: "#e4f2ff",
-    intensity: 1.14,
-    opacity: 0.92,
-    spread: 1.08,
-    speed: 0.94,
-    distortion: 0.026,
+    speed: 0.84,
+    amplitude: 0.18,
+    intensity: 0.82,
+    darkness: 0.35,
+    saturation: 1.22,
+    color: [0.96, 0.98, 1],
+    tintA: [0.38, 0.96, 1],
+    tintB: [1, 0.58, 0.88],
   };
 }
 
@@ -266,11 +201,10 @@ function ensureStageStyles() {
       opacity: 0;
       contain: strict;
       background:
-        radial-gradient(circle at 50% -10%, rgba(255, 255, 255, .28), transparent 34%),
-        radial-gradient(circle at 18% 16%, rgba(140, 216, 255, .14), transparent 32%),
-        radial-gradient(circle at 82% 14%, rgba(190, 168, 255, .10), transparent 31%),
-        radial-gradient(circle at 50% 112%, rgba(52, 102, 151, .18), transparent 42%),
-        linear-gradient(135deg, #050711, #07101d 48%, #130f21);
+        radial-gradient(circle at 16% 12%, rgba(82, 226, 255, .26), transparent 32%),
+        radial-gradient(circle at 80% 18%, rgba(255, 113, 208, .22), transparent 30%),
+        radial-gradient(circle at 48% 100%, rgba(152, 126, 255, .18), transparent 44%),
+        linear-gradient(135deg, #050711, #07101d 48%, #140d20);
       transition: opacity .42s ease;
       isolation: isolate;
     }
@@ -290,20 +224,19 @@ function ensureStageStyles() {
     }
     #campus-spline-stage::before {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, .075), transparent 31%),
-        radial-gradient(circle at 50% -12%, rgba(255, 255, 255, .28), transparent 40%);
+        linear-gradient(115deg, rgba(93, 233, 255, .16), transparent 28%, rgba(255, 139, 224, .12) 62%, transparent),
+        radial-gradient(circle at 50% -12%, rgba(255, 255, 255, .18), transparent 40%);
       mix-blend-mode: screen;
     }
     #campus-spline-stage::after {
       background:
-        radial-gradient(circle at 50% 52%, transparent 0, rgba(4, 7, 14, .28) 68%, rgba(4, 7, 14, .54) 100%),
-        linear-gradient(180deg, rgba(5, 7, 17, .03), rgba(5, 7, 17, .22));
+        radial-gradient(circle at 50% 52%, transparent 0, rgba(4, 7, 14, .24) 68%, rgba(4, 7, 14, .58) 100%),
+        linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .26));
     }
     #campus-spline-stage.campus-spline-fallback {
       background:
-        linear-gradient(112deg, transparent 0 26%, rgba(255, 255, 255, .15) 34%, transparent 48%),
-        linear-gradient(125deg, transparent 0 15%, rgba(138, 215, 255, .12) 29%, transparent 48%),
-        linear-gradient(135deg, #050711, #07101d 48%, #130f21);
+        conic-gradient(from 220deg at 48% 34%, rgba(80, 232, 255, .42), rgba(255, 128, 224, .34), rgba(173, 142, 255, .28), rgba(80, 232, 255, .42)),
+        linear-gradient(135deg, #050711, #07101d 48%, #140d20);
     }
     body[data-campus-spline="active"] {
       background: #050711 !important;
@@ -360,7 +293,7 @@ function createStage() {
     prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
     setupOrientationControl();
   } catch (error) {
-    console.warn("Light rays background failed to initialize:", error);
+    console.warn("Iridescence background failed to initialize:", error);
     stage.classList.add("campus-spline-fallback");
     gl = null;
   }
@@ -408,25 +341,20 @@ function buildProgram() {
   gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
   [
-    "iTime",
-    "iResolution",
-    "rayPos",
-    "rayDir",
-    "raysColor",
-    "accentColor",
-    "raysSpeed",
-    "lightSpread",
-    "rayLength",
-    "pulsating",
-    "fadeDistance",
-    "saturation",
-    "mousePos",
-    "mouseInfluence",
-    "noiseAmount",
-    "distortion",
-    "rayIntensity",
-    "rayOpacity",
-    "vignetteStrength",
+    "uTime",
+    "uResolution",
+    "uMouse",
+    "uColor",
+    "uTintA",
+    "uTintB",
+    "uAmplitude",
+    "uSpeed",
+    "uIntensity",
+    "uDarkness",
+    "uSaturation",
+    "uVignette",
+    "uScroll",
+    "uFocus",
   ].forEach((name) => {
     uniforms[name] = gl.getUniformLocation(program, name);
   });
@@ -444,7 +372,7 @@ function resizeScene() {
   const rect = stage?.getBoundingClientRect();
   viewportWidth = Math.max(1, Math.round(rect?.width || window.innerWidth || 1));
   viewportHeight = Math.max(1, Math.round(rect?.height || window.innerHeight || 1));
-  pixelRatio = Math.min(window.devicePixelRatio || 1, lowDetail ? 1.25 : 1.75);
+  pixelRatio = Math.min(window.devicePixelRatio || 1, lowDetail ? 1.2 : 1.65);
   canvas.width = Math.max(1, Math.round(viewportWidth * pixelRatio));
   canvas.height = Math.max(1, Math.round(viewportHeight * pixelRatio));
   gl.viewport(0, 0, canvas.width, canvas.height);
@@ -468,7 +396,7 @@ function handlePointerMove(event) {
     const height = Math.max(window.innerHeight, 1);
     targetPointer = {
       x: clamp(event.clientX / width, 0.04, 0.96),
-      y: clamp(event.clientY / height, 0.04, 0.96),
+      y: clamp(1 - event.clientY / height, 0.04, 0.96),
     };
   }
 }
@@ -481,39 +409,28 @@ function handleScroll() {
 function updateUniforms(now) {
   const config = routeConfig(routeName);
   const elapsed = (now - startTime) / 1000;
-  matchFocus += (matchFocusTarget - matchFocus) * (prefersReducedMotion.matches ? 0.16 : 0.055);
-  smoothPointer.x += (targetPointer.x - smoothPointer.x) * (lowDetail ? 0.105 : 0.075);
-  smoothPointer.y += (targetPointer.y - smoothPointer.y) * (lowDetail ? 0.105 : 0.075);
+  matchFocus += (matchFocusTarget - matchFocus) * (prefersReducedMotion.matches ? 0.14 : 0.055);
+  smoothPointer.x += (targetPointer.x - smoothPointer.x) * (lowDetail ? 0.12 : 0.08);
+  smoothPointer.y += (targetPointer.y - smoothPointer.y) * (lowDetail ? 0.12 : 0.08);
 
-  const width = canvas.width;
-  const height = canvas.height;
-  const placement = getAnchorAndDir(rayOrigin, width, height);
-  const color = hexToRgb(config.color);
-  const accent = hexToRgb(config.accent);
-  const speed = prefersReducedMotion.matches ? 0.04 : config.speed + matchFocus * 0.035;
-  const intensity = config.intensity + matchFocus * 0.06 + scrollProgress * 0.035;
-  const opacity = config.opacity + matchFocus * 0.025;
-  const mouseInfluence = (lowDetail ? 0.08 : 0.12) + matchFocus * 0.035;
+  const speed = prefersReducedMotion.matches ? 0.035 : config.speed + matchFocus * 0.05;
+  const amplitude = config.amplitude + matchFocus * 0.02;
+  const intensity = config.intensity + matchFocus * 0.05 + scrollProgress * 0.03;
 
-  gl.uniform1f(uniforms.iTime, elapsed);
-  gl.uniform2f(uniforms.iResolution, width, height);
-  gl.uniform2f(uniforms.rayPos, placement.anchor[0], placement.anchor[1]);
-  gl.uniform2f(uniforms.rayDir, placement.dir[0], placement.dir[1]);
-  gl.uniform3f(uniforms.raysColor, color[0], color[1], color[2]);
-  gl.uniform3f(uniforms.accentColor, accent[0], accent[1], accent[2]);
-  gl.uniform1f(uniforms.raysSpeed, speed);
-  gl.uniform1f(uniforms.lightSpread, config.spread + scrollProgress * 0.04);
-  gl.uniform1f(uniforms.rayLength, lowDetail ? 1.9 : 2);
-  gl.uniform1f(uniforms.pulsating, 0);
-  gl.uniform1f(uniforms.fadeDistance, lowDetail ? 1 : 1.08);
-  gl.uniform1f(uniforms.saturation, 1);
-  gl.uniform2f(uniforms.mousePos, smoothPointer.x, smoothPointer.y);
-  gl.uniform1f(uniforms.mouseInfluence, mouseInfluence);
-  gl.uniform1f(uniforms.noiseAmount, lowDetail ? 0.004 : 0.008);
-  gl.uniform1f(uniforms.distortion, config.distortion + matchFocus * 0.006);
-  gl.uniform1f(uniforms.rayIntensity, intensity);
-  gl.uniform1f(uniforms.rayOpacity, opacity);
-  gl.uniform1f(uniforms.vignetteStrength, lowDetail ? 0.55 : 0.72);
+  gl.uniform1f(uniforms.uTime, elapsed);
+  gl.uniform2f(uniforms.uResolution, canvas.width, canvas.height);
+  gl.uniform2f(uniforms.uMouse, smoothPointer.x, smoothPointer.y);
+  gl.uniform3f(uniforms.uColor, config.color[0], config.color[1], config.color[2]);
+  gl.uniform3f(uniforms.uTintA, config.tintA[0], config.tintA[1], config.tintA[2]);
+  gl.uniform3f(uniforms.uTintB, config.tintB[0], config.tintB[1], config.tintB[2]);
+  gl.uniform1f(uniforms.uAmplitude, amplitude);
+  gl.uniform1f(uniforms.uSpeed, speed);
+  gl.uniform1f(uniforms.uIntensity, intensity);
+  gl.uniform1f(uniforms.uDarkness, config.darkness);
+  gl.uniform1f(uniforms.uSaturation, config.saturation);
+  gl.uniform1f(uniforms.uVignette, lowDetail ? 0.62 : 0.78);
+  gl.uniform1f(uniforms.uScroll, scrollProgress);
+  gl.uniform1f(uniforms.uFocus, matchFocus);
 }
 
 function renderFrame(now) {
@@ -720,7 +637,6 @@ function setRoute(route) {
   const normalized = route || window.location.pathname;
   const config = routeConfig(normalized);
   routeName = normalized;
-  rayOrigin = config.origin;
   matchFocusTarget = config.focus;
   document.body.dataset.campusSpline = "active";
   start();
@@ -751,7 +667,7 @@ window.CampusSplineScene = {
   stop,
   inspect() {
     return {
-      mode: "light-rays",
+      mode: "iridescence",
       active,
       hasRenderer: Boolean(gl && program),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,
@@ -759,7 +675,6 @@ window.CampusSplineScene = {
       pixelRatio,
       frameBudget: frameBudget(),
       route: routeName,
-      rayOrigin,
       orientationStatus,
       orientationListening,
       orientationPointer: {

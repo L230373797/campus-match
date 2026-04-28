@@ -2,9 +2,17 @@ const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)
 const coarsePointer = window.matchMedia("(pointer: coarse)");
 const lowPowerDevice = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const lowDetail = coarsePointer.matches || lowPowerDevice;
+const backgroundModeKey = "campus-background-mode";
+const backgroundModes = ["iridescence", "light-rays", "ballpit"];
+const backgroundModeMeta = {
+  iridescence: { label: "虹", title: "虹彩" },
+  "light-rays": { label: "光", title: "光线" },
+  ballpit: { label: "球", title: "球池" },
+};
 
 let stage;
 let canvas;
+let switcher;
 let gl;
 let program;
 let vertexBuffer;
@@ -20,6 +28,7 @@ let scrollProgress = 0;
 let matchFocus = 0;
 let matchFocusTarget = 0;
 let routeName = window.location.pathname;
+let backgroundMode = readBackgroundMode();
 let targetPointer = { x: 0.5, y: 0.5 };
 let smoothPointer = { x: 0.5, y: 0.5 };
 let orientationListening = false;
@@ -60,6 +69,7 @@ uniform float uSaturation;
 uniform float uVignette;
 uniform float uScroll;
 uniform float uFocus;
+uniform float uMode;
 
 varying vec2 vUv;
 
@@ -68,11 +78,32 @@ vec3 saturateColor(vec3 color, float amount) {
   return mix(vec3(gray), color, amount);
 }
 
-void main() {
+float hash11(float p) {
+  return fract(sin(p * 127.1) * 43758.5453123);
+}
+
+float rayStrength(vec2 raySource, vec2 rayRefDirection, vec2 coord, float seedA, float seedB, float speed) {
+  vec2 sourceToCoord = coord - raySource;
+  vec2 dirNorm = normalize(sourceToCoord);
+  float cosAngle = dot(dirNorm, rayRefDirection);
+  float spreadFactor = pow(max(cosAngle, 0.0), 1.05);
+  float distance = length(sourceToCoord);
+  float maxDistance = uResolution.x * 2.0;
+  float lengthFalloff = clamp((maxDistance - distance) / maxDistance, 0.0, 1.0);
+  float fadeFalloff = clamp((uResolution.x * 1.08 - distance) / (uResolution.x * 1.08), 0.5, 1.0);
+  float baseStrength = clamp(
+    (0.45 + 0.15 * sin(cosAngle * seedA + uTime * speed)) +
+    (0.30 + 0.20 * cos(-cosAngle * seedB + uTime * speed)),
+    0.0,
+    1.0
+  );
+
+  return baseStrength * lengthFalloff * fadeFalloff * spreadFactor;
+}
+
+vec3 renderIridescence(vec2 frag, vec2 screenUv) {
   float mr = min(uResolution.x, uResolution.y);
-  vec2 frag = gl_FragCoord.xy;
   vec2 uv = (frag * 2.0 - uResolution.xy) / mr;
-  vec2 screenUv = frag / uResolution.xy;
 
   vec2 mouseOffset = (uMouse - vec2(0.5)) * uAmplitude;
   uv += mouseOffset;
@@ -106,11 +137,104 @@ void main() {
   col *= 1.0 - distance(screenUv, vec2(0.5, 0.52)) * uVignette;
   col = max(col, base);
 
+  return col;
+}
+
+vec3 renderLightRays(vec2 frag, vec2 screenUv) {
+  vec2 coord = vec2(frag.x, uResolution.y - frag.y);
+  vec2 rayPos = vec2(0.5 * uResolution.x, -0.2 * uResolution.y);
+  vec2 baseDir = vec2(0.0, 1.0);
+  vec2 mouseDir = normalize(uMouse * uResolution.xy - rayPos);
+  vec2 finalRayDir = normalize(mix(baseDir, mouseDir, 0.14 + uFocus * 0.04));
+  float speed = max(uSpeed, 0.2);
+  float rays =
+    rayStrength(rayPos, finalRayDir, coord, 36.2214, 21.11349, 1.5 * speed) * 0.56 +
+    rayStrength(rayPos, finalRayDir, coord, 22.3991, 18.0234, 1.1 * speed) * 0.42 +
+    rayStrength(rayPos + vec2(uResolution.x * 0.18, 0.0), normalize(finalRayDir + vec2(-0.10, 0.04)), coord, 18.174, 31.73, 0.88 * speed) * 0.30 +
+    rayStrength(rayPos - vec2(uResolution.x * 0.24, uResolution.y * 0.03), normalize(finalRayDir + vec2(0.18, 0.02)), coord, 44.73, 12.48, 0.72 * speed) * 0.22;
+  float topBrightness = 1.0 - (coord.y / uResolution.y);
+  vec3 col = vec3(rays) * vec3(0.55 + topBrightness * 0.55, 0.70 + topBrightness * 0.42, 0.90 + topBrightness * 0.32);
+  float crownGlow = pow(screenUv.y, 3.0) * 0.18;
+  vec3 base = vec3(0.015, 0.025, 0.055);
+  col = base + col * (1.18 + uFocus * 0.08) + crownGlow * vec3(0.72, 0.9, 1.0);
+  col *= 1.0 - distance(screenUv, vec2(0.5, 0.5)) * 0.72;
+  return max(col, base);
+}
+
+vec3 renderBallpit(vec2 frag, vec2 screenUv) {
+  vec2 aspect = vec2(uResolution.x / uResolution.y, 1.0);
+  vec2 p = (screenUv - vec2(0.5)) * aspect;
+  vec2 cursor = (uMouse - vec2(0.5)) * aspect;
+  vec3 col = mix(vec3(0.012, 0.018, 0.035), vec3(0.025, 0.045, 0.075), screenUv.y);
+  col += vec3(0.03, 0.04, 0.06) * pow(max(0.0, 1.0 - length(p - cursor * 0.22) * 1.2), 2.2);
+
+  for (float i = 0.0; i < 32.0; i += 1.0) {
+    float h1 = hash11(i + 1.7);
+    float h2 = hash11(i * 2.31 + 5.1);
+    float h3 = hash11(i * 4.17 + 2.4);
+    vec2 center = (vec2(h1, h2) - vec2(0.5)) * vec2(aspect.x * 1.34, 1.22);
+    center.x += sin(uTime * (0.18 + h3 * 0.12) + i * 0.61) * 0.045;
+    center.y += cos(uTime * (0.16 + h1 * 0.1) + i * 0.74) * 0.04 - uScroll * 0.12;
+    center += cursor * (0.06 + h2 * 0.06);
+    float radius = mix(0.055, 0.13, h3);
+    vec2 delta = p - center;
+    float distanceToBall = length(delta);
+    float mask = smoothstep(radius, radius * 0.78, distanceToBall);
+    float z = sqrt(max(0.0, 1.0 - pow(distanceToBall / radius, 2.0)));
+    vec3 normal = normalize(vec3(delta / radius, z));
+    vec3 light = normalize(vec3(-0.45, 0.64, 0.84));
+    float diffuse = max(dot(normal, light), 0.0);
+    float rim = pow(1.0 - max(z, 0.0), 2.0);
+    vec3 tint = mix(vec3(0.12, 0.46, 0.72), vec3(0.74, 0.28, 0.64), h1);
+    vec3 ball = mix(vec3(0.018, 0.035, 0.055), tint, 0.36) + diffuse * vec3(0.46, 0.68, 0.9) + rim * vec3(0.2, 0.14, 0.26);
+    float highlight = smoothstep(radius * 0.22, 0.0, length(delta + vec2(radius * 0.28, -radius * 0.24)));
+    ball += highlight * vec3(0.55, 0.75, 0.95);
+    col = mix(col, ball, mask * 0.9);
+  }
+
+  col *= 1.0 - distance(screenUv, vec2(0.5, 0.52)) * 0.58;
+  return max(col, vec3(0.008, 0.012, 0.024));
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy;
+  vec2 screenUv = frag / uResolution.xy;
+  vec3 col;
+
+  if (uMode < 0.5) {
+    col = renderIridescence(frag, screenUv);
+  } else if (uMode < 1.5) {
+    col = renderLightRays(frag, screenUv);
+  } else {
+    col = renderBallpit(frag, screenUv);
+  }
+
   gl_FragColor = vec4(col, 1.0);
 }`;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function readBackgroundMode() {
+  try {
+    const saved = window.localStorage?.getItem(backgroundModeKey);
+    return backgroundModes.includes(saved) ? saved : "iridescence";
+  } catch {
+    return "iridescence";
+  }
+}
+
+function writeBackgroundMode(mode) {
+  try {
+    window.localStorage?.setItem(backgroundModeKey, mode);
+  } catch {
+    // Storage may be unavailable in private or embedded contexts.
+  }
+}
+
+function backgroundModeIndex() {
+  return Math.max(0, backgroundModes.indexOf(backgroundMode));
 }
 
 function frameBudget() {
@@ -246,6 +370,63 @@ function ensureStageStyles() {
       position: relative;
       z-index: 2;
     }
+    .campus-bg-switcher {
+      position: fixed;
+      right: max(14px, env(safe-area-inset-right));
+      top: 50%;
+      z-index: 30;
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 999px;
+      background: rgba(9, 16, 32, .42);
+      box-shadow: 0 22px 70px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.18);
+      backdrop-filter: blur(22px) saturate(1.3);
+      -webkit-backdrop-filter: blur(22px) saturate(1.3);
+      transform: translate3d(0, -50%, 0);
+      pointer-events: auto;
+    }
+    .campus-bg-switcher button {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      color: rgba(232,242,255,.74);
+      background: transparent;
+      font: 800 14px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+      transition: transform .18s ease, color .18s ease, background .18s ease, box-shadow .18s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .campus-bg-switcher button:hover {
+      color: rgba(255,255,255,.96);
+      background: rgba(255,255,255,.10);
+      transform: scale(1.04);
+    }
+    .campus-bg-switcher button.is-active {
+      color: #06101d;
+      background: linear-gradient(180deg, #fff, #d8efff 58%, #ffd7ea);
+      box-shadow: 0 12px 28px rgba(99,191,255,.24), inset 0 1px rgba(255,255,255,.75);
+    }
+    @media (max-width: 640px) {
+      .campus-bg-switcher {
+        top: auto;
+        right: 50%;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        transform: translateX(50%);
+        grid-auto-flow: column;
+        padding: 6px;
+        gap: 6px;
+      }
+      .campus-bg-switcher button {
+        width: 34px;
+        height: 34px;
+        font-size: 13px;
+      }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -264,6 +445,7 @@ function createStage() {
   canvas.id = "campus-spline-canvas";
   stage.appendChild(canvas);
   document.body.prepend(stage);
+  createBackgroundSwitcher();
 
   gl = canvas.getContext("webgl", {
     alpha: true,
@@ -299,6 +481,58 @@ function createStage() {
   }
 
   return stage;
+}
+
+function createBackgroundSwitcher() {
+  if (switcher) {
+    updateBackgroundSwitcher();
+    return switcher;
+  }
+
+  switcher = document.createElement("div");
+  switcher.className = "campus-bg-switcher";
+  switcher.setAttribute("aria-label", "背景切换");
+
+  backgroundModes.forEach((mode) => {
+    const meta = backgroundModeMeta[mode];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = meta.label;
+    button.title = meta.title;
+    button.setAttribute("aria-label", meta.title);
+    button.dataset.mode = mode;
+    button.addEventListener("click", () => {
+      setBackgroundMode(mode);
+    });
+    switcher.appendChild(button);
+  });
+
+  document.body.appendChild(switcher);
+  updateBackgroundSwitcher();
+  return switcher;
+}
+
+function updateBackgroundSwitcher() {
+  if (!switcher) {
+    return;
+  }
+
+  switcher.querySelectorAll("button").forEach((button) => {
+    const selected = button.dataset.mode === backgroundMode;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
+
+function setBackgroundMode(mode) {
+  if (!backgroundModes.includes(mode) || backgroundMode === mode) {
+    return;
+  }
+
+  backgroundMode = mode;
+  writeBackgroundMode(mode);
+  updateBackgroundSwitcher();
+  renderFrame(performance.now());
 }
 
 function compileShader(type, source) {
@@ -355,6 +589,7 @@ function buildProgram() {
     "uVignette",
     "uScroll",
     "uFocus",
+    "uMode",
   ].forEach((name) => {
     uniforms[name] = gl.getUniformLocation(program, name);
   });
@@ -431,6 +666,7 @@ function updateUniforms(now) {
   gl.uniform1f(uniforms.uVignette, lowDetail ? 0.62 : 0.78);
   gl.uniform1f(uniforms.uScroll, scrollProgress);
   gl.uniform1f(uniforms.uFocus, matchFocus);
+  gl.uniform1f(uniforms.uMode, backgroundModeIndex());
 }
 
 function renderFrame(now) {
@@ -650,6 +886,10 @@ setRoute(window.location.pathname);
 
 window.CampusSplineScene = {
   setRoute,
+  setBackgroundMode,
+  getBackgroundMode() {
+    return backgroundMode;
+  },
   focusMatch() {
     matchFocusTarget = 1;
   },
@@ -667,7 +907,8 @@ window.CampusSplineScene = {
   stop,
   inspect() {
     return {
-      mode: "iridescence",
+      mode: backgroundMode,
+      availableModes: [...backgroundModes],
       active,
       hasRenderer: Boolean(gl && program),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,

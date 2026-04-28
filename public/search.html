@@ -760,7 +760,7 @@
             <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
             <div class="match-actions">
               <button class="back" type="button" data-back ${deckHistory.length ? "" : "disabled"}>回退</button>
-              <button class="skip" type="button" data-skip="${index}">跳过</button>
+              <button class="skip" type="button" data-skip="${userId}">跳过</button>
               <button class="super" type="button" data-super="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后解锁" : "超级喜欢"}</button>
             </div>
           </div>
@@ -803,6 +803,7 @@
           card.className = "match-card";
           card.dataset.index = String(activeIndex + stackIndex);
           card.dataset.stack = String(stackIndex);
+          card.dataset.userId = user.id || user._id || "";
           card.innerHTML = cardHtml(user, stackIndex, lockedPreview);
           const likeButton = card.querySelector("[data-super]");
           const skipButton = card.querySelector("[data-skip]");
@@ -817,7 +818,7 @@
             button.disabled = true;
             button.textContent = "正在点亮...";
             try {
-              await request(`/api/matches/like/${button.dataset.id}`, { method: "POST" });
+              await request(`/api/matches/like/${button.dataset.super}`, { method: "POST" });
               button.textContent = "已超级喜欢";
               swipeTopCard("up", { alreadyLiked: true });
             } catch (error) {
@@ -960,10 +961,19 @@
           : direction === "up" ? "is-exiting-up" : "is-exiting-left");
 
         if ((direction === "right" || direction === "up") && !lockedPreview && !options.alreadyLiked) {
-          const id = card.querySelector("[data-super]")?.dataset.id;
+          const id = card.dataset.userId || card.querySelector("[data-super]")?.dataset.super;
           if (id) {
             request(`/api/matches/like/${id}`, { method: "POST" }).catch((error) => {
               setStatus(error.message || "喜欢没有送出，可以再点一次。");
+            });
+          }
+        }
+
+        if (direction === "left" && !lockedPreview && !options.alreadySkipped) {
+          const id = card.dataset.userId || card.querySelector("[data-skip]")?.dataset.skip;
+          if (id) {
+            request(`/api/matches/skip/${id}`, { method: "POST" }).catch((error) => {
+              setStatus(error.message || "跳过没有保存，可以稍后再试。");
             });
           }
         }

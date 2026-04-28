@@ -431,7 +431,10 @@ async function handleUsers(req, store, segments, url) {
     const allUsers = (await listUsers(store))
       .map(publicUser)
       .filter((item) => item.id !== user.id && !skipped.has(item.id));
-    const recommendations = allUsers;
+    const recommendations = allUsers.length
+      ? allUsers
+      : filterSeedProfiles({ viewer: user, query: "", school: "", major: "", grade: "" })
+          .filter((item) => !skipped.has(item.id));
     const start = (page - 1) * limit;
 
     return json({
@@ -532,12 +535,16 @@ async function handleMatches(req, store, segments) {
       throw httpError("用户不存在", 404);
     }
 
-    const match = await upsertMatch(store, user, target);
+    if ((target.id || target._id) === user.id) {
+      throw httpError("不能匹配自己的账号", 400);
+    }
+
+    const { match, isNewMatch } = await upsertMatch(store, user, target);
     return json({
       success: true,
       data: {
-        isNewMatch: true,
-        message: "匹配成功！",
+        isNewMatch,
+        message: isNewMatch ? "匹配成功！" : "你们已经匹配过了",
         match,
       },
     });
@@ -648,7 +655,10 @@ async function upsertMatch(store, user, target) {
   if (existing?.matchId) {
     const match = await getMatch(store, existing.matchId);
     if (match) {
-      return serializeMatch(match, user.id, target);
+      return {
+        isNewMatch: false,
+        match: serializeMatch(match, user.id, target),
+      };
     }
   }
 
@@ -671,7 +681,14 @@ async function upsertMatch(store, user, target) {
   await saveMatch(store, match);
   await store.setJSON(`match-pairs/${pairKey}`, { matchId: match.id });
   await saveUser(store, bumpStat(user, "matches"));
-  return serializeMatch(match, user.id, target);
+  const targetRecord = await getUser(store, target.id || target._id);
+  if (targetRecord) {
+    await saveUser(store, bumpStat(targetRecord, "likes"));
+  }
+  return {
+    isNewMatch: true,
+    match: serializeMatch(match, user.id, target),
+  };
 }
 
 async function listMatchesForUser(store, userId) {
@@ -1155,12 +1172,16 @@ async function searchUsers(store, viewer, url) {
   const rows = databaseUsers?.length ? databaseUsers : await searchUsersInBlobs(store, { viewer, query, school, major, grade });
   const merged = rows
     .filter((item) => item.id !== viewer.id && !skipped.has(item.id));
+  const uniqueUsers = uniqueById(merged);
+  const fallbackSeedUsers = uniqueUsers.length ? [] : filterSeedProfiles({ viewer, query, school, major, grade })
+    .filter((item) => !skipped.has(item.id));
+  const users = uniqueById([...uniqueUsers, ...fallbackSeedUsers]);
 
   return {
-    users: uniqueById(merged).slice(0, limit),
-    pagination: { page, limit, total: uniqueById(merged).length },
+    users: users.slice(0, limit),
+    pagination: { page, limit, total: users.length },
     query: { q: query, school, major, grade },
-    source: databaseUsers?.length ? "database" : store.kind === "mysql" ? "mysql" : "blobs",
+    source: databaseUsers?.length ? "database" : fallbackSeedUsers.length ? "seed" : store.kind === "mysql" ? "mysql" : "blobs",
   };
 }
 

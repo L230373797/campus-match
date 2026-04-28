@@ -1766,6 +1766,79 @@
           50% { transform: translate3d(0, 8px, 0); opacity: .92; }
         }
       }
+      @media (max-width: 640px) and (max-height: 740px) {
+        body[data-campus-route="/login"] #root > div {
+          align-items: center;
+          padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+          width: min(100%, 370px);
+          max-width: min(100%, 370px);
+          max-height: calc(100svh - 12px);
+          border-radius: 28px !important;
+          scroll-padding: 18px;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .text-center.mb-8 {
+          margin-bottom: 8px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .w-28.h-28 {
+          width: 44px !important;
+          height: 44px !important;
+          margin-bottom: 8px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md h1,
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md [class*="text-3xl"] {
+          font-size: 1.74rem !important;
+          line-height: 1.1 !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .text-center.mb-8 p {
+          font-size: .88rem !important;
+          line-height: 1.42 !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md form.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+          margin-top: 10px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md label {
+          margin-bottom: 5px !important;
+          font-size: .9rem !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md input,
+        body[data-campus-route="/login"] .campus-code-panel input {
+          height: 48px !important;
+          min-height: 48px !important;
+          border-radius: 18px !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+          font-size: 16px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md button[type="submit"] {
+          height: 48px !important;
+          min-height: 48px !important;
+          margin-top: 12px !important;
+        }
+        body[data-campus-route="/login"] .campus-code-panel {
+          gap: 8px;
+          margin-top: 8px;
+        }
+        body[data-campus-route="/login"] .campus-code-panel button {
+          min-height: 46px;
+        }
+        body[data-campus-route="/login"] .campus-school-help {
+          display: none;
+        }
+        body[data-campus-route="/login"] .campus-school-suggestions {
+          max-height: 168px;
+          border-radius: 18px;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md > p,
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .text-center.text-sm {
+          font-size: .84rem !important;
+          line-height: 1.42 !important;
+        }
+        body[data-campus-route="/login"][data-campus-keyboard-focus="true"] #root > div {
+          align-items: center;
+        }
+      }
       @media (max-width: 380px) {
         body[data-campus-route="/login"] .campus-login-hero h1 {
           font-size: 1.96rem !important;
@@ -2238,6 +2311,8 @@
           closeLoginOverlay({ restoreTop: true });
         }
       });
+      overlay.addEventListener("focusin", handleAuthFocusIn);
+      overlay.addEventListener("focusout", handleAuthFocusOut);
     }
 
     if (state.loginObserver) {
@@ -2460,12 +2535,52 @@
     }, 60);
   }
 
+  function handleAuthFocusIn(event) {
+    const target = event.target;
+    if (!target?.matches?.("input, select, textarea")) {
+      return;
+    }
+
+    document.body.dataset.campusKeyboardFocus = "true";
+    setTimeout(() => {
+      if (document.activeElement === target) {
+        scrollAuthFieldIntoView(target);
+      }
+    }, 120);
+  }
+
+  function scrollAuthFieldIntoView(target) {
+    const card = target.closest(".w-full.max-w-md");
+    if (!card) {
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      return;
+    }
+
+    const cardRect = card.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const idealTop = card.clientHeight * 0.38;
+    const delta = targetRect.top - cardRect.top - idealTop + targetRect.height / 2;
+    card.scrollTo({
+      top: Math.max(0, card.scrollTop + delta),
+      behavior: "smooth",
+    });
+  }
+
+  function handleAuthFocusOut() {
+    setTimeout(() => {
+      if (!document.querySelector("#root input:focus, #root select:focus, #root textarea:focus")) {
+        delete document.body.dataset.campusKeyboardFocus;
+      }
+    }, 160);
+  }
+
   function closeLoginOverlay({ restoreTop = false } = {}) {
     if (document.body.dataset.campusLoginOverlay !== "open") {
       return;
     }
 
     delete document.body.dataset.campusLoginOverlay;
+    delete document.body.dataset.campusKeyboardFocus;
     updateScrollLock();
 
     if (restoreTop) {

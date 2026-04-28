@@ -1657,6 +1657,126 @@
         0% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
         100% { opacity: .22; transform: scale(.96) translateY(-12px); filter: blur(8px); }
       }
+      @media (max-width: 640px) {
+        body[data-campus-route="/login"] {
+          min-height: 100svh;
+        }
+        body[data-campus-route="/login"] .campus-login-story {
+          min-height: 238svh;
+          padding-bottom: calc(98px + env(safe-area-inset-bottom));
+        }
+        body[data-campus-route="/login"] .campus-login-hero,
+        body[data-campus-route="/login"] .campus-login-band,
+        body[data-campus-route="/login"] .campus-login-bottom {
+          width: min(calc(100% - 28px), 430px);
+        }
+        body[data-campus-route="/login"] .campus-login-hero {
+          min-height: 100svh;
+          padding: max(18px, env(safe-area-inset-top)) 0 34px;
+          gap: 14px;
+        }
+        body[data-campus-route="/login"] .campus-login-hero::after {
+          content: "";
+          width: 38px;
+          height: 5px;
+          margin: 0 auto;
+          border-radius: 999px;
+          background: rgba(224, 238, 255, .56);
+          box-shadow: 0 0 24px rgba(132, 216, 255, .26);
+          animation: campus-mobile-cue 1.55s ease-in-out infinite;
+        }
+        body[data-campus-route="/login"] .campus-login-hero h1 {
+          font-size: clamp(2.02rem, 9.2vw, 2.42rem) !important;
+          line-height: 1.07 !important;
+        }
+        body[data-campus-route="/login"] .campus-login-hero p {
+          font-size: .94rem !important;
+          line-height: 1.68 !important;
+        }
+        body[data-campus-route="/login"] .campus-login-actions {
+          row-gap: 8px;
+        }
+        body[data-campus-route="/login"] .campus-login-visual {
+          min-height: min(420px, 48svh) !important;
+          border-radius: 30px !important;
+        }
+        body[data-campus-route="/login"] .campus-ios-preview {
+          inset: 16px 14px auto;
+          gap: 9px;
+        }
+        body[data-campus-route="/login"] .campus-ios-preview-card {
+          padding: 13px;
+          border-radius: 23px;
+        }
+        body[data-campus-route="/login"] .campus-ios-preview-card strong {
+          font-size: .95rem;
+        }
+        body[data-campus-route="/login"] .campus-ios-preview-card span {
+          font-size: .82rem;
+          line-height: 1.48;
+        }
+        body[data-campus-route="/login"] .campus-ios-preview-card:nth-child(2) {
+          display: none !important;
+        }
+        body[data-campus-route="/login"] .campus-ios-metric-row {
+          gap: 8px;
+        }
+        body[data-campus-route="/login"] .campus-ios-metric {
+          padding: 9px 6px;
+        }
+        body[data-campus-route="/login"] .campus-login-band {
+          padding-top: 8px;
+          padding-bottom: 64px;
+        }
+        body[data-campus-route="/login"] .campus-login-strip,
+        body[data-campus-route="/login"] .campus-login-card,
+        body[data-campus-route="/login"] .campus-plan-card {
+          border-radius: 24px;
+        }
+        body[data-campus-route="/login"] .campus-login-bottom {
+          min-height: 70svh;
+          padding-bottom: calc(18svh + env(safe-area-inset-bottom));
+        }
+        body[data-campus-route="/login"] .campus-login-bottom h2 {
+          font-size: clamp(2.05rem, 10vw, 2.55rem) !important;
+          line-height: 1.04 !important;
+        }
+        body[data-campus-route="/login"] #root > div {
+          padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+          width: min(100%, 372px);
+          max-width: min(100%, 372px);
+          max-height: min(82svh, calc(100vh - 20px));
+          border-radius: 32px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md .w-28.h-28 {
+          width: 58px !important;
+          height: 58px !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md input,
+        body[data-campus-route="/login"] .campus-code-panel input {
+          min-height: 52px !important;
+        }
+        body[data-campus-route="/login"] .campus-bg-switcher {
+          display: none !important;
+        }
+        @keyframes campus-mobile-cue {
+          0%, 100% { transform: translate3d(0, 0, 0); opacity: .42; }
+          50% { transform: translate3d(0, 8px, 0); opacity: .92; }
+        }
+      }
+      @media (max-width: 380px) {
+        body[data-campus-route="/login"] .campus-login-hero h1 {
+          font-size: 1.96rem !important;
+        }
+        body[data-campus-route="/login"] .campus-login-visual {
+          min-height: min(390px, 46svh) !important;
+        }
+        body[data-campus-route="/login"] #root > div > .w-full.max-w-md {
+          max-height: min(84svh, calc(100vh - 18px));
+        }
+      }
     `;
     document.head.appendChild(style);
   }

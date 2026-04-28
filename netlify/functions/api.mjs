@@ -526,7 +526,8 @@ async function handleMatches(req, store, segments) {
 
   if (segments.length === 1 && req.method === "GET") {
     const matches = await listMatchesForUser(store, user.id);
-    return json({ success: true, data: { matches } });
+    const unreadTotal = matches.reduce((total, match) => total + (match.unreadCount || 0), 0);
+    return json({ success: true, data: { matches, unreadTotal } });
   }
 
   if (segments[1] === "like" && segments[2] && req.method === "POST") {
@@ -555,6 +556,20 @@ async function handleMatches(req, store, segments) {
     skippedIds.add(segments[2]);
     await saveUser(store, { ...user, skippedIds: [...skippedIds], updatedAt: new Date().toISOString() });
     return json({ success: true, message: "已跳过" });
+  }
+
+  if (segments[1] && segments[2] === "read" && req.method === "POST") {
+    const match = await getMatch(store, segments[1]);
+    if (!match || !match.participants.includes(user.id)) {
+      throw httpError("匹配不存在", 404);
+    }
+
+    const updatedMatch = markMatchRead(match, user.id);
+    await saveMatch(store, updatedMatch);
+    return json({
+      success: true,
+      data: { match: serializeMatch(updatedMatch, user.id, await findOtherProfile(store, updatedMatch, user.id), []) },
+    });
   }
 
   if (segments[1] && segments[2] === "reveal" && req.method === "POST") {
@@ -605,6 +620,8 @@ async function handleMessages(req, store, segments, url) {
     const messages = await getMessages(store, matchId);
     const start = Math.max(messages.length - page * limit, 0);
     const end = messages.length - (page - 1) * limit;
+    const updatedMatch = markMatchRead(match, user.id);
+    await saveMatch(store, updatedMatch);
 
     return json({
       success: true,
@@ -628,6 +645,7 @@ async function handleMessages(req, store, segments, url) {
       _id: messageId,
       id: messageId,
       match: matchId,
+      senderId: user.id,
       sender: publicUser(user),
       content,
       type: text(body.type) || "text",
@@ -636,13 +654,19 @@ async function handleMessages(req, store, segments, url) {
     const messages = await getMessages(store, matchId);
     messages.push(message);
     await store.setJSON(`messages/${matchId}`, messages);
-    await saveMatch(store, { ...match, lastMessageAt: now, updatedAt: now });
+    await saveMatch(store, applyOutgoingMessageState(match, user.id, content, now));
 
     return json({ success: true, data: { message } }, 201);
   }
 
   if (req.method === "DELETE") {
     await store.delete(`messages/${matchId}`);
+    await saveMatch(store, {
+      ...markMatchRead(match, user.id),
+      lastMessagePreview: "",
+      lastMessageSenderId: "",
+      updatedAt: new Date().toISOString(),
+    });
     return json({ success: true, message: "聊天记录已清空" });
   }
 
@@ -650,7 +674,8 @@ async function handleMessages(req, store, segments, url) {
 }
 
 async function upsertMatch(store, user, target) {
-  const pairKey = [user.id, target.id].sort().join("__");
+  const targetId = target.id || target._id;
+  const pairKey = [user.id, targetId].sort().join("__");
   const existing = await store.get(`match-pairs/${pairKey}`, { type: "json" });
   if (existing?.matchId) {
     const match = await getMatch(store, existing.matchId);
@@ -665,15 +690,25 @@ async function upsertMatch(store, user, target) {
   const now = new Date().toISOString();
   const match = {
     id: makeId("match"),
-    participants: [user.id, target.id],
+    participants: [user.id, targetId],
     userSnapshots: {
       [user.id]: publicUser(user),
-      [target.id]: target,
+      [targetId]: target,
     },
     matchedAt: now,
     lastMessageAt: now,
     identityRevealed: false,
     revealRequests: [],
+    readAtByUser: {
+      [user.id]: now,
+      [targetId]: now,
+    },
+    unreadByUser: {
+      [user.id]: 0,
+      [targetId]: 0,
+    },
+    lastMessagePreview: "",
+    lastMessageSenderId: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -681,7 +716,7 @@ async function upsertMatch(store, user, target) {
   await saveMatch(store, match);
   await store.setJSON(`match-pairs/${pairKey}`, { matchId: match.id });
   await saveUser(store, bumpStat(user, "matches"));
-  const targetRecord = await getUser(store, target.id || target._id);
+  const targetRecord = await getUser(store, targetId);
   if (targetRecord) {
     await saveUser(store, bumpStat(targetRecord, "likes"));
   }
@@ -696,13 +731,18 @@ async function listMatchesForUser(store, userId) {
 
   for (const match of await listMatches(store)) {
     if (match?.participants?.includes(userId)) {
-      const otherId = match.participants.find((participant) => participant !== userId);
-      const otherProfile = await findPublicProfile(store, otherId, match.userSnapshots?.[otherId]);
-      matches.push(serializeMatch(match, userId, otherProfile));
+      const otherProfile = await findOtherProfile(store, match, userId);
+      const messages = await getMessages(store, match.id);
+      matches.push(serializeMatch(match, userId, otherProfile, messages));
     }
   }
 
   return matches.sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")));
+}
+
+async function findOtherProfile(store, match, userId) {
+  const otherId = match.participants.find((participant) => participant !== userId);
+  return findPublicProfile(store, otherId, match.userSnapshots?.[otherId]);
 }
 
 async function findPublicProfile(store, id, fallback = null) {
@@ -836,14 +876,79 @@ async function getMessages(store, matchId) {
   return (await store.get(`messages/${matchId}`, { type: "json" })) || [];
 }
 
-function serializeMatch(match, viewerId, otherProfile) {
+function serializeMatch(match, viewerId, otherProfile, messages = []) {
+  const unreadCount = calculateUnreadCount(match, viewerId, messages);
   return {
     id: match.id,
     _id: match.id,
     matchedAt: match.matchedAt,
     identityRevealed: Boolean(match.identityRevealed),
     lastMessageAt: match.lastMessageAt,
+    lastMessagePreview: text(match.lastMessagePreview),
+    lastMessageSenderId: text(match.lastMessageSenderId),
+    unreadCount,
+    hasUnread: unreadCount > 0,
+    readAt: match.readAtByUser?.[viewerId] || null,
     user: otherProfile || null,
+  };
+}
+
+function calculateUnreadCount(match, viewerId, messages = []) {
+  const storedCount = Number(match.unreadByUser?.[viewerId]);
+  if (Number.isFinite(storedCount) && storedCount >= 0) {
+    return Math.floor(storedCount);
+  }
+
+  const readAt = Date.parse(match.readAtByUser?.[viewerId] || match.matchedAt || match.createdAt || 0);
+  return messages.filter((message) => {
+    if (senderIdForMessage(message) === viewerId) {
+      return false;
+    }
+
+    const messageAt = Date.parse(message.createdAt || 0);
+    return Number.isFinite(messageAt) && messageAt > readAt;
+  }).length;
+}
+
+function senderIdForMessage(message) {
+  return text(message.senderId || message.sender?.id || message.sender?._id || message.sender);
+}
+
+function markMatchRead(match, userId, now = new Date().toISOString()) {
+  return {
+    ...match,
+    readAtByUser: {
+      ...(match.readAtByUser || {}),
+      [userId]: now,
+    },
+    unreadByUser: {
+      ...(match.unreadByUser || {}),
+      [userId]: 0,
+    },
+    updatedAt: now,
+  };
+}
+
+function applyOutgoingMessageState(match, senderId, content, now = new Date().toISOString()) {
+  const unreadByUser = { ...(match.unreadByUser || {}) };
+  const readAtByUser = { ...(match.readAtByUser || {}) };
+  for (const participant of match.participants || []) {
+    if (participant === senderId) {
+      unreadByUser[participant] = 0;
+      readAtByUser[participant] = now;
+    } else {
+      unreadByUser[participant] = Math.max(0, Number(unreadByUser[participant]) || 0) + 1;
+    }
+  }
+
+  return {
+    ...match,
+    lastMessageAt: now,
+    lastMessagePreview: text(content).slice(0, 80),
+    lastMessageSenderId: senderId,
+    readAtByUser,
+    unreadByUser,
+    updatedAt: now,
   };
 }
 

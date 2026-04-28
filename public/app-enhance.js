@@ -65,6 +65,12 @@
     swiperPromise: null,
     loginSwipers: [],
     loginMotionCleanup: null,
+    unreadTotal: 0,
+    unreadMatches: [],
+    unreadPollTimer: null,
+    unreadFetching: false,
+    unreadCheckedAt: 0,
+    baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
   injectStyles();
@@ -76,11 +82,83 @@
   document.addEventListener("keydown", handleGlobalKeydown);
   document.addEventListener("click", handleLogoutClick, true);
   document.addEventListener("click", handleRouteTransitionClick, true);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      refreshUnreadSummary({ force: true }).catch(() => {});
+    }
+  });
+  window.addEventListener("focus", () => {
+    refreshUnreadSummary({ force: true }).catch(() => {});
+  });
 
   function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
       body:not([data-campus-admin="true"]) a[href="/admin/verification"] { display: none !important; }
+      .ios-tab-item,
+      .campus-unread-anchor {
+        position: relative;
+      }
+      .campus-unread-badge {
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #ff6b8a, #ff2d55);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,.72);
+        box-shadow: 0 10px 24px rgba(255,45,85,.34);
+        font: 800 11px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .ios-tab-item > .campus-unread-badge,
+      .campus-unread-anchor > .campus-unread-badge[data-campus-nav-badge="true"] {
+        position: absolute;
+        top: 6px;
+        right: 18%;
+        z-index: 4;
+      }
+      .campus-thread-unread {
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+      #campus-unread-pill {
+        position: fixed;
+        right: max(14px, env(safe-area-inset-right));
+        bottom: calc(106px + env(safe-area-inset-bottom));
+        z-index: 35;
+        pointer-events: auto;
+      }
+      #campus-unread-pill a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: rgba(255,255,255,.94);
+        background: rgba(11, 18, 34, .66);
+        border: 1px solid rgba(255,255,255,.18);
+        box-shadow: 0 18px 46px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.18);
+        backdrop-filter: blur(22px) saturate(1.35);
+        -webkit-backdrop-filter: blur(22px) saturate(1.35);
+        font-size: 13px;
+        font-weight: 750;
+      }
+      body[data-campus-route="/login"] #campus-unread-pill,
+      body[data-campus-authenticated="false"] #campus-unread-pill {
+        display: none;
+      }
+      @media (max-width: 640px) {
+        #campus-unread-pill {
+          right: 12px;
+          bottom: calc(92px + env(safe-area-inset-bottom));
+        }
+        #campus-unread-pill a span:last-child {
+          display: none;
+        }
+      }
       .campus-code-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 10px; }
       .campus-code-panel input {
         width: 100%;
@@ -1880,7 +1958,13 @@
                 text: "进入你的 3D 匹配卡组",
               });
             }
+            ensureUnreadPolling();
           }, 220);
+        }
+        if (response.ok && /\/api\/(messages|matches)(\/|\?|$)/.test(url)) {
+          setTimeout(() => {
+            refreshUnreadSummary({ force: true }).catch(() => {});
+          }, 450);
         }
         return response;
       });
@@ -1944,6 +2028,7 @@
     document.body.dataset.campusAuthenticated = "false";
     document.body.dataset.campusAdmin = "false";
     document.body.dataset.campusMembership = "free";
+    stopUnreadPolling();
     redirectToLogin();
   }
 
@@ -2069,6 +2154,157 @@
     return payload || {};
   }
 
+  function unreadLabel(count) {
+    return count > 99 ? "99+" : String(Math.max(0, Number(count) || 0));
+  }
+
+  function updateDocumentUnreadTitle(total) {
+    const base = state.baseTitle || document.title.replace(/^\(\d+\)\s*/, "");
+    state.baseTitle = base;
+    document.title = total > 0 ? `(${unreadLabel(total)}) ${base}` : base;
+  }
+
+  function syncUnreadIndicators(matches = [], unreadTotal = null) {
+    const total = Number.isFinite(Number(unreadTotal))
+      ? Math.max(0, Number(unreadTotal))
+      : matches.reduce((sum, match) => sum + (Number(match.unreadCount) || 0), 0);
+
+    state.unreadTotal = total;
+    state.unreadMatches = Array.isArray(matches) ? matches : [];
+    document.body.dataset.campusUnread = total > 0 ? "true" : "false";
+    updateDocumentUnreadTitle(total);
+    updateNavUnreadBadge(total);
+    updateThreadUnreadBadges(state.unreadMatches);
+    updateFloatingUnreadPill(total);
+  }
+
+  function updateNavUnreadBadge(total) {
+    document.querySelectorAll('a[href="/matches"], a[href$="/matches"]').forEach((link) => {
+      link.classList.add("campus-unread-anchor");
+      let badge = link.querySelector('.campus-unread-badge[data-campus-nav-badge="true"]');
+      if (total > 0) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "campus-unread-badge";
+          badge.dataset.campusNavBadge = "true";
+          badge.setAttribute("aria-label", "未读消息");
+          link.appendChild(badge);
+        }
+        const label = unreadLabel(total);
+        if (badge.textContent !== label) {
+          badge.textContent = label;
+        }
+      } else {
+        badge?.remove();
+      }
+    });
+  }
+
+  function matchIdFromChatHref(href) {
+    const match = String(href || "").match(/\/chat\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function updateThreadUnreadBadges(matches = []) {
+    const unreadById = new Map(matches.map((match) => [String(match.id || match._id || ""), Number(match.unreadCount) || 0]));
+    document.querySelectorAll('a[href*="/chat/"]').forEach((link) => {
+      const matchId = matchIdFromChatHref(link.getAttribute("href"));
+      const count = unreadById.get(matchId) || 0;
+      let badge = link.querySelector(".campus-thread-unread");
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "campus-unread-badge campus-thread-unread";
+          link.appendChild(badge);
+        }
+        const label = unreadLabel(count);
+        if (badge.textContent !== label) {
+          badge.textContent = label;
+        }
+        badge.setAttribute("aria-label", `${count} 条未读消息`);
+      } else {
+        badge?.remove();
+      }
+    });
+
+    document.querySelectorAll(".campus-thread-unread").forEach((badge) => {
+      if (!badge.closest('a[href*="/chat/"]')) {
+        badge.remove();
+      }
+    });
+  }
+
+  function updateFloatingUnreadPill(total) {
+    let pill = document.querySelector("#campus-unread-pill");
+    if (!total || !currentToken() || window.location.pathname === "/login") {
+      pill?.remove();
+      return;
+    }
+
+    if (!pill) {
+      pill = document.createElement("div");
+      pill.id = "campus-unread-pill";
+      document.body.appendChild(pill);
+    }
+
+    const countLabel = unreadLabel(total);
+    if (pill.dataset.count === countLabel) {
+      return;
+    }
+
+    pill.dataset.count = countLabel;
+    pill.innerHTML = `<a href="/matches" aria-label="${total} 条未读消息"><span class="campus-unread-badge">${countLabel}</span><span>条新消息</span></a>`;
+  }
+
+  async function refreshUnreadSummary({ force = false } = {}) {
+    if (!currentToken()) {
+      stopUnreadPolling();
+      return;
+    }
+    if (state.unreadFetching) {
+      return;
+    }
+    if (!force && Date.now() - state.unreadCheckedAt < 12000) {
+      return;
+    }
+
+    state.unreadFetching = true;
+    try {
+      const payload = await requestApi("/matches");
+      const matches = payload.data?.matches || [];
+      syncUnreadIndicators(matches, payload.data?.unreadTotal);
+      state.unreadCheckedAt = Date.now();
+    } catch {
+      // Transient network errors should not interrupt the page.
+    } finally {
+      state.unreadFetching = false;
+    }
+  }
+
+  function ensureUnreadPolling() {
+    if (!currentToken()) {
+      stopUnreadPolling();
+      return;
+    }
+
+    refreshUnreadSummary().catch(() => {});
+    if (!state.unreadPollTimer) {
+      state.unreadPollTimer = window.setInterval(() => {
+        refreshUnreadSummary().catch(() => {});
+      }, 15000);
+    }
+  }
+
+  function stopUnreadPolling() {
+    if (state.unreadPollTimer) {
+      clearInterval(state.unreadPollTimer);
+      state.unreadPollTimer = null;
+    }
+    state.unreadFetching = false;
+    state.unreadCheckedAt = 0;
+    syncUnreadIndicators([], 0);
+  }
+
   async function refreshUser(force = false) {
     const token = currentToken();
     if (!token) {
@@ -2078,6 +2314,7 @@
       document.body.dataset.campusAuthenticated = "false";
       document.body.dataset.campusAdmin = "false";
       document.body.dataset.campusMembership = "free";
+      stopUnreadPolling();
       guardAdminRoute();
       if (isProtectedRoute()) {
         redirectToLogin();
@@ -2101,6 +2338,7 @@
       document.body.dataset.campusAuthenticated = "true";
       document.body.dataset.campusAdmin = state.user?.isAdmin ? "true" : "false";
       document.body.dataset.campusMembership = state.membership.planId;
+      ensureUnreadPolling();
       if (!hadToken && (window.location.pathname === "/login" || window.location.pathname === "/")) {
         setTimeout(() => {
           if (currentToken()) {
@@ -2118,6 +2356,7 @@
       document.body.dataset.campusAuthenticated = "false";
       document.body.dataset.campusAdmin = "false";
       document.body.dataset.campusMembership = "free";
+      stopUnreadPolling();
       if (isProtectedRoute()) {
         localStorage.removeItem("token");
         redirectToLogin();
@@ -3234,6 +3473,8 @@
     window.CampusUniversityOptions?.populateSelects?.(document);
     enhanceRegisterSchoolInput();
     rewriteAudienceCopy();
+    ensureUnreadPolling();
+    syncUnreadIndicators(state.unreadMatches, state.unreadTotal);
   }
 
   const observer = new MutationObserver(() => {

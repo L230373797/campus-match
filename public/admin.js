@@ -30,7 +30,7 @@
   privacyTab.addEventListener("click", () => switchTab("privacy"));
 
   boot().catch((error) => {
-    showLogin(error.message || "管理员端暂时无法打开");
+    showLogin(error.message || "运营后台暂时无法打开");
   });
 
   async function boot() {
@@ -43,14 +43,14 @@
       const payload = await requestApi("/auth/me");
       state.user = payload.data?.user || null;
       if (!state.user?.isAdmin) {
-        showLogin("当前账号不是管理员，请使用管理员账号登录。");
+        showLogin("当前账号没有后台权限，请使用运营账号登录。");
         return;
       }
 
       showAdmin();
       await loadCurrentQueue();
     } catch {
-      logout("登录已过期，请重新登录管理员端。");
+      logout("登录已过期，请重新登录运营后台。");
     }
   }
 
@@ -59,7 +59,7 @@
     loginMessage.textContent = "";
     const button = loginForm.querySelector("button");
     button.disabled = true;
-    button.textContent = "登录中...";
+    button.textContent = "正在进入...";
 
     try {
       const email = document.querySelector("#email").value.trim();
@@ -77,16 +77,16 @@
       if (!state.user?.isAdmin) {
         localStorage.removeItem("token");
         state.token = "";
-        throw new Error("这个账号不是管理员，不能进入审核后台。");
+        throw new Error("这个账号没有后台权限，不能进入运营后台。");
       }
 
       showAdmin();
       await loadCurrentQueue();
     } catch (error) {
-      loginMessage.textContent = error.message || "登录失败";
+      loginMessage.textContent = error.message || "登录没有成功";
     } finally {
       button.disabled = false;
-      button.textContent = "进入管理员端";
+      button.textContent = "进入运营后台";
     }
   }
 
@@ -99,7 +99,7 @@
     verificationTab.classList.toggle("active", tab === "verification");
     privacyTab.classList.toggle("active", tab === "privacy");
     if (adminTitle) {
-      adminTitle.textContent = tab === "privacy" ? "隐私请求处理" : "校园认证审核";
+      adminTitle.textContent = tab === "privacy" ? "账号资料请求" : "认证队列";
     }
     setNotice("");
     loadCurrentQueue();
@@ -112,49 +112,49 @@
   async function loadPendingUsers() {
     setNotice("");
     refreshButton.disabled = true;
-    refreshButton.textContent = "刷新中...";
-    queue.innerHTML = `<div class="loading glass">正在读取待审核申请...</div>`;
+    refreshButton.textContent = "正在刷新...";
+    queue.innerHTML = `<div class="loading glass">正在读取认证队列...</div>`;
 
     try {
       const payload = await requestApi("/users/verification/pending");
       state.pendingUsers = payload.data?.users || [];
-      pendingCount.textContent = `待审核 ${state.pendingUsers.length}`;
-      lastRefresh.textContent = `刷新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+      pendingCount.textContent = `待处理 ${state.pendingUsers.length}`;
+      lastRefresh.textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
       renderQueue();
     } catch (error) {
       queue.innerHTML = "";
-      setNotice(error.message || "读取待审核列表失败");
+      setNotice(error.message || "认证队列读取失败");
     } finally {
       refreshButton.disabled = false;
-      refreshButton.textContent = "刷新列表";
+      refreshButton.textContent = "刷新队列";
     }
   }
 
   async function loadPrivacyRequests() {
     setNotice("");
     refreshButton.disabled = true;
-    refreshButton.textContent = "刷新中...";
-    queue.innerHTML = `<div class="loading glass">正在读取隐私请求...</div>`;
+    refreshButton.textContent = "正在刷新...";
+    queue.innerHTML = `<div class="loading glass">正在读取账号资料请求...</div>`;
 
     try {
       const payload = await requestApi("/admin/privacy-requests");
       state.privacyRequests = payload.data?.requests || [];
       const pending = state.privacyRequests.filter((request) => request.status === "pending").length;
       pendingCount.textContent = `待处理 ${pending}`;
-      lastRefresh.textContent = `刷新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+      lastRefresh.textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
       renderPrivacyQueue();
     } catch (error) {
       queue.innerHTML = "";
-      setNotice(error.message || "读取隐私请求失败");
+      setNotice(error.message || "账号资料请求读取失败");
     } finally {
       refreshButton.disabled = false;
-      refreshButton.textContent = "刷新列表";
+      refreshButton.textContent = "刷新队列";
     }
   }
 
   function renderQueue() {
     if (!state.pendingUsers.length) {
-      queue.innerHTML = `<div class="empty glass">当前没有待审核认证申请。</div>`;
+      queue.innerHTML = `<div class="empty glass">当前没有待处理的认证申请。</div>`;
       return;
     }
 
@@ -169,7 +169,7 @@
   function renderPrivacyQueue() {
     const pendingRequests = state.privacyRequests.filter((request) => request.status === "pending");
     if (!pendingRequests.length) {
-      queue.innerHTML = `<div class="empty glass">当前没有待处理的隐私请求。</div>`;
+      queue.innerHTML = `<div class="empty glass">当前没有待处理的账号资料请求。</div>`;
       return;
     }
 
@@ -200,18 +200,18 @@
         </div>
 
         <div class="privacy-reason">
-          <strong>用户说明</strong>
-          <p>${escapeHtml(request.reason || "用户没有填写原因")}</p>
+          <strong>用户填写的说明</strong>
+          <p>${escapeHtml(request.reason || "用户未填写说明")}</p>
         </div>
 
         <label>
-          处理备注
-          <textarea data-privacy-notes="${escapeAttr(request.requestId)}" placeholder="填写处理说明，用户端会看到这条记录。">${escapeHtml(request.notes || "")}</textarea>
+          处理记录
+          <textarea data-privacy-notes="${escapeAttr(request.requestId)}" placeholder="填写处理结果或补充说明，用户端会看到这条记录。">${escapeHtml(request.notes || "")}</textarea>
         </label>
 
         <div class="review-actions">
-          <button class="button secondary" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="reject" ${busy ? "disabled" : ""}>驳回</button>
-          <button class="button danger" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="complete" ${busy ? "disabled" : ""}>完成处理</button>
+          <button class="button secondary" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="reject" ${busy ? "disabled" : ""}>驳回请求</button>
+          <button class="button danger" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="complete" ${busy ? "disabled" : ""}>确认完成</button>
         </div>
       </article>
     `;
@@ -220,14 +220,14 @@
   async function reviewPrivacyRequest(userId, requestId, action) {
     const notes = Array.from(queue.querySelectorAll("[data-privacy-notes]"))
       .find((field) => field.dataset.privacyNotes === requestId)?.value || "";
-    const confirmed = action !== "complete" || window.confirm("确认已核验并完成这个隐私请求吗？完成后可能会清空资料或注销账号。");
+    const confirmed = action !== "complete" || window.confirm("确认完成该账号资料请求吗？完成后可能会清空资料或注销账号。");
     if (!confirmed) {
       return;
     }
 
     state.busyUserId = requestId;
     renderPrivacyQueue();
-    setNotice(action === "complete" ? "正在完成隐私请求..." : "正在驳回隐私请求...");
+    setNotice(action === "complete" ? "正在完成账号资料请求..." : "正在驳回账号资料请求...");
 
     try {
       const payload = await requestApi("/admin/privacy-requests/review", {
@@ -239,7 +239,7 @@
           notes,
         }),
       });
-      setNotice(payload.message || "处理完成");
+      setNotice(payload.message || "账号资料请求已处理");
       state.privacyRequests = state.privacyRequests.map((request) => (
         request.requestId === requestId ? payload.data.request : request
       ));
@@ -247,7 +247,7 @@
       pendingCount.textContent = `待处理 ${pending}`;
       renderPrivacyQueue();
     } catch (error) {
-      setNotice(error.message || "处理失败");
+      setNotice(error.message || "处理没有成功");
     } finally {
       state.busyUserId = "";
       renderPrivacyQueue();
@@ -255,7 +255,7 @@
   }
 
   function privacyTypeLabel(type) {
-    return type === "delete_account" ? "注销账号" : "删除资料";
+    return type === "delete_account" ? "注销账号" : "清空资料";
   }
 
   function renderUserCard(user) {
@@ -274,7 +274,7 @@
             <p class="meta">${escapeHtml(user.school || "未设置学校")} · ${escapeHtml(user.major || "未设置专业")} · ${escapeHtml(user.grade || "未设置年级")}</p>
             <p class="meta">申请时间：${escapeHtml(requestedAt)}</p>
           </div>
-          <span class="badge">待审核</span>
+          <span class="badge">待处理</span>
         </div>
 
         <div class="details">
@@ -285,16 +285,16 @@
         </div>
 
         <div class="campus-card">
-          ${imageUrl ? `<a href="${escapeAttr(imageUrl)}" target="_blank" rel="noreferrer">打开校园卡原图</a><img src="${escapeAttr(imageUrl)}" alt="校园卡照片" loading="lazy" />` : `<div class="detail"><strong>校园卡照片</strong>未上传</div>`}
+          ${imageUrl ? `<a href="${escapeAttr(imageUrl)}" target="_blank" rel="noreferrer">查看校园卡原图</a><img src="${escapeAttr(imageUrl)}" alt="校园卡照片" loading="lazy" />` : `<div class="detail"><strong>校园卡照片</strong>未上传</div>`}
         </div>
 
         <label>
-          审核备注
-          <textarea data-notes="${escapeAttr(id)}" placeholder="可填写通过或驳回原因，用户端会保留审核记录。">${escapeHtml(user.verificationNotes || "")}</textarea>
+          处理记录
+          <textarea data-notes="${escapeAttr(id)}" placeholder="可填写通过或驳回原因，用户端会保留这条记录。">${escapeHtml(user.verificationNotes || "")}</textarea>
         </label>
 
         <div class="review-actions">
-          <button class="button danger" type="button" data-user-id="${escapeAttr(id)}" data-action="reject" ${busy ? "disabled" : ""}>驳回</button>
+          <button class="button danger" type="button" data-user-id="${escapeAttr(id)}" data-action="reject" ${busy ? "disabled" : ""}>驳回申请</button>
           <button class="button" type="button" data-user-id="${escapeAttr(id)}" data-action="approve" ${busy ? "disabled" : ""}>通过认证</button>
         </div>
       </article>
@@ -306,19 +306,19 @@
       .find((field) => field.dataset.notes === userId)?.value || "";
     state.busyUserId = userId;
     renderQueue();
-    setNotice(action === "approve" ? "正在通过认证..." : "正在驳回申请...");
+    setNotice(action === "approve" ? "正在通过认证..." : "正在驳回认证申请...");
 
     try {
       const payload = await requestApi("/users/verification/review", {
         method: "POST",
         body: JSON.stringify({ userId, action, notes }),
       });
-      setNotice(payload.message || "审核已完成");
+      setNotice(payload.message || "认证申请已处理");
       state.pendingUsers = state.pendingUsers.filter((user) => (user.id || user._id) !== userId);
-      pendingCount.textContent = `待审核 ${state.pendingUsers.length}`;
+      pendingCount.textContent = `待处理 ${state.pendingUsers.length}`;
       renderQueue();
     } catch (error) {
-      setNotice(error.message || "审核失败");
+      setNotice(error.message || "认证处理没有成功");
     } finally {
       state.busyUserId = "";
       renderQueue();
@@ -341,7 +341,7 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.message || `请求失败：${response.status}`);
+      throw new Error(payload.message || `请求未成功：${response.status}`);
     }
 
     return payload;
@@ -357,9 +357,9 @@
     loginView.classList.add("hidden");
     adminView.classList.remove("hidden");
     if (adminTitle) {
-      adminTitle.textContent = state.activeTab === "privacy" ? "隐私请求处理" : "校园认证审核";
+      adminTitle.textContent = state.activeTab === "privacy" ? "账号资料请求" : "认证队列";
     }
-    adminSubtitle.textContent = `${state.user?.nickname || state.user?.email || "管理员"} · 管理员端`;
+    adminSubtitle.textContent = `${state.user?.nickname || state.user?.email || "运营账号"} · 运营后台`;
   }
 
   function logout(message = "") {

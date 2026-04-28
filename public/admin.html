@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>校园匹配管理员端</title>
+    <title>校园匹配运营后台</title>
     <meta name="robots" content="noindex,nofollow" />
     <style>
       :root {
@@ -386,20 +386,20 @@
         <div class="brand">
           <div class="mark">管</div>
           <div>
-            <h1>管理员端</h1>
-            <p class="subtitle">登录后处理校园认证审核。</p>
+            <h1>运营后台</h1>
+            <p class="subtitle">登录后处理认证队列和账号资料请求。</p>
           </div>
         </div>
         <form id="login-form" class="form-grid">
           <label>
-            管理员邮箱
+            运营账号邮箱
             <input id="email" type="email" autocomplete="email" required placeholder="admin@qq.com" />
           </label>
           <label>
             密码
             <input id="password" type="password" autocomplete="current-password" required placeholder="请输入密码" />
           </label>
-          <button class="button" type="submit">进入管理员端</button>
+          <button class="button" type="submit">进入运营后台</button>
           <p id="login-message" class="message" role="status"></p>
         </form>
       </section>
@@ -409,27 +409,27 @@
           <div class="brand">
             <div class="mark">管</div>
             <div>
-              <h1>校园认证审核</h1>
-              <p class="subtitle" id="admin-subtitle">管理员端</p>
+              <h1>认证队列</h1>
+              <p class="subtitle" id="admin-subtitle">运营后台</p>
             </div>
           </div>
           <div class="actions">
             <a class="button secondary" href="/">回到用户端</a>
-            <button id="logout" class="button secondary" type="button">退出</button>
+            <button id="logout" class="button secondary" type="button">退出后台</button>
           </div>
         </header>
 
         <div class="tabs glass">
-          <button id="tab-verification" class="tab active" type="button">认证审核</button>
-          <button id="tab-privacy" class="tab" type="button">隐私请求</button>
+          <button id="tab-verification" class="tab active" type="button">认证队列</button>
+          <button id="tab-privacy" class="tab" type="button">账号资料请求</button>
         </div>
 
         <div class="toolbar glass">
           <div class="stats">
-            <span class="pill" id="pending-count">待审核 0</span>
-            <span class="pill" id="last-refresh">尚未刷新</span>
+            <span class="pill" id="pending-count">待处理 0</span>
+            <span class="pill" id="last-refresh">尚未更新</span>
           </div>
-          <button id="refresh" class="button" type="button">刷新列表</button>
+          <button id="refresh" class="button" type="button">刷新队列</button>
         </div>
 
         <div id="notice" class="message" role="status"></div>

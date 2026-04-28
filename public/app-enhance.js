@@ -1013,10 +1013,7 @@
       }
       .campus-avatar-control {
         position: relative;
-        display: inline-grid;
-        justify-items: center;
-        align-content: start;
-        gap: 8px;
+        display: inline-block;
       }
       .campus-avatar-control img {
         object-fit: cover;
@@ -1024,8 +1021,7 @@
       .campus-avatar-upload-input {
         display: none !important;
       }
-      .campus-avatar-upload-trigger,
-      .campus-avatar-upload-prompt {
+      .campus-avatar-upload-trigger {
         cursor: pointer;
       }
       .campus-avatar-control > .campus-avatar-upload-trigger {
@@ -1033,34 +1029,84 @@
         right: -4px !important;
         bottom: auto !important;
       }
-      .campus-avatar-upload-trigger:disabled,
-      .campus-avatar-upload-prompt:disabled {
+      .campus-avatar-upload-trigger:disabled {
         opacity: .58;
         cursor: wait;
       }
-      .campus-avatar-upload-prompt {
-        width: 100%;
-        min-height: 32px;
-        border: 1px solid rgba(255,255,255,.18);
-        border-radius: 999px;
-        padding: 0 12px;
-        color: rgba(255,255,255,.92);
-        background: rgba(255,255,255,.11);
-        box-shadow: inset 0 1px rgba(255,255,255,.16);
-        font-size: 12px;
-        font-weight: 850;
-        white-space: nowrap;
-      }
       .campus-avatar-upload-status {
-        min-height: 14px;
-        max-width: 112px;
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 8px);
+        width: max-content;
+        max-width: 132px;
+        transform: translateX(-50%);
         color: rgba(226,238,255,.64);
         font-size: 11px;
         line-height: 1.25;
         text-align: center;
+        pointer-events: none;
       }
       .campus-avatar-upload-status.is-error {
         color: #ffb4ab;
+      }
+      .campus-avatar-sheet {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: none;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 18px max(14px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+        background: rgba(4,10,18,.58);
+        backdrop-filter: blur(16px) saturate(1.2);
+        -webkit-backdrop-filter: blur(16px) saturate(1.2);
+      }
+      body[data-campus-avatar-sheet="open"] .campus-avatar-sheet {
+        display: flex;
+      }
+      .campus-avatar-sheet-panel {
+        width: min(390px, 100%);
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.18);
+        background: linear-gradient(180deg, rgba(20,29,43,.96), rgba(8,14,24,.94));
+        box-shadow: 0 32px 90px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.14);
+        color: rgba(255,255,255,.92);
+        overflow: hidden;
+      }
+      .campus-avatar-sheet-title {
+        padding: 18px 18px 10px;
+      }
+      .campus-avatar-sheet-title strong {
+        display: block;
+        font-size: 1rem;
+      }
+      .campus-avatar-sheet-title span {
+        display: block;
+        margin-top: 5px;
+        color: rgba(226,238,255,.62);
+        font-size: 13px;
+      }
+      .campus-avatar-sheet-actions {
+        display: grid;
+        gap: 8px;
+        padding: 8px;
+      }
+      .campus-avatar-sheet-actions button {
+        min-height: 52px;
+        border: 0;
+        border-radius: 20px;
+        color: rgba(255,255,255,.92);
+        background: rgba(255,255,255,.1);
+        font-size: 15px;
+        font-weight: 850;
+        cursor: pointer;
+      }
+      .campus-avatar-sheet-actions button.primary {
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+      }
+      .campus-avatar-sheet-actions button:active {
+        transform: translateY(1px) scale(.99);
       }
 
       @media (max-width: 900px) {
@@ -1325,16 +1371,11 @@
           height: 82px !important;
           border-radius: 1.6rem !important;
         }
-        body[data-campus-route="/profile"] .campus-avatar-upload-prompt {
-          min-height: 30px;
-          padding: 0 10px;
-          font-size: 12px;
-        }
         body[data-campus-route="/profile"] .campus-avatar-control > .campus-avatar-upload-trigger {
           top: 50px !important;
         }
         body[data-campus-route="/profile"] .campus-avatar-upload-status {
-          max-width: 82px;
+          max-width: 96px;
           font-size: 10px;
         }
         body[data-campus-route="/profile"] .campus-profile-summary-card [class*="rounded-[1.5rem]"] {
@@ -3066,7 +3107,8 @@
 
   function updateScrollLock() {
     const shouldLock = document.body.dataset.campusLoginOverlay === "open"
-      || document.body.dataset.campusMembershipModal === "open";
+      || document.body.dataset.campusMembershipModal === "open"
+      || document.body.dataset.campusAvatarSheet === "open";
     document.documentElement.style.overflow = shouldLock ? "hidden" : "";
     document.body.style.overflow = shouldLock ? "hidden" : "";
   }
@@ -3078,6 +3120,11 @@
 
     if (document.body.dataset.campusMembershipModal === "open") {
       closeMembershipCenter();
+      return;
+    }
+
+    if (document.body.dataset.campusAvatarSheet === "open") {
+      closeAvatarSourceSheet();
       return;
     }
 
@@ -4052,6 +4099,7 @@
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
       document.querySelector("#campus-privacy-panel")?.remove();
+      closeAvatarSourceSheet();
       return;
     }
 
@@ -4078,47 +4126,50 @@
     }
 
     avatarWrap.classList.add("campus-avatar-control");
+    avatarWrap.querySelector(".campus-avatar-upload-prompt")?.remove();
 
-    let input = avatarWrap.querySelector(".campus-avatar-upload-input");
-    if (!input) {
-      input = document.createElement("input");
-      input.className = "campus-avatar-upload-input";
-      input.type = "file";
-      input.accept = "image/jpeg,image/png,image/webp,image/*";
-      avatarWrap.appendChild(input);
+    const cameraInput = ensureAvatarFileInput(avatarWrap, "camera");
+    const galleryInput = ensureAvatarFileInput(avatarWrap, "gallery");
+
+    for (const input of [cameraInput, galleryInput]) {
+      if (input.dataset.bound !== "true") {
+        input.dataset.bound = "true";
+        input.addEventListener("change", handleAvatarFileSelect);
+      }
     }
 
-    if (input.dataset.bound !== "true") {
-      input.dataset.bound = "true";
-      input.addEventListener("change", handleAvatarFileSelect);
-    }
-
-    const iconButton = avatarWrap.querySelector("button:not(.campus-avatar-upload-prompt)");
+    const iconButton = avatarWrap.querySelector("button");
     if (iconButton) {
       iconButton.type = "button";
       iconButton.classList.add("campus-avatar-upload-trigger");
-      iconButton.setAttribute("aria-label", "更换头像");
-      iconButton.setAttribute("title", "拍照或从相册选择头像");
-      bindAvatarUploadButton(iconButton, input);
+      iconButton.setAttribute("aria-label", "选择头像来源");
+      iconButton.setAttribute("title", "拍照或从相册选择");
+      bindAvatarUploadButton(iconButton, avatarWrap);
     }
-
-    let promptButton = avatarWrap.querySelector(".campus-avatar-upload-prompt");
-    if (!promptButton) {
-      promptButton = document.createElement("button");
-      promptButton.type = "button";
-      promptButton.className = "campus-avatar-upload-prompt";
-      promptButton.textContent = "换头像";
-      avatarWrap.appendChild(promptButton);
-    }
-    bindAvatarUploadButton(promptButton, input);
 
     let status = avatarWrap.querySelector(".campus-avatar-upload-status");
     if (!status) {
       status = document.createElement("span");
       status.className = "campus-avatar-upload-status";
-      status.textContent = "拍照 / 相册";
+      status.textContent = "";
       avatarWrap.appendChild(status);
     }
+  }
+
+  function ensureAvatarFileInput(avatarWrap, source) {
+    let input = avatarWrap.querySelector(`.campus-avatar-${source}-input`);
+    if (!input) {
+      input = document.createElement("input");
+      input.className = `campus-avatar-upload-input campus-avatar-${source}-input`;
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp,image/*";
+      input.dataset.avatarSource = source;
+      if (source === "camera") {
+        input.setAttribute("capture", "environment");
+      }
+      avatarWrap.appendChild(input);
+    }
+    return input;
   }
 
   function findProfileAvatarWrap(summary) {
@@ -4130,8 +4181,8 @@
     return image?.closest(".relative") || image?.parentElement?.parentElement || null;
   }
 
-  function bindAvatarUploadButton(button, input) {
-    if (!button || !input || button.dataset.avatarUploadBound === "true") {
+  function bindAvatarUploadButton(button, avatarWrap) {
+    if (!button || !avatarWrap || button.dataset.avatarUploadBound === "true") {
       return;
     }
 
@@ -4139,8 +4190,86 @@
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      input.click();
+      openAvatarSourceSheet(avatarWrap);
     });
+  }
+
+  function openAvatarSourceSheet(avatarWrap) {
+    const sheet = ensureAvatarSourceSheet();
+    sheet.dataset.targetAvatarId = ensureAvatarTargetId(avatarWrap);
+    document.body.dataset.campusAvatarSheet = "open";
+    updateScrollLock();
+  }
+
+  function closeAvatarSourceSheet() {
+    delete document.body.dataset.campusAvatarSheet;
+    updateScrollLock();
+  }
+
+  function ensureAvatarSourceSheet() {
+    let sheet = document.querySelector("#campus-avatar-sheet");
+    if (sheet) {
+      return sheet;
+    }
+
+    sheet = document.createElement("div");
+    sheet.id = "campus-avatar-sheet";
+    sheet.className = "campus-avatar-sheet";
+    sheet.innerHTML = `
+      <div class="campus-avatar-sheet-panel" role="dialog" aria-modal="true" aria-label="选择头像来源">
+        <div class="campus-avatar-sheet-title">
+          <strong>选择头像来源</strong>
+          <span>拍一张新照片，或从相册里挑一张喜欢的。</span>
+        </div>
+        <div class="campus-avatar-sheet-actions">
+          <button class="primary" type="button" data-avatar-source="camera">拍照</button>
+          <button type="button" data-avatar-source="gallery">从相册选择</button>
+          <button type="button" data-avatar-source="cancel">取消</button>
+        </div>
+      </div>
+    `;
+    sheet.addEventListener("click", (event) => {
+      if (event.target === sheet) {
+        closeAvatarSourceSheet();
+      }
+    });
+    sheet.querySelectorAll("[data-avatar-source]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const source = button.dataset.avatarSource;
+        if (source === "cancel") {
+          closeAvatarSourceSheet();
+          return;
+        }
+
+        const avatarWrap = findAvatarTarget(sheet.dataset.targetAvatarId);
+        const input = avatarWrap?.querySelector(`.campus-avatar-${source}-input`);
+        closeAvatarSourceSheet();
+        input?.click();
+      });
+    });
+    document.body.appendChild(sheet);
+    return sheet;
+  }
+
+  function ensureAvatarTargetId(avatarWrap) {
+    if (!avatarWrap.dataset.avatarTargetId) {
+      avatarWrap.dataset.avatarTargetId = `avatar-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+    return avatarWrap.dataset.avatarTargetId;
+  }
+
+  function findAvatarTarget(targetId) {
+    if (!targetId) {
+      return null;
+    }
+    return document.querySelector(`.campus-avatar-control[data-avatar-target-id="${cssEscape(targetId)}"]`);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS?.escape) {
+      return window.CSS.escape(String(value));
+    }
+    return String(value).replace(/["\\]/g, "\\$&");
   }
 
   async function handleAvatarFileSelect(event) {
@@ -4184,7 +4313,7 @@
       refreshUser(true).catch(() => {});
       setTimeout(() => {
         if (document.body.contains(avatarWrap)) {
-          setAvatarUploadStatus(avatarWrap, "拍照 / 相册", false);
+          setAvatarUploadStatus(avatarWrap, "", false);
         }
       }, 2200);
     } catch (error) {
@@ -4225,7 +4354,7 @@
 
   function setAvatarUploading(avatarWrap, uploading) {
     avatarWrap.dataset.avatarUploading = uploading ? "true" : "false";
-    avatarWrap.querySelectorAll(".campus-avatar-upload-trigger, .campus-avatar-upload-prompt")
+    avatarWrap.querySelectorAll(".campus-avatar-upload-trigger")
       .forEach((button) => {
         button.disabled = uploading;
       });

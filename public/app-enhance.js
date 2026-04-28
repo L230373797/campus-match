@@ -674,6 +674,30 @@
       body[data-campus-route="/login"][data-campus-login-overlay="open"] #root > div > .w-full.max-w-md {
         transform: translateY(0) scale(1);
       }
+      .campus-consent-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255,255,255,.42);
+        border: 1px solid rgba(255,255,255,.46);
+        color: rgba(71,85,105,.88);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .campus-consent-row input {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        accent-color: #087fff;
+      }
+      .campus-consent-row a {
+        color: #087fff;
+        font-weight: 750;
+      }
 
       .campus-membership-modal {
         position: fixed;
@@ -2925,6 +2949,72 @@
     });
   }
 
+  function ensureLegalLinksAndConsent() {
+    if (window.location.pathname !== "/login") {
+      document.querySelector("#campus-register-consent")?.remove();
+      return;
+    }
+
+    document.querySelectorAll('a[href="#"], a[href="/privacy"], a[href="/terms"]').forEach((link) => {
+      const text = link.textContent.trim();
+      if (text.includes("用户协议")) {
+        link.href = "/terms";
+        link.target = "_blank";
+        link.rel = "noreferrer";
+      }
+      if (text.includes("隐私政策")) {
+        link.href = "/privacy";
+        link.target = "_blank";
+        link.rel = "noreferrer";
+      }
+    });
+
+    const form = document.querySelector("#root form");
+    const submitButton = form
+      ? Array.from(form.querySelectorAll('button[type="submit"], button'))
+          .find((button) => button.textContent.includes("创建账号"))
+      : null;
+    const existing = document.querySelector("#campus-register-consent");
+
+    if (!form || !submitButton) {
+      existing?.remove();
+      return;
+    }
+
+    if (!existing) {
+      const row = document.createElement("label");
+      row.id = "campus-register-consent";
+      row.className = "campus-consent-row";
+      row.innerHTML = `
+        <input id="campus-consent-checkbox" type="checkbox" required />
+        <span>我已阅读并同意 <a href="/terms" target="_blank" rel="noreferrer">用户协议</a> 和 <a href="/privacy" target="_blank" rel="noreferrer">隐私政策</a>，并同意平台为注册、校园认证和匹配服务处理必要信息。</span>
+      `;
+      submitButton.insertAdjacentElement("beforebegin", row);
+    }
+
+    if (form.dataset.campusConsentBound === "true") {
+      return;
+    }
+
+    form.dataset.campusConsentBound = "true";
+    form.addEventListener("submit", (event) => {
+      const consent = document.querySelector("#campus-consent-checkbox");
+      const isRegistering = Array.from(form.querySelectorAll("button"))
+        .some((button) => button.textContent.includes("创建账号"));
+      if (!isRegistering || !consent) {
+        return;
+      }
+      if (!consent.checked) {
+        consent.setCustomValidity("请先阅读并同意用户协议和隐私政策");
+        consent.reportValidity();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      } else {
+        consent.setCustomValidity("");
+      }
+    }, true);
+  }
+
   function ensureQuickActions() {
     let actions = document.querySelector("#campus-quick-actions");
     if (!actions) {
@@ -3832,6 +3922,7 @@
     ensureSplineScene();
     ensureQuickActions();
     enhanceAuthPage();
+    ensureLegalLinksAndConsent();
     ensureLoginStory();
     await refreshUser();
     tagResponsiveRouteSections();

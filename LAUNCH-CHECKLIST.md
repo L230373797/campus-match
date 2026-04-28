@@ -76,6 +76,12 @@ https://campus-match-sansui.netlify.app/api/health
 - 聊天页消息发送、未读提示、互相展示身份文案正常。
 - 退出登录后能回到登录页，不会卡在无响应状态。
 
+运营后台的具体操作说明见：
+
+```text
+OPERATOR-GUIDE.md
+```
+
 ## 上线前业务确认
 
 - 隐私政策和用户协议已经放在 `/privacy`、`/terms`。

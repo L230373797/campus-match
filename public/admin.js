@@ -3,6 +3,8 @@
     token: localStorage.getItem("token") || "",
     user: null,
     pendingUsers: [],
+    privacyRequests: [],
+    activeTab: "verification",
     busyUserId: "",
   };
 
@@ -17,10 +19,15 @@
   const lastRefresh = document.querySelector("#last-refresh");
   const refreshButton = document.querySelector("#refresh");
   const logoutButton = document.querySelector("#logout");
+  const adminTitle = document.querySelector("#admin-view h1");
+  const verificationTab = document.querySelector("#tab-verification");
+  const privacyTab = document.querySelector("#tab-privacy");
 
   loginForm.addEventListener("submit", handleLogin);
-  refreshButton.addEventListener("click", () => loadPendingUsers());
+  refreshButton.addEventListener("click", () => loadCurrentQueue());
   logoutButton.addEventListener("click", logout);
+  verificationTab.addEventListener("click", () => switchTab("verification"));
+  privacyTab.addEventListener("click", () => switchTab("privacy"));
 
   boot().catch((error) => {
     showLogin(error.message || "管理员端暂时无法打开");
@@ -41,7 +48,7 @@
       }
 
       showAdmin();
-      await loadPendingUsers();
+      await loadCurrentQueue();
     } catch {
       logout("登录已过期，请重新登录管理员端。");
     }
@@ -74,13 +81,32 @@
       }
 
       showAdmin();
-      await loadPendingUsers();
+      await loadCurrentQueue();
     } catch (error) {
       loginMessage.textContent = error.message || "登录失败";
     } finally {
       button.disabled = false;
       button.textContent = "进入管理员端";
     }
+  }
+
+  function switchTab(tab) {
+    if (state.activeTab === tab) {
+      return;
+    }
+
+    state.activeTab = tab;
+    verificationTab.classList.toggle("active", tab === "verification");
+    privacyTab.classList.toggle("active", tab === "privacy");
+    if (adminTitle) {
+      adminTitle.textContent = tab === "privacy" ? "隐私请求处理" : "校园认证审核";
+    }
+    setNotice("");
+    loadCurrentQueue();
+  }
+
+  function loadCurrentQueue() {
+    return state.activeTab === "privacy" ? loadPrivacyRequests() : loadPendingUsers();
   }
 
   async function loadPendingUsers() {
@@ -104,6 +130,28 @@
     }
   }
 
+  async function loadPrivacyRequests() {
+    setNotice("");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "刷新中...";
+    queue.innerHTML = `<div class="loading glass">正在读取隐私请求...</div>`;
+
+    try {
+      const payload = await requestApi("/admin/privacy-requests");
+      state.privacyRequests = payload.data?.requests || [];
+      const pending = state.privacyRequests.filter((request) => request.status === "pending").length;
+      pendingCount.textContent = `待处理 ${pending}`;
+      lastRefresh.textContent = `刷新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+      renderPrivacyQueue();
+    } catch (error) {
+      queue.innerHTML = "";
+      setNotice(error.message || "读取隐私请求失败");
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "刷新列表";
+    }
+  }
+
   function renderQueue() {
     if (!state.pendingUsers.length) {
       queue.innerHTML = `<div class="empty glass">当前没有待审核认证申请。</div>`;
@@ -116,6 +164,98 @@
         reviewUser(button.dataset.userId, button.dataset.action);
       });
     });
+  }
+
+  function renderPrivacyQueue() {
+    const pendingRequests = state.privacyRequests.filter((request) => request.status === "pending");
+    if (!pendingRequests.length) {
+      queue.innerHTML = `<div class="empty glass">当前没有待处理的隐私请求。</div>`;
+      return;
+    }
+
+    queue.innerHTML = pendingRequests.map(renderPrivacyRequestCard).join("");
+    queue.querySelectorAll("[data-privacy-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        reviewPrivacyRequest(button.dataset.userId, button.dataset.requestId, button.dataset.privacyAction);
+      });
+    });
+  }
+
+  function renderPrivacyRequestCard(request) {
+    const busy = state.busyUserId === request.requestId;
+    const requestedAt = request.requestedAt
+      ? new Date(request.requestedAt).toLocaleString("zh-CN")
+      : "未知";
+
+    return `
+      <article class="review-card glass">
+        <div class="review-head">
+          <div>
+            <h2 class="name">${escapeHtml(request.userNickname || "未命名用户")}</h2>
+            <p class="meta">${escapeHtml(request.userEmail || "未填写邮箱")}</p>
+            <p class="meta">${escapeHtml([request.userSchool, request.userMajor, request.userGrade].filter(Boolean).join(" · ") || "资料未填写完整")}</p>
+            <p class="meta">提交时间：${escapeHtml(requestedAt)}</p>
+          </div>
+          <span class="badge">${escapeHtml(privacyTypeLabel(request.type))}</span>
+        </div>
+
+        <div class="privacy-reason">
+          <strong>用户说明</strong>
+          <p>${escapeHtml(request.reason || "用户没有填写原因")}</p>
+        </div>
+
+        <label>
+          处理备注
+          <textarea data-privacy-notes="${escapeAttr(request.requestId)}" placeholder="填写处理说明，用户端会看到这条记录。">${escapeHtml(request.notes || "")}</textarea>
+        </label>
+
+        <div class="review-actions">
+          <button class="button secondary" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="reject" ${busy ? "disabled" : ""}>驳回</button>
+          <button class="button danger" type="button" data-user-id="${escapeAttr(request.userId)}" data-request-id="${escapeAttr(request.requestId)}" data-privacy-action="complete" ${busy ? "disabled" : ""}>完成处理</button>
+        </div>
+      </article>
+    `;
+  }
+
+  async function reviewPrivacyRequest(userId, requestId, action) {
+    const notes = Array.from(queue.querySelectorAll("[data-privacy-notes]"))
+      .find((field) => field.dataset.privacyNotes === requestId)?.value || "";
+    const confirmed = action !== "complete" || window.confirm("确认已核验并完成这个隐私请求吗？完成后可能会清空资料或注销账号。");
+    if (!confirmed) {
+      return;
+    }
+
+    state.busyUserId = requestId;
+    renderPrivacyQueue();
+    setNotice(action === "complete" ? "正在完成隐私请求..." : "正在驳回隐私请求...");
+
+    try {
+      const payload = await requestApi("/admin/privacy-requests/review", {
+        method: "POST",
+        body: JSON.stringify({
+          userId,
+          requestId,
+          status: action === "complete" ? "completed" : "rejected",
+          notes,
+        }),
+      });
+      setNotice(payload.message || "处理完成");
+      state.privacyRequests = state.privacyRequests.map((request) => (
+        request.requestId === requestId ? payload.data.request : request
+      ));
+      const pending = state.privacyRequests.filter((request) => request.status === "pending").length;
+      pendingCount.textContent = `待处理 ${pending}`;
+      renderPrivacyQueue();
+    } catch (error) {
+      setNotice(error.message || "处理失败");
+    } finally {
+      state.busyUserId = "";
+      renderPrivacyQueue();
+    }
+  }
+
+  function privacyTypeLabel(type) {
+    return type === "delete_account" ? "注销账号" : "删除资料";
   }
 
   function renderUserCard(user) {
@@ -216,6 +356,9 @@
   function showAdmin() {
     loginView.classList.add("hidden");
     adminView.classList.remove("hidden");
+    if (adminTitle) {
+      adminTitle.textContent = state.activeTab === "privacy" ? "隐私请求处理" : "校园认证审核";
+    }
     adminSubtitle.textContent = `${state.user?.nickname || state.user?.email || "管理员"} · 管理员端`;
   }
 

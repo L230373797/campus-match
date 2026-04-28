@@ -71,6 +71,9 @@
     unreadFetching: false,
     unreadCheckedAt: 0,
     messageThreads: new Map(),
+    privacyRequests: [],
+    privacyCheckedAt: 0,
+    privacyFetching: false,
     baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
@@ -875,6 +878,70 @@
       .campus-membership-button {
         min-width: 132px;
       }
+      .campus-privacy-panel {
+        margin: 16px 0;
+        padding: 18px 20px;
+        display: grid;
+        gap: 14px;
+      }
+      .campus-privacy-panel h3 {
+        margin: 0;
+        color: rgba(255,255,255,.94);
+        font-size: 1.05rem;
+      }
+      .campus-privacy-panel p {
+        margin: 0;
+        color: rgba(226,238,255,.76);
+        line-height: 1.7;
+      }
+      .campus-privacy-status {
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255,255,255,.11);
+        border: 1px solid rgba(255,255,255,.16);
+        color: rgba(255,255,255,.86);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .campus-privacy-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .campus-privacy-reason {
+        width: 100%;
+        min-height: 82px;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,.18);
+        background: rgba(255,255,255,.12);
+        color: rgba(255,255,255,.9);
+        padding: 14px 15px;
+        resize: vertical;
+        outline: none;
+      }
+      .campus-privacy-reason::placeholder {
+        color: rgba(226,238,255,.48);
+      }
+      .campus-privacy-button {
+        min-height: 44px;
+        border-radius: 999px;
+        border: 0;
+        padding: 0 16px;
+        font-weight: 850;
+        cursor: pointer;
+      }
+      .campus-privacy-button.primary {
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+      }
+      .campus-privacy-button.danger {
+        color: #fff;
+        background: linear-gradient(180deg,#ff6b61,#ff3b30);
+      }
+      .campus-privacy-button:disabled {
+        opacity: .55;
+        cursor: wait;
+      }
 
       @media (max-width: 900px) {
         .campus-login-hero,
@@ -1035,6 +1102,13 @@
         }
         .campus-membership-banner .campus-membership-button {
           width: 100%;
+        }
+        .campus-privacy-panel {
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-privacy-actions {
+          grid-template-columns: 1fr;
         }
         .ios-tabbar-wrap {
           padding-left: 14px !important;
@@ -3837,6 +3911,7 @@
   function ensureProfileEnhancements() {
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
+      document.querySelector("#campus-privacy-panel")?.remove();
       return;
     }
 
@@ -3847,6 +3922,7 @@
     }
 
     refreshProfileMembershipDecorations();
+    ensureProfilePrivacyPanel();
   }
 
   function findMembershipButton() {
@@ -3910,6 +3986,144 @@
       manageButton.dataset.bound = "true";
       manageButton.addEventListener("click", openMembershipCenter);
     }
+  }
+
+  function ensureProfilePrivacyPanel() {
+    if (window.location.pathname !== "/profile" || !document.querySelector("#root")) {
+      return;
+    }
+
+    const firstCard = document.querySelector("#root .apple-card");
+    if (!firstCard || !firstCard.parentElement) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-privacy-panel");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "campus-privacy-panel";
+      panel.className = "campus-privacy-panel apple-card";
+      const membershipBanner = document.querySelector("#campus-membership-banner");
+      (membershipBanner || firstCard).insertAdjacentElement("afterend", panel);
+    }
+
+    renderPrivacyPanel(panel);
+    refreshPrivacyRequests().then(() => renderPrivacyPanel(panel)).catch(() => {});
+  }
+
+  async function refreshPrivacyRequests(force = false) {
+    if (!currentToken()) {
+      state.privacyRequests = [];
+      state.privacyCheckedAt = 0;
+      return;
+    }
+
+    if (state.privacyFetching || (!force && Date.now() - state.privacyCheckedAt < 15000)) {
+      return;
+    }
+
+    state.privacyFetching = true;
+    try {
+      const payload = await requestApi("/users/privacy-requests");
+      state.privacyRequests = payload.data?.requests || [];
+      state.privacyCheckedAt = Date.now();
+    } finally {
+      state.privacyFetching = false;
+    }
+  }
+
+  function latestPrivacyRequest() {
+    return [...(state.privacyRequests || [])]
+      .sort((a, b) => String(b.requestedAt || "").localeCompare(String(a.requestedAt || "")))[0] || null;
+  }
+
+  function renderPrivacyPanel(panel) {
+    const latest = latestPrivacyRequest();
+    const pending = latest?.status === "pending";
+    const locked = pending || state.privacyFetching;
+    const statusText = latest
+      ? `${privacyTypeLabel(latest.type)}：${privacyStatusLabel(latest.status)}${latest.requestedAt ? `，提交于 ${formatPrivacyDate(latest.requestedAt)}` : ""}${latest.notes ? `。备注：${latest.notes}` : ""}`
+      : "当前没有待处理的隐私请求。";
+    const renderKey = JSON.stringify({
+      latestId: latest?.id || "",
+      latestStatus: latest?.status || "",
+      latestNotes: latest?.notes || "",
+      fetching: state.privacyFetching,
+    });
+
+    if (panel.dataset.renderKey !== renderKey) {
+      panel.dataset.renderKey = renderKey;
+      panel.innerHTML = `
+        <div>
+          <h3>资料与账号处理</h3>
+          <p>你可以申请清空个人资料，或申请注销账号。提交后会进入管理员端核验，处理完成前不会立刻删除。</p>
+        </div>
+        <div class="campus-privacy-status">${escapeHtml(statusText)}</div>
+        <textarea class="campus-privacy-reason" placeholder="可以简单说明原因（选填）"></textarea>
+        <div class="campus-privacy-actions">
+          <button class="campus-privacy-button primary" type="button" data-privacy-type="delete_profile" ${locked ? "disabled" : ""}>申请删除资料</button>
+          <button class="campus-privacy-button danger" type="button" data-privacy-type="delete_account" ${locked ? "disabled" : ""}>申请注销账号</button>
+        </div>
+      `;
+    }
+
+    panel.querySelectorAll("[data-privacy-type]").forEach((button) => {
+      if (button.dataset.bound === "true") {
+        return;
+      }
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => submitPrivacyRequest(button.dataset.privacyType));
+    });
+  }
+
+  async function submitPrivacyRequest(type) {
+    const panel = document.querySelector("#campus-privacy-panel");
+    if (!panel || state.privacyFetching) {
+      return;
+    }
+
+    if (type === "delete_account") {
+      const confirmed = window.confirm("确认申请注销账号吗？管理员完成处理后，你将无法再登录这个账号。");
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    const reason = panel.querySelector(".campus-privacy-reason")?.value || "";
+    state.privacyFetching = true;
+    renderPrivacyPanel(panel);
+
+    try {
+      const payload = await requestApi("/users/privacy-requests", {
+        method: "POST",
+        body: JSON.stringify({ type, reason }),
+      });
+      state.privacyRequests = payload.data?.requests || (payload.data?.request ? [payload.data.request] : []);
+      state.privacyCheckedAt = Date.now();
+      renderPrivacyPanel(panel);
+    } catch (error) {
+      panel.querySelector(".campus-privacy-status").textContent = error.message || "提交失败，请稍后再试";
+    } finally {
+      state.privacyFetching = false;
+      renderPrivacyPanel(panel);
+    }
+  }
+
+  function privacyTypeLabel(type) {
+    return type === "delete_account" ? "注销账号" : "删除资料";
+  }
+
+  function privacyStatusLabel(status) {
+    return {
+      pending: "待处理",
+      completed: "已完成",
+      rejected: "已驳回",
+    }[status] || "待处理";
+  }
+
+  function formatPrivacyDate(value) {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString("zh-CN") : "未知时间";
   }
 
   function findLeafNode(root, acceptedValues) {

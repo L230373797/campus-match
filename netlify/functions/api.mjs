@@ -238,6 +238,8 @@ async function handleAuth(req, store, segments) {
       throw httpError("邮箱或密码不正确", 401);
     }
 
+    assertAccountCanLogin(user);
+
     const token = await createSession(store, user.id);
     return json({ success: true, message: "登录成功", data: { token, user: publicUser(user) } });
   }
@@ -253,6 +255,36 @@ async function handleAuth(req, store, segments) {
 async function handleAdmin(req, store, segments) {
   const user = await requireUser(req, store);
   requireAdmin(user);
+
+  if (segments[1] === "privacy-requests" && req.method === "GET") {
+    const users = await listUsers(store);
+    const requests = users
+      .flatMap((item) => normalizePrivacyRequests(item).map((request) => adminPrivacyRequest(item, request)))
+      .sort((a, b) => String(b.requestedAt || "").localeCompare(String(a.requestedAt || "")));
+
+    return json({ success: true, data: { requests } });
+  }
+
+  if (segments[1] === "privacy-requests" && segments[2] === "review" && req.method === "POST") {
+    const body = await readBody(req);
+    const targetUser = await getUser(store, text(body.userId));
+    if (!targetUser) {
+      throw httpError("User not found", 404);
+    }
+
+    const result = await reviewPrivacyRequest(store, targetUser, {
+      requestId: text(body.requestId),
+      status: text(body.status || body.action).toLowerCase(),
+      notes: text(body.notes),
+      reviewer: user,
+    });
+
+    return json({
+      success: true,
+      message: result.message,
+      data: { request: adminPrivacyRequest(result.user, result.request) },
+    });
+  }
 
   if (segments[1] === "export" && req.method === "GET") {
     const [users, matches, messages] = await Promise.all([
@@ -360,6 +392,53 @@ async function handleUsers(req, store, segments, url) {
     return json({ success: true, message: "资料更新成功", data: { user: publicUser(updatedUser) } });
   }
 
+  if (segments[1] === "privacy-requests" && req.method === "GET") {
+    return json({
+      success: true,
+      data: { requests: normalizePrivacyRequests(user) },
+    });
+  }
+
+  if (segments[1] === "privacy-requests" && req.method === "POST") {
+    const body = await readBody(req);
+    const type = normalizePrivacyRequestType(body.type);
+    if (!type) {
+      throw httpError("Choose a request type", 400);
+    }
+
+    const requests = normalizePrivacyRequests(user);
+    const pendingRequest = requests.find((request) => request.status === "pending");
+    if (pendingRequest) {
+      return json({
+        success: true,
+        message: "You already have a pending privacy request",
+        data: { request: pendingRequest, requests },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const request = normalizePrivacyRequest({
+      id: makeId("privacy"),
+      type,
+      reason: text(body.reason).slice(0, 500),
+      status: "pending",
+      requestedAt: now,
+    });
+    const updatedUser = {
+      ...user,
+      privacyRequests: [request, ...requests],
+      privacyRequestStatus: "pending",
+      updatedAt: now,
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "Privacy request submitted",
+      data: { request, requests: normalizePrivacyRequests(updatedUser) },
+    }, 201);
+  }
+
   if (segments[1] === "verification" && segments[2] === "request" && req.method === "POST") {
     if (!user.campusCardImage) {
       throw httpError("请先填写校园卡图片地址，再提交认证申请", 400);
@@ -429,6 +508,7 @@ async function handleUsers(req, store, segments, url) {
     const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
     const skipped = new Set(user.skippedIds || []);
     const allUsers = (await listUsers(store))
+      .filter(isActiveUser)
       .map(publicUser)
       .filter((item) => item.id !== user.id && !skipped.has(item.id));
     const recommendations = allUsers.length
@@ -747,7 +827,7 @@ async function findOtherProfile(store, match, userId) {
 
 async function findPublicProfile(store, id, fallback = null) {
   const user = await getUser(store, id);
-  if (user) {
+  if (user && isActiveUser(user)) {
     return publicUser(user);
   }
 
@@ -771,6 +851,9 @@ async function saveUser(store, user) {
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    privacyRequests: normalizePrivacyRequests(user),
+    privacyRequestStatus: text(user.privacyRequestStatus) || "none",
+    accountStatus: text(user.accountStatus) || "active",
     isAdmin: hasAdminAccess(user),
   };
   await store.setJSON(`users/${normalizedUser.id}`, normalizedUser);
@@ -860,6 +943,8 @@ async function requireUser(req, store) {
   if (!user) {
     throw httpError("用户不存在", 401);
   }
+
+  assertAccountCanLogin(user);
 
   return user;
 }
@@ -956,9 +1041,240 @@ function applyOutgoingMessageState(match, senderId, content, now = new Date().to
   };
 }
 
+function normalizePrivacyRequestType(type) {
+  const value = text(type).toLowerCase();
+  if (["delete_profile", "delete_account"].includes(value)) {
+    return value;
+  }
+
+  return "";
+}
+
+function privacyRequestTypeLabel(type) {
+  return type === "delete_account" ? "Account deletion" : "Profile data deletion";
+}
+
+function privacyRequestStatusLabel(status) {
+  return {
+    pending: "Pending",
+    completed: "Completed",
+    rejected: "Rejected",
+  }[status] || "Pending";
+}
+
+function normalizePrivacyRequest(request) {
+  const type = normalizePrivacyRequestType(request?.type) || "delete_profile";
+  const status = ["pending", "completed", "rejected"].includes(text(request?.status).toLowerCase())
+    ? text(request.status).toLowerCase()
+    : "pending";
+
+  return {
+    id: text(request?.id) || makeId("privacy"),
+    type,
+    typeLabel: privacyRequestTypeLabel(type),
+    reason: text(request?.reason).slice(0, 500),
+    status,
+    statusLabel: privacyRequestStatusLabel(status),
+    requestedAt: request?.requestedAt || new Date().toISOString(),
+    reviewedAt: request?.reviewedAt || null,
+    completedAt: request?.completedAt || null,
+    reviewedBy: text(request?.reviewedBy),
+    notes: text(request?.notes),
+  };
+}
+
+function normalizePrivacyRequests(user) {
+  return Array.isArray(user?.privacyRequests)
+    ? user.privacyRequests.map(normalizePrivacyRequest)
+    : [];
+}
+
+function adminPrivacyRequest(user, request) {
+  const normalizedUser = normalizeUserRecord(user);
+  return {
+    ...request,
+    requestId: request.id,
+    userId: normalizedUser.id,
+    userEmail: normalizedUser.email,
+    userNickname: normalizedUser.nickname,
+    userSchool: normalizedUser.school,
+    userMajor: normalizedUser.major,
+    userGrade: normalizedUser.grade,
+    accountStatus: normalizedUser.accountStatus || "active",
+  };
+}
+
+async function reviewPrivacyRequest(store, targetUser, { requestId, status, notes, reviewer }) {
+  const requests = normalizePrivacyRequests(targetUser);
+  const index = requests.findIndex((request) => request.id === requestId);
+  if (index < 0) {
+    throw httpError("Request not found", 404);
+  }
+
+  const action = status === "reject" || status === "rejected" ? "rejected" : "completed";
+  const now = new Date().toISOString();
+  const reviewedRequest = {
+    ...requests[index],
+    status: action,
+    statusLabel: privacyRequestStatusLabel(action),
+    notes,
+    reviewedBy: reviewer?.email || reviewer?.id || "",
+    reviewedAt: now,
+    completedAt: action === "completed" ? now : null,
+  };
+  const nextRequests = [...requests];
+  nextRequests[index] = reviewedRequest;
+
+  let updatedUser = {
+    ...targetUser,
+    privacyRequests: nextRequests,
+    privacyRequestStatus: nextRequests.some((request) => request.status === "pending") ? "pending" : action,
+    updatedAt: now,
+  };
+
+  if (action === "completed") {
+    updatedUser = await applyPrivacyRequestCompletion(store, updatedUser, reviewedRequest, now);
+  }
+
+  await saveUser(store, updatedUser);
+  return {
+    user: updatedUser,
+    request: reviewedRequest,
+    message: action === "completed" ? "Privacy request completed" : "Privacy request rejected",
+  };
+}
+
+async function applyPrivacyRequestCompletion(store, user, request, now) {
+  await redactUserMessagesAndMatches(store, user, now);
+  await deleteStoredCampusCard(store, user.campusCardImage);
+
+  if (request.type === "delete_account") {
+    return {
+      ...anonymizeUserProfile(user, now, true),
+      email: `deleted+${user.id}@campus-match.local`,
+      accountStatus: "deleted",
+      deletedAt: now,
+      passwordHash: "",
+      passwordSalt: "",
+      membership: createDefaultMembership(now),
+    };
+  }
+
+  return {
+    ...anonymizeUserProfile(user, now, false),
+    email: user.email,
+    accountStatus: "active",
+    passwordHash: user.passwordHash,
+    passwordSalt: user.passwordSalt,
+  };
+}
+
+function anonymizeUserProfile(user, now, deleted) {
+  return {
+    ...user,
+    studentId: "",
+    nickname: deleted ? "Deleted user" : "Profile cleared",
+    school: "",
+    grade: "",
+    major: "",
+    college: "",
+    campusZone: "",
+    dormArea: "",
+    bio: "",
+    tags: [],
+    sceneTags: [],
+    matchModes: [],
+    schedule: "",
+    idealScene: "",
+    relationshipGoal: "",
+    allowAnonymousMatch: false,
+    allowOfflineEvents: false,
+    campusCardImage: "",
+    avatar: "",
+    isVerified: false,
+    verificationStatus: "unverified",
+    verificationBadge: "",
+    verificationRequestedAt: null,
+    verificationReviewedAt: null,
+    verificationNotes: "",
+    skippedIds: [],
+    stats: { matches: 0, likes: 0, views: 0 },
+    updatedAt: now,
+  };
+}
+
+async function deleteStoredCampusCard(store, campusCardImage) {
+  const image = text(campusCardImage);
+  if (!image.startsWith("/api/uploads/")) {
+    return;
+  }
+
+  const key = `uploads/${image.replace(/^\/api\/uploads\//, "")}`;
+  await store.delete(key).catch(() => {});
+}
+
+async function redactUserMessagesAndMatches(store, user, now) {
+  const matches = await listMatches(store);
+  for (const match of matches) {
+    if (!Array.isArray(match.participants) || !match.participants.includes(user.id)) {
+      continue;
+    }
+
+    const messages = await getMessages(store, match.id);
+    const redactedMessages = messages.map((message) => {
+      if (senderIdForMessage(message) !== user.id) {
+        return message;
+      }
+
+      return {
+        ...message,
+        content: "[Message deleted]",
+        sender: {
+          id: user.id,
+          _id: user.id,
+          nickname: "Deleted user",
+        },
+        redactedAt: now,
+      };
+    });
+    await store.setJSON(`messages/${match.id}`, redactedMessages);
+
+    const snapshots = { ...(match.userSnapshots || {}) };
+    if (snapshots[user.id]) {
+      snapshots[user.id] = {
+        id: user.id,
+        _id: user.id,
+        nickname: "Deleted user",
+        school: "",
+        major: "",
+        grade: "",
+        isVerified: false,
+      };
+    }
+
+    await saveMatch(store, {
+      ...match,
+      userSnapshots: snapshots,
+      revealRequests: (match.revealRequests || []).filter((id) => id !== user.id),
+      identityRevealed: false,
+      updatedAt: now,
+    });
+  }
+}
+
+function assertAccountCanLogin(user) {
+  if (user?.accountStatus === "deleted") {
+    throw httpError("Account has been deleted", 403);
+  }
+}
+
+function isActiveUser(user) {
+  return user?.accountStatus !== "deleted";
+}
+
 function publicUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, privacyRequests, privacyRequestStatus, ...safeUser } = normalizedUser;
 
   return {
     ...safeUser,
@@ -1138,6 +1454,9 @@ function normalizeUserRecord(user) {
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    privacyRequests: normalizePrivacyRequests(user),
+    privacyRequestStatus: text(user.privacyRequestStatus) || "none",
+    accountStatus: text(user.accountStatus) || "active",
   };
 }
 
@@ -1280,7 +1599,7 @@ async function searchUsers(store, viewer, url) {
   const databaseUsers = await searchUsersInDatabase({ viewer, query, school, major, grade, limit, offset });
   const rows = databaseUsers?.length ? databaseUsers : await searchUsersInBlobs(store, { viewer, query, school, major, grade });
   const merged = rows
-    .filter((item) => item.id !== viewer.id && !skipped.has(item.id));
+    .filter((item) => isActiveUser(item) && item.id !== viewer.id && !skipped.has(item.id));
   const uniqueUsers = uniqueById(merged);
   const fallbackSeedUsers = uniqueUsers.length ? [] : filterSeedProfiles({ viewer, query, school, major, grade })
     .filter((item) => !skipped.has(item.id));
@@ -1325,7 +1644,7 @@ async function searchUsersInDatabase({ viewer, query, school, major, grade, limi
 }
 
 async function searchUsersInBlobs(store, filters) {
-  const users = (await listUsers(store)).map(publicUser);
+  const users = (await listUsers(store)).filter(isActiveUser).map(publicUser);
   return users.filter((user) => matchesSearchFilters(user, filters));
 }
 
@@ -1377,6 +1696,11 @@ async function indexUserInDatabase(user) {
     }
 
     await ensureDatabase(sql);
+    if (user.accountStatus === "deleted") {
+      await sql`DELETE FROM campus_users WHERE id = ${user.id}`;
+      return;
+    }
+
     const safe = publicUser(user);
     const searchableText = [
       safe.nickname,

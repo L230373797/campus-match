@@ -111,6 +111,30 @@
         margin-bottom: 18px;
       }
 
+      .tabs {
+        display: flex;
+        gap: 10px;
+        padding: 8px;
+        margin-bottom: 18px;
+      }
+
+      .tab {
+        flex: 1;
+        min-height: 42px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .tab.active {
+        color: var(--ink);
+        background: rgba(255, 255, 255, .72);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, .08);
+      }
+
       .stats {
         display: flex;
         gap: 10px;
@@ -281,6 +305,15 @@
         color: var(--ink);
       }
 
+      .privacy-reason {
+        margin: 12px 0;
+        padding: 13px 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .56);
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
       .campus-card {
         display: grid;
         gap: 10px;
@@ -324,6 +357,11 @@
         .topbar,
         .toolbar {
           display: grid;
+        }
+
+        .tabs {
+          display: grid;
+          grid-template-columns: 1fr;
         }
 
         .details {
@@ -380,6 +418,11 @@
             <button id="logout" class="button secondary" type="button">退出</button>
           </div>
         </header>
+
+        <div class="tabs glass">
+          <button id="tab-verification" class="tab active" type="button">认证审核</button>
+          <button id="tab-privacy" class="tab" type="button">隐私请求</button>
+        </div>
 
         <div class="toolbar glass">
           <div class="stats">

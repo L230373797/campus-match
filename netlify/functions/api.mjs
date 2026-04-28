@@ -877,15 +877,19 @@ async function getMessages(store, matchId) {
 }
 
 function serializeMatch(match, viewerId, otherProfile, messages = []) {
+  const lastMessage = [...messages].reverse().find(Boolean);
   const unreadCount = calculateUnreadCount(match, viewerId, messages);
+  const lastMessageAt = match.lastMessageAt || lastMessage?.createdAt || match.matchedAt;
+  const lastMessagePreview = text(match.lastMessagePreview) || text(lastMessage?.content);
+  const lastMessageSenderId = text(match.lastMessageSenderId) || senderIdForMessage(lastMessage || {});
   return {
     id: match.id,
     _id: match.id,
     matchedAt: match.matchedAt,
     identityRevealed: Boolean(match.identityRevealed),
-    lastMessageAt: match.lastMessageAt,
-    lastMessagePreview: text(match.lastMessagePreview),
-    lastMessageSenderId: text(match.lastMessageSenderId),
+    lastMessageAt,
+    lastMessagePreview,
+    lastMessageSenderId,
     unreadCount,
     hasUnread: unreadCount > 0,
     readAt: match.readAtByUser?.[viewerId] || null,

@@ -70,6 +70,7 @@
     unreadPollTimer: null,
     unreadFetching: false,
     unreadCheckedAt: 0,
+    messageThreads: new Map(),
     baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
@@ -157,6 +158,100 @@
         }
         #campus-unread-pill a span:last-child {
           display: none;
+        }
+      }
+      body[data-campus-route="/matches"] a[href*="/chat/"][data-campus-has-unread="true"] {
+        border-color: rgba(255,45,85,.34) !important;
+        box-shadow: 0 18px 48px rgba(255,45,85,.13), inset 0 1px rgba(255,255,255,.62) !important;
+      }
+      .campus-match-preview-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .campus-match-preview-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: rgba(71,85,105,.82);
+        font-size: 13px;
+        line-height: 1.35;
+        font-weight: 650;
+      }
+      .campus-match-preview-time {
+        flex: 0 0 auto;
+        color: rgba(100,116,139,.66);
+        font-size: 11px;
+        font-weight: 750;
+        font-variant-numeric: tabular-nums;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row {
+        scroll-margin: 88px 0 100px;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble {
+        position: relative;
+        max-width: min(78vw, 520px);
+        overflow: hidden;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble p {
+        word-break: break-word;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-mine {
+        border: 1px solid rgba(255,255,255,.36);
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-theirs {
+        border: 1px solid rgba(255,255,255,.52);
+        background: rgba(255,255,255,.72) !important;
+        color: #111827 !important;
+        box-shadow: 0 16px 34px rgba(15,23,42,.08), inset 0 1px rgba(255,255,255,.42);
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-mine p {
+        color: #fff !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-theirs .campus-message-time {
+        color: rgba(15,23,42,.58) !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-mine .campus-message-time {
+        color: rgba(255,255,255,.76) !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-time {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+      }
+      .campus-chat-date-chip {
+        display: flex;
+        justify-content: center;
+        margin: 12px 0 4px;
+        pointer-events: none;
+      }
+      .campus-chat-date-chip span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.58);
+        border: 1px solid rgba(255,255,255,.7);
+        color: rgba(71,85,105,.72);
+        box-shadow: 0 12px 30px rgba(15,23,42,.08);
+        backdrop-filter: blur(16px) saturate(1.22);
+        -webkit-backdrop-filter: blur(16px) saturate(1.22);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      @media (max-width: 640px) {
+        .campus-match-preview-row {
+          margin-top: 5px;
+        }
+        .campus-match-preview-time {
+          display: none;
+        }
+        body[data-campus-route^="/chat/"] .campus-message-bubble {
+          max-width: 80vw;
         }
       }
       .campus-code-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 10px; }
@@ -1949,6 +2044,9 @@
         }
       }
       return originalFetch(input, init).then((response) => {
+        const apiPath = apiPathFromFetchUrl(url);
+        const method = String(init?.method || input?.method || "GET").toUpperCase();
+        rememberApiResponse(apiPath, method, response);
         if (response.ok && /\/api\/auth\/(login|register)$/.test(url)) {
           setTimeout(() => {
             if (window.location.pathname === "/login" && currentToken()) {
@@ -1961,7 +2059,7 @@
             ensureUnreadPolling();
           }, 220);
         }
-        if (response.ok && /\/api\/(messages|matches)(\/|\?|$)/.test(url)) {
+        if (response.ok && /\/api\/(messages|matches)(\/|\?|$)/.test(apiPath)) {
           setTimeout(() => {
             refreshUnreadSummary({ force: true }).catch(() => {});
           }, 450);
@@ -2154,6 +2252,59 @@
     return payload || {};
   }
 
+  function apiPathFromFetchUrl(url) {
+    if (!url) {
+      return "";
+    }
+
+    try {
+      const parsed = new URL(url, window.location.origin);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return String(url || "");
+    }
+  }
+
+  function rememberApiResponse(apiPath, method, response) {
+    if (!response.ok || !/\/api\/(messages|matches)(\/|\?|$)/.test(apiPath)) {
+      return;
+    }
+
+    response.clone().json().then((payload) => {
+      if (apiPath.replace(/\?.*$/, "") === "/api/matches" && Array.isArray(payload.data?.matches)) {
+        syncUnreadIndicators(payload.data.matches, payload.data.unreadTotal);
+        return;
+      }
+
+      const matchId = matchIdFromMessageApiPath(apiPath);
+      if (!matchId) {
+        return;
+      }
+
+      if (method === "GET" && Array.isArray(payload.data?.messages)) {
+        state.messageThreads.set(matchId, payload.data.messages);
+      } else if (method === "POST" && payload.data?.message) {
+        const current = state.messageThreads.get(matchId) || [];
+        state.messageThreads.set(matchId, [...current, payload.data.message]);
+      }
+
+      setTimeout(() => {
+        enhanceChatTimeline();
+      }, 90);
+    }).catch(() => {
+      // Some responses are not JSON; nothing to remember.
+    });
+  }
+
+  function matchIdFromMessageApiPath(apiPath) {
+    const match = String(apiPath || "").match(/\/api\/messages\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function cleanText(value) {
+    return String(value || "").trim();
+  }
+
   function unreadLabel(count) {
     return count > 99 ? "99+" : String(Math.max(0, Number(count) || 0));
   }
@@ -2175,6 +2326,7 @@
     updateDocumentUnreadTitle(total);
     updateNavUnreadBadge(total);
     updateThreadUnreadBadges(state.unreadMatches);
+    updateMatchPreviewCards(state.unreadMatches);
     updateFloatingUnreadPill(total);
   }
 
@@ -2232,6 +2384,229 @@
         badge.remove();
       }
     });
+  }
+
+  function updateMatchPreviewCards(matches = []) {
+    const matchById = new Map(matches.map((match) => [String(match.id || match._id || ""), match]));
+    document.querySelectorAll('a[href*="/chat/"]').forEach((link) => {
+      const match = matchById.get(matchIdFromChatHref(link.getAttribute("href")));
+      if (!match) {
+        return;
+      }
+
+      const unreadCount = Number(match.unreadCount) || 0;
+      link.dataset.campusHasUnread = unreadCount > 0 ? "true" : "false";
+      const info = link.querySelector('[class*="flex-1"][class*="min-w-0"]');
+      if (!info) {
+        return;
+      }
+
+      let row = info.querySelector(".campus-match-preview-row");
+      if (!row) {
+        row = document.createElement("div");
+        row.className = "campus-match-preview-row";
+        info.appendChild(row);
+      }
+
+      const previewText = buildLastMessagePreview(match);
+      const timeText = formatThreadTime(match.lastMessageAt || match.matchedAt);
+      const signature = `${previewText}__${timeText}__${unreadCount}`;
+      if (row.dataset.signature === signature) {
+        return;
+      }
+
+      row.dataset.signature = signature;
+      row.innerHTML = `
+        <span class="campus-match-preview-text">${escapeHtml(previewText)}</span>
+        <span class="campus-match-preview-time">${escapeHtml(timeText)}</span>
+      `;
+      link.setAttribute("aria-label", `${match.user?.nickname || "匹配对象"}，${previewText}`);
+    });
+  }
+
+  function buildLastMessagePreview(match) {
+    const content = cleanText(match.lastMessagePreview);
+    if (!content) {
+      return "刚刚匹配，打个招呼吧";
+    }
+
+    const senderId = cleanText(match.lastMessageSenderId);
+    return `${isCurrentUserId(senderId) ? "我：" : ""}${content}`;
+  }
+
+  function isCurrentUserId(id) {
+    const value = cleanText(id);
+    if (!value) {
+      return false;
+    }
+
+    return [state.user?.id, state.user?._id, "me"].map(cleanText).includes(value);
+  }
+
+  function senderIdForClient(message) {
+    return cleanText(message?.senderId || message?.sender?.id || message?.sender?._id || message?.sender);
+  }
+
+  function isCurrentUserSender(message) {
+    return isCurrentUserId(senderIdForClient(message));
+  }
+
+  function toValidDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function isSameLocalDate(a, b) {
+    return a.getFullYear() === b.getFullYear()
+      && a.getMonth() === b.getMonth()
+      && a.getDate() === b.getDate();
+  }
+
+  function isYesterday(date, now = new Date()) {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    return isSameLocalDate(date, yesterday);
+  }
+
+  function formatHourMinute(date) {
+    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatThreadTime(value) {
+    const date = toValidDate(value);
+    if (!date) {
+      return "";
+    }
+
+    const now = new Date();
+    if (isSameLocalDate(date, now)) {
+      return formatHourMinute(date);
+    }
+    if (isYesterday(date, now)) {
+      return "昨天";
+    }
+    if (date.getFullYear() === now.getFullYear()) {
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+  }
+
+  function formatMessageTime(value) {
+    const date = toValidDate(value);
+    if (!date) {
+      return "";
+    }
+
+    const now = new Date();
+    if (isSameLocalDate(date, now)) {
+      return formatHourMinute(date);
+    }
+    if (isYesterday(date, now)) {
+      return `昨天 ${formatHourMinute(date)}`;
+    }
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${formatHourMinute(date)}`;
+  }
+
+  function localDateKey(value) {
+    const date = toValidDate(value);
+    if (!date) {
+      return "";
+    }
+
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  }
+
+  function dateChipLabel(value) {
+    const date = toValidDate(value);
+    if (!date) {
+      return "";
+    }
+
+    const now = new Date();
+    if (isSameLocalDate(date, now)) {
+      return "今天";
+    }
+    if (isYesterday(date, now)) {
+      return "昨天";
+    }
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  function enhanceChatTimeline() {
+    if (!window.location.pathname.startsWith("/chat/")) {
+      return;
+    }
+
+    const matchId = decodeURIComponent(window.location.pathname.replace(/^\/chat\//, "").split(/[/?#]/)[0] || "");
+    const messages = state.messageThreads.get(matchId) || [];
+    if (!messages.length) {
+      return;
+    }
+
+    const contentNodes = Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] p'))
+      .filter((node) => !node.children.length && messages.some((message) => cleanText(message.content) === cleanText(node.textContent)));
+    const usedNodes = new Set();
+    let previousDateKey = "";
+
+    messages.forEach((message) => {
+      const content = cleanText(message.content);
+      if (!content) {
+        return;
+      }
+
+      const contentNode = contentNodes.find((node) => !usedNodes.has(node) && cleanText(node.textContent) === content);
+      if (!contentNode) {
+        return;
+      }
+      usedNodes.add(contentNode);
+
+      const bubble = contentNode.parentElement;
+      const row = bubble?.closest('div[class*="justify-end"], div[class*="justify-start"]');
+      if (!bubble || !row) {
+        return;
+      }
+
+      const mine = isCurrentUserSender(message) || row.className.includes("justify-end");
+      row.classList.add("campus-message-row");
+      row.dataset.campusSender = mine ? "me" : "them";
+      bubble.classList.add("campus-message-bubble");
+      bubble.classList.toggle("is-mine", mine);
+      bubble.classList.toggle("is-theirs", !mine);
+
+      const timeNode = Array.from(bubble.querySelectorAll("span")).find((node) => !node.children.length);
+      const messageAt = message.createdAt || message.time;
+      const timeText = formatMessageTime(messageAt);
+      if (timeNode && timeText) {
+        timeNode.classList.add("campus-message-time");
+        timeNode.title = toValidDate(messageAt)?.toLocaleString("zh-CN") || "";
+        if (timeNode.textContent.trim() !== timeText) {
+          timeNode.textContent = timeText;
+        }
+      }
+
+      const key = localDateKey(messageAt);
+      if (key && key !== previousDateKey) {
+        ensureDateChipBefore(row, key, dateChipLabel(messageAt));
+        previousDateKey = key;
+      }
+    });
+  }
+
+  function ensureDateChipBefore(row, key, label) {
+    const previous = row.previousElementSibling;
+    if (previous?.classList.contains("campus-chat-date-chip") && previous.dataset.dateKey === key) {
+      return;
+    }
+
+    if (previous?.classList.contains("campus-chat-date-chip") && previous.dataset.dateKey !== key) {
+      previous.remove();
+    }
+
+    const chip = document.createElement("div");
+    chip.className = "campus-chat-date-chip";
+    chip.dataset.dateKey = key;
+    chip.innerHTML = `<span>${escapeHtml(label)}</span>`;
+    row.insertAdjacentElement("beforebegin", chip);
   }
 
   function updateFloatingUnreadPill(total) {
@@ -3475,6 +3850,7 @@
     rewriteAudienceCopy();
     ensureUnreadPolling();
     syncUnreadIndicators(state.unreadMatches, state.unreadTotal);
+    enhanceChatTimeline();
   }
 
   const observer = new MutationObserver(() => {

@@ -195,23 +195,23 @@
   <body>
     <main>
       <section class="headline">
-        <h1>校园卡上传</h1>
-        <p>上传校园卡后，我们会尽快完成认证。通过后，你的资料会更容易获得同校同学的信任。</p>
+        <h1>上传校园卡照片</h1>
+        <p>选一张能证明同校身份的照片。通过后，资料页会显示校园认证，认识新朋友时也更安心。</p>
         <div class="nav">
-          <a class="button" href="/">返回首页</a>
-          <a class="secondary" href="/profile">查看资料</a>
+          <a class="button" href="/">回到首页</a>
+          <a class="secondary" href="/profile">回到我的资料</a>
         </div>
       </section>
 
       <section class="panel">
-        <div class="status" id="status">正在检查登录状态...</div>
+        <div class="status" id="status">正在确认登录状态...</div>
         <div class="preview">
           <img id="preview" alt="校园卡预览" />
           <span id="empty">选择 JPG、PNG 或 WebP 图片</span>
         </div>
         <div class="controls">
           <input id="file" type="file" accept="image/jpeg,image/png,image/webp" />
-          <button id="submit" type="button" disabled>上传</button>
+          <button id="submit" type="button" disabled>上传照片</button>
         </div>
         <div class="result" id="result"></div>
       </section>
@@ -244,20 +244,20 @@
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload.message || "请求失败");
+          throw new Error(payload.message || "暂时没有请求成功");
         }
         return payload;
       }
 
       async function init() {
         if (!token) {
-          setStatus("请先登录账号，再上传校园卡。");
+          setStatus("先登录账号，再上传校园卡。");
           return;
         }
 
         try {
           const payload = await request("/api/auth/me");
-          setStatus(`${payload.data.user.nickname || payload.data.user.email}，现在可以上传校园卡了`);
+          setStatus(`${payload.data.user.nickname || payload.data.user.email}，可以选择校园卡照片了`);
         } catch (error) {
           setStatus(error.message);
         }
@@ -305,7 +305,7 @@
         }
 
         submit.disabled = true;
-        setStatus("正在上传，请稍等...");
+        setStatus("正在上传，马上就好...");
 
         try {
           const payload = await request("/api/uploads/campus-card", {
@@ -316,8 +316,8 @@
             }),
           });
           result.style.display = "block";
-          result.textContent = "已收到你的校园卡，我们会尽快完成认证。";
-          setStatus(payload.message || "校园卡已上传，正在等待认证。");
+          result.textContent = "已收到你的校园卡照片。";
+          setStatus(payload.message || "校园卡已上传，我们会尽快完成认证。");
         } catch (error) {
           setStatus(error.message);
         } finally {

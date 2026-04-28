@@ -4070,7 +4070,7 @@
       panel.innerHTML = `
         <div>
           <h3>资料与账号处理</h3>
-          <p>你可以申请清空个人资料，或申请注销账号。提交后会进入管理员端核验，处理完成前不会立刻删除。</p>
+          <p>你可以申请清空个人资料，或申请注销账号。处理完成前不会立刻删除。</p>
         </div>
         <div class="campus-privacy-status">${escapeHtml(statusText)}</div>
         <textarea class="campus-privacy-reason" placeholder="可以简单说明原因（选填）"></textarea>

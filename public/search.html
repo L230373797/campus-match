@@ -596,7 +596,7 @@
         <h1>搜索同学</h1>
         <p class="muted">按兴趣、专业、学院或常去的地方，找更合拍的同校同学。</p>
       </div>
-        <a href="/">返回首页</a>
+        <a href="/">回到首页</a>
       </header>
 
       <section class="toolbar">
@@ -610,7 +610,7 @@
           <option>浙江大学</option>
         </select>
         <div class="school-search" data-school-search>
-          <input id="schoolQuery" autocomplete="off" role="combobox" aria-expanded="false" placeholder="输入学校名称筛选" />
+          <input id="schoolQuery" autocomplete="off" role="combobox" aria-expanded="false" placeholder="输入学校名称" />
           <button class="school-clear" type="button" aria-label="清空学校">×</button>
           <div class="school-suggestions" role="listbox"></div>
         </div>
@@ -630,13 +630,13 @@
       <div id="status" class="status">正在检查登录状态...</div>
       <section class="match-board">
         <div class="match-copy">
-          <strong>3D Match Deck</strong>
+          <strong>今日推荐</strong>
           <h2>像翻动一组漂浮卡片一样，遇见同校新朋友。</h2>
-          <p class="muted">左右滑动切换，喜欢的人会进入匹配流程。也可以用卡片底部按钮轻松操作。</p>
+          <p class="muted">左右滑动切换，觉得合拍就留下，暂时没感觉就轻轻略过。</p>
           <div class="match-hints">
-            <span>左滑跳过</span>
+            <span>左滑略过</span>
             <span>右滑喜欢</span>
-            <span>上滑超级喜欢</span>
+            <span>上滑更感兴趣</span>
             <span>可回退上一张</span>
           </div>
         </div>
@@ -719,7 +719,7 @@
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload.message || "请求失败");
+          throw new Error(payload.message || "暂时没有请求成功");
         }
         return payload;
       }
@@ -742,9 +742,9 @@
         const [cardA, cardB] = colorPair(activeIndex + index);
         const userId = escapeHtml(user.id || user._id || "");
         return `
-          <span class="swipe-label swipe-skip">跳过</span>
+          <span class="swipe-label swipe-skip">略过</span>
           <span class="swipe-label swipe-like">喜欢</span>
-          <span class="swipe-label swipe-super">超级喜欢</span>
+          <span class="swipe-label swipe-super">更感兴趣</span>
           <div class="match-visual" style="--card-a:${cardA};--card-b:${cardB}">
             <div class="match-initial">${escapeHtml(initials(user.nickname))}</div>
           </div>
@@ -754,14 +754,14 @@
                 <h2>${escapeHtml(user.nickname || "未命名用户")}</h2>
                 <p class="match-meta">${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · ") || "同校同学")}</p>
               </div>
-              <span class="badge">${user.isVerified ? "已认证" : "待认证"}</span>
+              <span class="badge">${user.isVerified ? "已认证" : "还未认证"}</span>
             </div>
-            <p class="match-bio">${escapeHtml(user.bio || "这个同学还没写简介，先从标签了解一下吧。")}</p>
+            <p class="match-bio">${escapeHtml(user.bio || "对方还没写简介，可以先看看兴趣标签。")}</p>
             <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
             <div class="match-actions">
               <button class="back" type="button" data-back ${deckHistory.length ? "" : "disabled"}>回退</button>
-              <button class="skip" type="button" data-skip="${userId}">跳过</button>
-              <button class="super" type="button" data-super="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后解锁" : "超级喜欢"}</button>
+              <button class="skip" type="button" data-skip="${userId}">略过</button>
+              <button class="super" type="button" data-super="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后可用" : "更感兴趣"}</button>
             </div>
           </div>
         `;
@@ -772,7 +772,7 @@
         const visible = deckUsers.slice(activeIndex, activeIndex + 4);
 
         if (!visible.length) {
-          setStatus("暂时没找到合适的同学，换个关键词试试。");
+          setStatus("暂时没找到合拍的同学，换个关键词试试。");
           const empty = document.createElement("article");
           empty.className = "match-card";
           empty.innerHTML = `
@@ -783,13 +783,13 @@
               <div class="match-name-row">
                 <div>
                   <h2>换个关键词试试</h2>
-                  <p class="match-meta">也许下一组就有更合拍的人。</p>
+                  <p class="match-meta">也许下一组就有更聊得来的人。</p>
                 </div>
               </div>
               <p class="match-bio">可以试试兴趣、院系、活动或常去地点，比如图书馆、夜跑、摄影。</p>
               <div class="match-actions">
-                <button class="skip" type="button" disabled>没有更多</button>
-                <button type="button" disabled>等待新推荐</button>
+                <button class="skip" type="button" disabled>先到这里</button>
+                <button type="button" disabled>晚点再看看</button>
               </div>
             </div>
           `;
@@ -812,20 +812,20 @@
           likeButton?.addEventListener("click", async (event) => {
             const button = event.currentTarget;
             if (lockedPreview) {
-              setStatus("登录后就可以把超级喜欢送给真实同学。");
+              setStatus("登录后就可以表达更感兴趣。");
               return;
             }
             button.disabled = true;
             button.textContent = "正在点亮...";
             try {
               await request(`/api/matches/like/${button.dataset.super}`, { method: "POST" });
-              button.textContent = "已超级喜欢";
+              button.textContent = "已标记感兴趣";
               swipeTopCard("up", { alreadyLiked: true });
             } catch (error) {
               button.textContent = error.message;
               setTimeout(() => {
                 button.disabled = false;
-                button.textContent = "超级喜欢";
+                button.textContent = "更感兴趣";
               }, 1800);
             }
           });
@@ -964,7 +964,7 @@
           const id = card.dataset.userId || card.querySelector("[data-super]")?.dataset.super;
           if (id) {
             request(`/api/matches/like/${id}`, { method: "POST" }).catch((error) => {
-              setStatus(error.message || "喜欢没有送出，可以再点一次。");
+              setStatus(error.message || "喜欢没有送出，可以再试一次。");
             });
           }
         }
@@ -973,7 +973,7 @@
           const id = card.dataset.userId || card.querySelector("[data-skip]")?.dataset.skip;
           if (id) {
             request(`/api/matches/skip/${id}`, { method: "POST" }).catch((error) => {
-              setStatus(error.message || "跳过没有保存，可以稍后再试。");
+              setStatus(error.message || "这次略过没有保存，可以稍后再试。");
             });
           }
         }
@@ -982,7 +982,7 @@
           deckHistory.push(currentIndex);
           activeIndex += 1;
           if (direction === "up") {
-            setStatus(lockedPreview ? "登录后可以发送超级喜欢。" : "已发送超级喜欢");
+            setStatus(lockedPreview ? "登录后可以表达更感兴趣。" : "已标记更感兴趣");
           }
           renderDeck();
         }, 300);

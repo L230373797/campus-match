@@ -74,6 +74,7 @@
 
   window.addEventListener("popstate", queueEnhance);
   document.addEventListener("keydown", handleGlobalKeydown);
+  document.addEventListener("click", handleLogoutClick, true);
   document.addEventListener("click", handleRouteTransitionClick, true);
 
   function injectStyles() {
@@ -1899,6 +1900,53 @@
     return localStorage.getItem("token") || "";
   }
 
+  function isProtectedRoute(pathname = window.location.pathname) {
+    return pathname !== "/" && pathname !== "/login";
+  }
+
+  function redirectToLogin({ replace = true } = {}) {
+    if (window.location.pathname === "/login") {
+      return;
+    }
+
+    if (replace) {
+      window.location.replace("/login");
+    } else {
+      window.location.assign("/login");
+    }
+  }
+
+  function handleLogoutClick(event) {
+    const target = event.target.closest?.("button, a");
+    if (!target) {
+      return;
+    }
+
+    const label = `${target.textContent || ""} ${target.getAttribute("aria-label") || ""}`.trim();
+    const isLogout = /退出登录|退出|登出|log\s*out/i.test(label);
+    if (!isLogout || !currentToken()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+
+    target.disabled = true;
+    if (target.tagName === "BUTTON") {
+      target.textContent = "退出中...";
+    }
+
+    localStorage.removeItem("token");
+    state.token = "";
+    state.user = null;
+    state.membership = normalizeMembership(null);
+    document.body.dataset.campusAuthenticated = "false";
+    document.body.dataset.campusAdmin = "false";
+    document.body.dataset.campusMembership = "free";
+    redirectToLogin();
+  }
+
   function setRouteState() {
     document.body.dataset.campusRoute = window.location.pathname;
   }
@@ -2031,6 +2079,9 @@
       document.body.dataset.campusAdmin = "false";
       document.body.dataset.campusMembership = "free";
       guardAdminRoute();
+      if (isProtectedRoute()) {
+        redirectToLogin();
+      }
       refreshProfileMembershipDecorations();
       return;
     }
@@ -2067,6 +2118,10 @@
       document.body.dataset.campusAuthenticated = "false";
       document.body.dataset.campusAdmin = "false";
       document.body.dataset.campusMembership = "free";
+      if (isProtectedRoute()) {
+        localStorage.removeItem("token");
+        redirectToLogin();
+      }
     }
 
     guardAdminRoute();

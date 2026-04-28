@@ -83,11 +83,15 @@ await check("profile read and update", async () => {
       bio: "Launch smoke profile",
       sceneTags: ["图书馆", "夜跑"],
       matchModes: ["学习搭子", "散步搭子"],
+      mbti: "INFP",
+      birthDate: "2004-10-08",
       allowAnonymousMatch: true,
       allowOfflineEvents: true,
     },
   });
   assert(updated.data?.user?.bio === "Launch smoke profile", "profile update should persist");
+  assert(updated.data?.user?.mbti === "INFP", "profile MBTI should persist");
+  assert(updated.data?.user?.birthDate === "2004-10-08", "profile birth date should persist");
 });
 
 await check("membership read and subscribe", async () => {

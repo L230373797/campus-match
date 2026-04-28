@@ -205,6 +205,8 @@ async function handleAuth(req, store, segments) {
       tags: arrayOfText(body.tags),
       sceneTags: arrayOfText(body.sceneTags),
       matchModes: arrayOfText(body.matchModes),
+      mbti: normalizeMbti(body.mbti),
+      birthDate: normalizeBirthDate(body.birthDate || body.birthday),
       schedule: text(body.schedule),
       idealScene: text(body.idealScene),
       relationshipGoal: text(body.relationshipGoal) || "先低压力认识彼此",
@@ -377,6 +379,8 @@ async function handleUsers(req, store, segments, url) {
       "idealScene",
       "relationshipGoal",
       "matchModes",
+      "mbti",
+      "birthDate",
       "allowAnonymousMatch",
       "allowOfflineEvents",
       "avatar",
@@ -385,7 +389,13 @@ async function handleUsers(req, store, segments, url) {
     const updatedUser = { ...user };
     for (const field of allowedFields) {
       if (Object.hasOwn(body, field)) {
-        updatedUser[field] = Array.isArray(body[field]) ? arrayOfText(body[field]) : body[field];
+        if (field === "mbti") {
+          updatedUser[field] = normalizeMbti(body[field]);
+        } else if (field === "birthDate") {
+          updatedUser[field] = normalizeBirthDate(body[field]);
+        } else {
+          updatedUser[field] = Array.isArray(body[field]) ? arrayOfText(body[field]) : body[field];
+        }
       }
     }
 
@@ -900,6 +910,8 @@ async function saveUser(store, user) {
     tags: arrayOfText(user.tags),
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
+    mbti: normalizeMbti(user.mbti),
+    birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
@@ -1518,6 +1530,8 @@ function normalizeUserRecord(user) {
     tags: arrayOfText(user.tags),
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
+    mbti: normalizeMbti(user.mbti),
+    birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
@@ -1745,6 +1759,8 @@ function matchesSearchFilters(user, { viewer, query, school, major, grade }) {
     user.college,
     user.grade,
     user.bio,
+    user.mbti,
+    user.birthDate,
     ...(user.tags || []),
     ...(user.sceneTags || []),
     ...(user.matchModes || []),
@@ -1775,6 +1791,8 @@ async function indexUserInDatabase(user) {
       safe.college,
       safe.grade,
       safe.bio,
+      safe.mbti,
+      safe.birthDate,
       ...(safe.tags || []),
       ...(safe.sceneTags || []),
       ...(safe.matchModes || []),
@@ -1970,6 +1988,8 @@ function seedProfiles() {
     {
       id: "seed-library-ning",
       _id: "seed-library-ning",
+      mbti: "INFJ",
+      birthDate: "2004-09-12",
       nickname: "图书馆阿宁",
       school: "北京大学",
       major: "法学",
@@ -1989,6 +2009,8 @@ function seedProfiles() {
     {
       id: "seed-runner-zhou",
       _id: "seed-runner-zhou",
+      mbti: "ENFP",
+      birthDate: "2005-05-28",
       nickname: "夜跑小周",
       school: "北京大学",
       major: "新闻学",
@@ -2008,6 +2030,8 @@ function seedProfiles() {
     {
       id: "seed-food-senior",
       _id: "seed-food-senior",
+      mbti: "ESFJ",
+      birthDate: "2003-11-06",
       nickname: "干饭学姐",
       school: "北京大学",
       major: "经济学",
@@ -2072,6 +2096,31 @@ function makeId(prefix) {
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function normalizeMbti(value) {
+  const mbti = text(value).toUpperCase();
+  return /^(I|E)(N|S)(F|T)(J|P)$/.test(mbti) ? mbti : "";
+}
+
+function normalizeBirthDate(value) {
+  const raw = text(value);
+  if (!raw) {
+    return "";
+  }
+
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return "";
+  }
+
+  const date = new Date(`${raw}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime())
+    && date.getUTCFullYear() === Number(match[1])
+    && date.getUTCMonth() + 1 === Number(match[2])
+    && date.getUTCDate() === Number(match[3])
+    ? raw
+    : "";
 }
 
 function text(value) {

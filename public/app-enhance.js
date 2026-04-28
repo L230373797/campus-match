@@ -30,7 +30,9 @@
   ];
   const MEMBERSHIP_LABELS = new Set(["免费用户", "校园会员", "高级会员", "会员已过期"]);
   const AVATAR_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+  const MBTI_TYPES = ["INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP", "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP"];
   const AUDIENCE_COPY_REPLACEMENTS = new Map([
+    ["继续下滑了解业务", "继续下滑看看"],
     ["01 / 业务定位", "01 / 为什么这里不同"],
     ["不是一起全抛出来，而是边滑边看到重点", "先确认感觉，再慢慢了解彼此"],
     ["校园匹配不是泛社交广场，而是校内真实连接平台。首页改成随滚动逐段出现信息，让用户先抓到核心，再继续往下理解产品逻辑。", "这里不急着把所有人推到你面前，而是先根据同校认证、兴趣场景和相处节奏，帮你更轻松地判断谁值得认识。"],
@@ -1107,6 +1109,983 @@
       }
       .campus-avatar-sheet-actions button:active {
         transform: translateY(1px) scale(.99);
+      }
+      .campus-business-home {
+        margin: 22px 0 0;
+        display: grid;
+        gap: 16px;
+        color: rgba(245,248,255,.94);
+        position: relative;
+        isolation: isolate;
+      }
+      .campus-business-home::before {
+        content: "";
+        position: absolute;
+        inset: -18px -18px -22px;
+        z-index: -1;
+        border-radius: 36px;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(143,216,255,.18), transparent 36%),
+          radial-gradient(circle at 100% 42%, rgba(255,216,229,.12), transparent 38%),
+          linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0));
+        opacity: .88;
+        pointer-events: none;
+      }
+      .campus-business-home > * {
+        animation: campusBusinessRise .54s cubic-bezier(.2,.78,.24,1) both;
+        will-change: transform, opacity;
+      }
+      .campus-business-home > *:nth-child(2) { animation-delay: .04s; }
+      .campus-business-home > *:nth-child(3) { animation-delay: .08s; }
+      .campus-business-home > *:nth-child(4) { animation-delay: .12s; }
+      .campus-business-home > *:nth-child(5) { animation-delay: .16s; }
+      .campus-business-home > *:nth-child(6) { animation-delay: .2s; }
+      .campus-business-home > *:nth-child(7) { animation-delay: .24s; }
+      @keyframes campusBusinessRise {
+        from {
+          opacity: 0;
+          transform: translateY(16px) scale(.985);
+          filter: blur(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+          filter: blur(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .campus-business-home > *,
+        .campus-business-search,
+        .campus-business-shortcut,
+        .campus-business-feed-card,
+        .campus-business-banner,
+        .campus-business-ai {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+      .campus-business-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .campus-business-heading h3 {
+        margin: 0;
+        font-size: clamp(1.35rem, 2.2vw, 2rem);
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+      .campus-business-heading p {
+        margin: 8px 0 0;
+        max-width: 620px;
+        color: rgba(226,238,255,.68);
+        line-height: 1.7;
+      }
+      .campus-business-live {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 0 13px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.09);
+        color: rgba(245,248,255,.82);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .campus-business-live::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #51f2c2;
+        box-shadow: 0 0 18px rgba(81,242,194,.8);
+      }
+      .campus-business-search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 62px;
+        padding: 8px 9px 8px 18px;
+        border-radius: 24px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.07));
+        box-shadow: 0 18px 50px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.18);
+        backdrop-filter: blur(22px) saturate(1.25);
+        -webkit-backdrop-filter: blur(22px) saturate(1.25);
+        position: relative;
+        overflow: hidden;
+        transition: transform .24s ease, border-color .24s ease, box-shadow .24s ease;
+      }
+      .campus-business-search::after {
+        content: "";
+        position: absolute;
+        inset: 1px auto 1px 1px;
+        width: 42%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, rgba(255,255,255,.13), transparent);
+        opacity: .6;
+        pointer-events: none;
+      }
+      .campus-business-search:focus-within {
+        transform: translateY(-1px);
+        border-color: rgba(143,216,255,.34);
+        box-shadow: 0 22px 58px rgba(0,0,0,.22), 0 0 0 3px rgba(143,216,255,.09), inset 0 1px rgba(255,255,255,.2);
+      }
+      .campus-business-search span {
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        color: #8fd8ff;
+        background: rgba(143,216,255,.12);
+        font-size: 18px;
+      }
+      .campus-business-search input {
+        min-width: 0;
+        flex: 1 1 auto;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: rgba(255,255,255,.94);
+        font-size: 16px;
+        font-weight: 750;
+      }
+      .campus-business-search input::placeholder {
+        color: rgba(226,238,255,.55);
+      }
+      .campus-business-search button,
+      .campus-business-banner strong,
+      .campus-business-ai {
+        border: 0;
+        cursor: pointer;
+        min-height: 44px;
+        border-radius: 999px;
+        padding: 0 18px;
+        color: #07111f !important;
+        -webkit-text-fill-color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        font-weight: 900;
+        white-space: nowrap;
+        transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+      }
+      .campus-business-search button:hover,
+      .campus-business-banner:hover strong,
+      .campus-business-ai:hover {
+        transform: translateY(-1px);
+        filter: saturate(1.08) brightness(1.02);
+      }
+      .campus-business-search button:active,
+      .campus-business-banner:active strong,
+      .campus-business-ai:active {
+        transform: translateY(1px) scale(.985);
+      }
+      .campus-business-status {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        align-items: stretch;
+      }
+      .campus-business-score,
+      .campus-business-metrics,
+      .campus-business-shortcut,
+      .campus-business-feed-card,
+      .campus-business-banner {
+        border: 1px solid rgba(255,255,255,.13);
+        background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.06));
+        box-shadow: 0 18px 46px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.14);
+        backdrop-filter: blur(20px) saturate(1.2);
+        -webkit-backdrop-filter: blur(20px) saturate(1.2);
+      }
+      .campus-business-score {
+        min-height: 180px;
+        padding: 22px;
+        border-radius: 28px;
+        display: grid;
+        gap: 14px;
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(143,216,255,.2), transparent 34%),
+          radial-gradient(circle at 86% 78%, rgba(255,216,229,.12), transparent 32%),
+          linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+      }
+      .campus-business-score::after {
+        content: "";
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,.16);
+        background: conic-gradient(from 145deg, rgba(143,216,255,.9), rgba(255,216,229,.55), rgba(255,255,255,.14), rgba(143,216,255,.9));
+        -webkit-mask: radial-gradient(circle, transparent 52%, #000 54%);
+        mask: radial-gradient(circle, transparent 52%, #000 54%);
+        opacity: .62;
+        pointer-events: none;
+      }
+      .campus-business-score small,
+      .campus-business-shortcut small,
+      .campus-business-feed-card small {
+        color: rgba(226,238,255,.58);
+        font-weight: 750;
+      }
+      .campus-business-score strong {
+        font-size: clamp(3.6rem, 8vw, 5.8rem);
+        line-height: .88;
+        letter-spacing: 0;
+        width: fit-content;
+        background: linear-gradient(180deg,#fff 0%,#d8ecff 56%,#f5d5df 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 20px 56px rgba(143,216,255,.2);
+      }
+      .campus-business-score strong span {
+        font-size: 1.1rem;
+        color: rgba(226,238,255,.7);
+        -webkit-text-fill-color: rgba(226,238,255,.7);
+      }
+      .campus-business-score p {
+        max-width: 520px;
+        margin: 0;
+        color: rgba(226,238,255,.74);
+        line-height: 1.7;
+      }
+      .campus-business-metrics {
+        padding: 18px;
+        border-radius: 28px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.055)),
+          radial-gradient(circle at 50% 0%, rgba(255,255,255,.1), transparent 46%);
+      }
+      .campus-business-meter {
+        display: grid;
+        gap: 9px;
+        justify-items: center;
+        align-content: end;
+        min-height: 138px;
+        padding: 12px 6px;
+        border-radius: 20px;
+        background: rgba(255,255,255,.06);
+        transition: transform .2s ease, background .2s ease;
+      }
+      .campus-business-meter:hover {
+        transform: translateY(-2px);
+        background: rgba(255,255,255,.09);
+      }
+      .campus-business-meter i {
+        width: 13px;
+        height: 72px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(255,255,255,.28), var(--meter-color));
+        box-shadow: 0 0 28px color-mix(in srgb, var(--meter-color) 48%, transparent);
+        transform-origin: bottom;
+        transform: scaleY(var(--meter-value));
+      }
+      .campus-business-meter b {
+        font-size: 1.25rem;
+      }
+      .campus-business-meter span {
+        color: rgba(226,238,255,.58);
+        font-size: 12px;
+        font-weight: 750;
+      }
+      .campus-business-shortcuts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .campus-business-shortcut {
+        min-height: 118px;
+        padding: 15px;
+        border-radius: 24px;
+        display: grid;
+        gap: 8px;
+        text-decoration: none;
+        color: rgba(245,248,255,.92);
+        position: relative;
+        overflow: hidden;
+        transition: transform .22s ease, border-color .22s ease, background .22s ease, box-shadow .22s ease;
+      }
+      .campus-business-shortcut::after,
+      .campus-business-feed-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,.13), transparent 44%);
+        opacity: 0;
+        transition: opacity .22s ease;
+        pointer-events: none;
+      }
+      .campus-business-shortcut:hover,
+      .campus-business-feed-card:hover,
+      .campus-business-banner:hover {
+        transform: translateY(-2px);
+        border-color: rgba(143,216,255,.34);
+        background: linear-gradient(180deg, rgba(255,255,255,.17), rgba(255,255,255,.08));
+        box-shadow: 0 22px 58px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.18);
+      }
+      .campus-business-shortcut:hover::after,
+      .campus-business-feed-card:hover::after {
+        opacity: 1;
+      }
+      .campus-business-icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        color: #07111f !important;
+        -webkit-text-fill-color: #07111f;
+        background: linear-gradient(150deg, #a8ecff, #fff 52%, #ffd8e5);
+        font-size: 15px;
+        font-weight: 950;
+        box-shadow: 0 12px 30px rgba(143,216,255,.14);
+      }
+      .campus-business-shortcut:nth-child(3n + 2) .campus-business-icon {
+        background: linear-gradient(150deg, #ffe5a8, #fff 52%, #c6f7e6);
+      }
+      .campus-business-shortcut:nth-child(3n) .campus-business-icon {
+        background: linear-gradient(150deg, #c7d2ff, #fff 52%, #ffd6f1);
+      }
+      .campus-business-shortcut b {
+        font-size: 1rem;
+      }
+      .campus-business-badge {
+        position: absolute;
+        top: 13px;
+        right: 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 26px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        color: #07111f;
+        -webkit-text-fill-color: #07111f;
+        background: linear-gradient(180deg,#fff,#ffe2eb);
+        font-size: 11px;
+        font-weight: 950;
+        box-shadow: 0 10px 24px rgba(255,216,229,.18);
+      }
+      .campus-business-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 96px;
+        padding: 18px 20px;
+        border-radius: 28px;
+        color: rgba(245,248,255,.94);
+        text-decoration: none;
+        overflow: hidden;
+        position: relative;
+      }
+      .campus-business-banner::after {
+        content: "";
+        position: absolute;
+        inset: -70% -10% auto auto;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(143,216,255,.32), transparent 66%);
+        pointer-events: none;
+      }
+      .campus-business-banner h4 {
+        margin: 0 0 6px;
+        font-size: 1.1rem;
+      }
+      .campus-business-banner p {
+        margin: 0;
+        color: rgba(226,238,255,.68);
+        line-height: 1.55;
+      }
+      .campus-business-banner strong {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        text-decoration: none;
+        z-index: 1;
+      }
+      .campus-business-channels {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 2px 2px 8px;
+        scrollbar-width: none;
+      }
+      .campus-business-channels::-webkit-scrollbar {
+        display: none;
+      }
+      .campus-business-channel {
+        flex: 0 0 auto;
+        border: 1px solid rgba(255,255,255,.13);
+        border-radius: 999px;
+        padding: 10px 15px;
+        color: rgba(226,238,255,.72);
+        background: rgba(255,255,255,.07);
+        font-weight: 850;
+        transition: transform .18s ease, border-color .18s ease, background .18s ease;
+      }
+      .campus-business-channel:hover {
+        transform: translateY(-1px);
+        border-color: rgba(255,255,255,.24);
+        background: rgba(255,255,255,.11);
+      }
+      .campus-business-channel.is-active {
+        color: #07111f !important;
+        -webkit-text-fill-color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+      }
+      .campus-business-feed {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .campus-business-feed-card {
+        min-height: 150px;
+        padding: 16px;
+        border-radius: 24px;
+        display: grid;
+        gap: 10px;
+        align-content: space-between;
+        color: rgba(245,248,255,.92);
+        text-decoration: none;
+        position: relative;
+        overflow: hidden;
+      }
+      .campus-business-feed-card b {
+        font-size: 1.05rem;
+      }
+      .campus-business-feed-card p {
+        margin: 0;
+        color: rgba(226,238,255,.64);
+        line-height: 1.55;
+      }
+      .campus-business-feed-tag {
+        width: fit-content;
+        border-radius: 999px;
+        padding: 7px 10px;
+        background: rgba(143,216,255,.12);
+        color: rgba(180,231,255,.9);
+        font-size: 12px;
+        font-weight: 850;
+      }
+      .campus-business-ai {
+        position: fixed;
+        right: max(18px, env(safe-area-inset-right));
+        bottom: calc(126px + env(safe-area-inset-bottom));
+        z-index: 34;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 98px;
+        min-height: 54px;
+        text-decoration: none;
+        box-shadow: 0 18px 52px rgba(143,216,255,.24), 0 8px 18px rgba(0,0,0,.22);
+      }
+      body:not([data-campus-route="/"]) .campus-business-ai {
+        display: none;
+      }
+      body[data-campus-route="/report"] #root {
+        display: none !important;
+      }
+      .campus-profile-compat-panel {
+        margin: 16px 0;
+        padding: 20px;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.13);
+        background:
+          radial-gradient(circle at 12% 0%, rgba(143,216,255,.16), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+        box-shadow: 0 18px 46px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.14);
+        color: rgba(245,248,255,.92);
+      }
+      .campus-profile-compat-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .campus-profile-compat-head h3 {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+      }
+      .campus-profile-compat-head p {
+        margin: 0;
+        color: rgba(226,238,255,.66);
+        line-height: 1.65;
+      }
+      .campus-profile-compat-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+      }
+      .campus-profile-compat-field {
+        display: grid;
+        gap: 8px;
+      }
+      .campus-profile-compat-field label {
+        color: rgba(226,238,255,.68);
+        font-size: 13px;
+        font-weight: 850;
+      }
+      .campus-profile-compat-field select,
+      .campus-profile-compat-field input {
+        min-height: 52px;
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,.15);
+        background: rgba(255,255,255,.1);
+        color: rgba(255,255,255,.92);
+        padding: 0 14px;
+        outline: none;
+      }
+      .campus-profile-compat-field select option {
+        color: #07111f;
+      }
+      .campus-profile-compat-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+      .campus-profile-compat-actions button,
+      .campus-profile-compat-actions a,
+      .campus-report-actions a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0 18px;
+        border: 0;
+        color: #07111f !important;
+        -webkit-text-fill-color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        font-weight: 900;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .campus-profile-compat-actions a.secondary,
+      .campus-report-actions a.secondary {
+        color: rgba(245,248,255,.9) !important;
+        -webkit-text-fill-color: rgba(245,248,255,.9);
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.09);
+      }
+      .campus-profile-compat-status {
+        min-height: 20px;
+        color: rgba(226,238,255,.66);
+        font-size: 13px;
+      }
+      .campus-profile-compat-status.is-error {
+        color: #ffb4ab;
+      }
+      .campus-report-page {
+        width: min(100% - 28px, 1120px);
+        margin: 22px auto 120px;
+        display: grid;
+        gap: 18px;
+        color: rgba(245,248,255,.94);
+      }
+      .campus-report-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.13);
+        background: rgba(255,255,255,.08);
+        backdrop-filter: blur(20px) saturate(1.2);
+        -webkit-backdrop-filter: blur(20px) saturate(1.2);
+      }
+      .campus-report-nav strong {
+        font-size: 1rem;
+      }
+      .campus-report-nav a {
+        color: rgba(245,248,255,.86);
+        text-decoration: none;
+        font-weight: 850;
+      }
+      .campus-report-hero,
+      .campus-report-card,
+      .campus-report-tip {
+        border: 1px solid rgba(255,255,255,.13);
+        background:
+          radial-gradient(circle at 18% 0%, rgba(143,216,255,.18), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.06));
+        box-shadow: 0 18px 46px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.14);
+        backdrop-filter: blur(20px) saturate(1.2);
+        -webkit-backdrop-filter: blur(20px) saturate(1.2);
+      }
+      .campus-report-hero {
+        min-height: 280px;
+        padding: clamp(22px, 4vw, 34px);
+        border-radius: 34px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(240px, .72fr);
+        gap: 24px;
+        align-items: center;
+      }
+      .campus-report-kicker {
+        margin: 0 0 10px;
+        color: rgba(226,238,255,.64);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      .campus-report-hero h1 {
+        margin: 0;
+        font-size: clamp(2.4rem, 6vw, 5.4rem);
+        line-height: .95;
+        letter-spacing: 0;
+      }
+      .campus-report-hero p {
+        margin: 16px 0 0;
+        max-width: 680px;
+        color: rgba(226,238,255,.72);
+        line-height: 1.75;
+      }
+      .campus-report-score {
+        min-height: 220px;
+        border-radius: 30px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        background:
+          radial-gradient(circle at 50% 35%, rgba(143,216,255,.24), transparent 38%),
+          rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.13);
+      }
+      .campus-report-score strong {
+        font-size: clamp(4.5rem, 10vw, 7rem);
+        line-height: .9;
+      }
+      .campus-report-score span {
+        color: rgba(226,238,255,.66);
+        font-weight: 850;
+      }
+      .campus-report-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .campus-report-chip {
+        border-radius: 999px;
+        padding: 9px 13px;
+        border: 1px solid rgba(255,255,255,.13);
+        background: rgba(255,255,255,.08);
+        color: rgba(245,248,255,.84);
+        font-weight: 850;
+        font-size: 13px;
+      }
+      .campus-report-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .campus-report-card,
+      .campus-report-tip {
+        border-radius: 28px;
+        padding: 20px;
+      }
+      .campus-report-card small,
+      .campus-report-tip small {
+        color: rgba(226,238,255,.56);
+        font-weight: 850;
+      }
+      .campus-report-card h3,
+      .campus-report-tip h3 {
+        margin: 10px 0 8px;
+        font-size: 1.18rem;
+      }
+      .campus-report-card p,
+      .campus-report-tip p {
+        margin: 0;
+        color: rgba(226,238,255,.68);
+        line-height: 1.65;
+      }
+      .campus-report-tips {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .campus-report-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      @media (max-width: 720px) {
+        .campus-business-home {
+          margin-top: 14px;
+          gap: 12px;
+        }
+        .campus-business-home::before {
+          inset: -14px -14px -18px;
+          border-radius: 30px;
+        }
+        .campus-business-heading {
+          align-items: start;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .campus-business-heading h3 {
+          font-size: 1.32rem;
+        }
+        .campus-business-heading p {
+          font-size: .92rem;
+        }
+        .campus-business-live {
+          min-height: 30px;
+          padding: 0 11px;
+        }
+        .campus-business-search {
+          min-height: 54px;
+          padding: 7px 8px 7px 12px;
+          border-radius: 22px;
+        }
+        .campus-business-search span {
+          width: 30px;
+          height: 30px;
+          font-size: 16px;
+        }
+        .campus-business-search input {
+          font-size: 14px;
+        }
+        .campus-business-search button {
+          min-height: 40px;
+          padding: 0 14px;
+        }
+        .campus-business-status {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .campus-business-score {
+          min-height: 146px;
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-business-score::after {
+          width: 72px;
+          height: 72px;
+          right: 16px;
+          top: 18px;
+        }
+        .campus-business-score strong {
+          font-size: 3.4rem;
+        }
+        .campus-business-score p {
+          max-width: 270px;
+          font-size: .9rem;
+          line-height: 1.6;
+        }
+        .campus-business-metrics {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          padding: 8px;
+          gap: 8px;
+          border-radius: 22px;
+        }
+        .campus-business-meter {
+          min-height: 96px;
+          padding: 8px 4px;
+          border-radius: 16px;
+        }
+        .campus-business-meter i {
+          height: 40px;
+          width: 10px;
+        }
+        .campus-business-meter b {
+          font-size: .98rem;
+        }
+        .campus-business-meter span {
+          font-size: 11px;
+        }
+        .campus-business-shortcuts {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .campus-business-shortcut {
+          min-height: 94px;
+          border-radius: 20px;
+          padding: 10px 9px;
+          align-content: center;
+          justify-items: start;
+          gap: 7px;
+        }
+        .campus-business-icon {
+          width: 34px;
+          height: 34px;
+          border-radius: 13px;
+          font-size: 12px;
+        }
+        .campus-business-shortcut b {
+          font-size: .88rem;
+          line-height: 1.15;
+        }
+        .campus-business-shortcut small {
+          display: none;
+        }
+        .campus-business-badge {
+          top: 9px;
+          right: 8px;
+          min-width: 22px;
+          height: 18px;
+          padding: 0 6px;
+          font-size: 10px;
+        }
+        .campus-business-banner {
+          align-items: start;
+          flex-direction: column;
+          min-height: 118px;
+          padding: 15px;
+          border-radius: 24px;
+          gap: 13px;
+        }
+        .campus-business-banner h4 {
+          font-size: 1.02rem;
+        }
+        .campus-business-banner p {
+          font-size: .92rem;
+          line-height: 1.5;
+        }
+        .campus-business-banner strong {
+          width: 100%;
+        }
+        .campus-business-channel {
+          padding: 9px 13px;
+          font-size: 13px;
+        }
+        .campus-business-feed {
+          display: flex;
+          gap: 10px;
+          overflow-x: auto;
+          scroll-snap-type: x mandatory;
+          padding: 1px 2px 8px;
+          margin-left: -2px;
+          margin-right: -2px;
+          scrollbar-width: none;
+        }
+        .campus-business-feed::-webkit-scrollbar {
+          display: none;
+        }
+        .campus-business-feed-card {
+          flex: 0 0 min(82vw, 312px);
+          scroll-snap-align: start;
+          min-height: 136px;
+          border-radius: 22px;
+        }
+        .campus-business-feed-card p {
+          font-size: .93rem;
+          line-height: 1.5;
+        }
+        .campus-business-ai {
+          position: static;
+          justify-self: end;
+          margin-top: -4px;
+          min-width: 86px;
+          min-height: 46px;
+          font-size: 14px;
+        }
+        .campus-profile-compat-panel {
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-profile-compat-head {
+          display: grid;
+          gap: 10px;
+        }
+        .campus-profile-compat-form {
+          grid-template-columns: 1fr;
+        }
+        .campus-profile-compat-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .campus-report-page {
+          width: min(100% - 28px, 430px);
+          margin-top: 14px;
+          gap: 14px;
+        }
+        .campus-report-hero {
+          grid-template-columns: 1fr;
+          min-height: auto;
+          padding: 20px;
+          border-radius: 28px;
+        }
+        .campus-report-score {
+          min-height: 158px;
+          border-radius: 24px;
+        }
+        .campus-report-grid,
+        .campus-report-tips {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .campus-report-card,
+        .campus-report-tip {
+          border-radius: 24px;
+          padding: 16px;
+        }
+        .campus-report-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .campus-business-shortcut {
+          min-height: 88px;
+          padding: 9px 8px;
+        }
+        .campus-business-shortcut b {
+          font-size: .82rem;
+        }
+        .campus-business-icon {
+          width: 31px;
+          height: 31px;
+          border-radius: 12px;
+        }
+        .campus-business-search input {
+          font-size: 13px;
+        }
+        .campus-business-search button {
+          min-height: 38px;
+          padding: 0 12px;
+        }
+      }
+
+      @media (min-width: 721px) and (max-width: 1180px) {
+        .campus-business-shortcuts {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .campus-business-feed {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .campus-business-feed-card {
+          min-height: 126px;
+          border-radius: 22px;
+        }
       }
 
       @media (max-width: 900px) {
@@ -3290,6 +4269,518 @@
     }
   }
 
+  function ensureHomeBusinessModules() {
+    if (window.location.pathname !== "/") {
+      document.querySelector("#campus-home-business")?.remove();
+      return;
+    }
+
+    const homeHero = document.querySelector(".campus-home-hero-card")
+      || document.querySelector("#root h2")?.closest(".apple-card");
+    if (!homeHero) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-home-business");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "campus-home-business";
+      panel.className = "campus-business-home";
+      homeHero.insertAdjacentElement("afterend", panel);
+    }
+
+    const renderKey = buildHomeBusinessRenderKey();
+    if (panel.dataset.renderKey !== renderKey) {
+      panel.dataset.renderKey = renderKey;
+      panel.innerHTML = buildHomeBusinessModulesHtml();
+    }
+
+    bindHomeBusinessModules(panel);
+  }
+
+  function buildHomeBusinessRenderKey() {
+    const userKey = state.user?.id || state.user?._id || state.user?.email || "guest";
+    const school = cleanText(state.user?.school || state.user?.university || "");
+    return `${userKey}:${school}:${getDailyBusinessScore()}`;
+  }
+
+  function getDailyBusinessScore() {
+    const today = new Date().toISOString().slice(0, 10);
+    const seed = `${state.user?.id || state.user?._id || state.user?.email || "guest"}:${today}`;
+    let hash = 0;
+    for (let index = 0; index < seed.length; index += 1) {
+      hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0;
+    }
+    return 72 + (Math.abs(hash) % 19);
+  }
+
+  function buildHomeBusinessModulesHtml() {
+    const school = cleanText(state.user?.school || state.user?.university || "") || "同校";
+    const score = getDailyBusinessScore();
+    const intro = school === "同校"
+      ? "今天适合先看看同校推荐、学习搭子和低压力轻聊，找到聊得来的节奏。"
+      : `今天在 ${school} 的同频信号不错，适合从同校推荐和兴趣搭子开始认识。`;
+    const metrics = [
+      { label: "同校", value: Math.min(96, score + 5), color: "#8fd8ff" },
+      { label: "兴趣", value: Math.max(58, score - 4), color: "#ffd166" },
+      { label: "节奏", value: Math.max(60, score + 1), color: "#a7b8ff" },
+      { label: "活跃", value: Math.max(56, score - 9), color: "#51f2c2" },
+    ];
+    const shortcuts = [
+      { title: "同校匹配", text: "先看同校同频的人", icon: "同", href: "/search.html" },
+      { title: "校园认证", text: "让同学更放心认识你", icon: "证", href: "/upload.html" },
+      { title: "MBTI 档案", text: "用性格类型破冰", icon: "MB", href: "/profile", badge: "新" },
+      { title: "生辰合拍", text: "生日节奏轻松破冰", icon: "生", href: "/profile", badge: "新" },
+      { title: "兴趣星盘", text: "用兴趣找到话题入口", icon: "趣", href: "/profile" },
+      { title: "学习搭子", text: "自习、图书馆、备考", icon: "学", href: "/search.html" },
+      { title: "夜跑搭子", text: "操场散步和运动同伴", icon: "跑", href: "/search.html" },
+      { title: "匿名聊天", text: "先轻松聊，再决定认识", icon: "聊", href: "/matches" },
+      { title: "会员权益", text: "更多推荐和优先曝光", icon: "会", href: "/profile" },
+    ];
+    const channels = ["为你推荐", "同校", "搭子", "MBTI", "生辰", "活动", "树洞", "心理"];
+    const feed = [
+      { title: "今晚操场夜跑局", tag: "运动搭子", text: "适合想轻松见一面的人，先从一圈操场开始。", href: "/search.html" },
+      { title: "图书馆自习同频", tag: "学习搭子", text: "找一个安静坐得住的人，把今天的任务一起完成。", href: "/search.html" },
+      { title: "MBTI 同频话题", tag: "性格破冰", text: "用性格类型找开场白，先聊舒服，再慢慢认识。", href: "/profile" },
+      { title: "生辰合拍小卡", tag: "生日节奏", text: "把生日当作轻松话题入口，找到更自然的聊天节奏。", href: "/profile" },
+      { title: "低压力匿名轻聊", tag: "树洞聊天", text: "不急着展示身份，先聊聊最近的校园生活。", href: "/matches" },
+    ];
+
+    return `
+      <div class="campus-business-heading">
+        <div>
+          <h3>今天可以从这里开始</h3>
+          <p>${escapeHtml(intro)}</p>
+        </div>
+        <span class="campus-business-live">今日推荐已更新</span>
+      </div>
+
+      <form class="campus-business-search" data-business-search>
+        <span aria-hidden="true">找</span>
+        <input name="keyword" type="search" autocomplete="off" placeholder="找同校、MBTI、生辰、搭子、树洞话题" />
+        <button type="submit">发现</button>
+      </form>
+
+      <div class="campus-business-status">
+        <div class="campus-business-score">
+          <small>今日合拍度</small>
+          <strong>${score}<span> 分</span></strong>
+          <p>系统会优先帮你看同校、兴趣和相处节奏更接近的人。完善资料后，这个结果会更准。</p>
+        </div>
+        <div class="campus-business-metrics" aria-label="今日推荐指标">
+          ${metrics.map((item) => `
+            <div class="campus-business-meter" style="--meter-value:${Math.max(.2, item.value / 100)};--meter-color:${item.color}">
+              <i aria-hidden="true"></i>
+              <b>${item.value}</b>
+              <span>${escapeHtml(item.label)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="campus-business-shortcuts" aria-label="常用功能">
+        ${shortcuts.map((item) => `
+          <a class="campus-business-shortcut" href="${escapeAttr(item.href)}">
+            <span class="campus-business-icon">${escapeHtml(item.icon)}</span>
+            ${item.badge ? `<span class="campus-business-badge">${escapeHtml(item.badge)}</span>` : ""}
+            <b>${escapeHtml(item.title)}</b>
+            <small>${escapeHtml(item.text)}</small>
+          </a>
+        `).join("")}
+      </div>
+
+      <a class="campus-business-banner" href="/report">
+        <div>
+          <h4>生成你的校园合拍度报告</h4>
+          <p>补全学校、兴趣和想认识的人，首页会变成更懂你的推荐入口。</p>
+        </div>
+        <strong>查看报告</strong>
+      </a>
+
+      <div class="campus-business-channels" aria-label="推荐频道">
+        ${channels.map((label, index) => `
+          <span class="campus-business-channel${index === 0 ? " is-active" : ""}">${escapeHtml(label)}</span>
+        `).join("")}
+      </div>
+
+      <div class="campus-business-feed" aria-label="今日推荐内容">
+        ${feed.map((item) => `
+          <a class="campus-business-feed-card" href="${escapeAttr(item.href)}">
+            <span class="campus-business-feed-tag">${escapeHtml(item.tag)}</span>
+            <b>${escapeHtml(item.title)}</b>
+            <p>${escapeHtml(item.text)}</p>
+          </a>
+        `).join("")}
+      </div>
+
+      <a class="campus-business-ai" href="/search.html" aria-label="打开 AI 问问">AI 问问</a>
+    `;
+  }
+
+  function bindHomeBusinessModules(panel) {
+    if (panel.dataset.businessBound === "true") {
+      return;
+    }
+
+    panel.dataset.businessBound = "true";
+    panel.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-business-search]");
+      if (!form) {
+        return;
+      }
+
+      event.preventDefault();
+      const keyword = cleanText(new FormData(form).get("keyword"));
+      if (keyword) {
+        sessionStorage.setItem("campus-search-keyword", keyword);
+      } else {
+        sessionStorage.removeItem("campus-search-keyword");
+      }
+      startHomeToMatchTransition({
+        source: "home-business-search",
+        title: "打开发现",
+        text: keyword ? `正在寻找：${keyword}` : "看看今天的同频推荐",
+      });
+    });
+  }
+
+  function ensureProfileCompatibilityPanel() {
+    if (window.location.pathname !== "/profile") {
+      document.querySelector("#campus-profile-compat")?.remove();
+      return;
+    }
+
+    const profileForm = document.querySelector(".campus-profile-form-card");
+    if (!profileForm) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-profile-compat");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "campus-profile-compat";
+      panel.className = "campus-profile-compat-panel";
+      profileForm.insertAdjacentElement("afterend", panel);
+    }
+
+    const renderKey = `${state.user?.mbti || ""}:${state.user?.birthDate || ""}`;
+    if (panel.dataset.renderKey !== renderKey) {
+      panel.dataset.renderKey = renderKey;
+      panel.innerHTML = buildProfileCompatibilityPanelHtml(state.user || {});
+    }
+
+    bindProfileCompatibilityPanel(panel);
+  }
+
+  function buildProfileCompatibilityPanelHtml(user) {
+    const mbti = normalizeClientMbti(user.mbti);
+    const birthDate = normalizeClientBirthDate(user.birthDate || user.birthday);
+
+    return `
+      <div class="campus-profile-compat-head">
+        <div>
+          <h3>合拍资料</h3>
+          <p>填写 MBTI 和生日后，系统会帮你生成更自然的破冰话题和校园合拍报告。</p>
+        </div>
+        <a class="secondary" href="/report">查看报告</a>
+      </div>
+      <form class="campus-profile-compat-form" data-compat-profile-form>
+        <div class="campus-profile-compat-field">
+          <label for="campus-mbti-select">MBTI</label>
+          <select id="campus-mbti-select" name="mbti">
+            <option value="">先不填写</option>
+            ${MBTI_TYPES.map((type) => `<option value="${type}" ${type === mbti ? "selected" : ""}>${type}</option>`).join("")}
+          </select>
+        </div>
+        <div class="campus-profile-compat-field">
+          <label for="campus-birth-date">生日</label>
+          <input id="campus-birth-date" name="birthDate" type="date" value="${escapeAttr(birthDate)}" />
+        </div>
+        <div class="campus-profile-compat-actions">
+          <button type="submit">保存合拍资料</button>
+          <a class="secondary" href="/report">生成合拍报告</a>
+          <span class="campus-profile-compat-status" data-compat-status></span>
+        </div>
+      </form>
+    `;
+  }
+
+  function bindProfileCompatibilityPanel(panel) {
+    const form = panel.querySelector("[data-compat-profile-form]");
+    if (!form || form.dataset.bound === "true") {
+      return;
+    }
+
+    form.dataset.bound = "true";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const status = panel.querySelector("[data-compat-status]");
+      const submit = form.querySelector('button[type="submit"]');
+      status?.classList.remove("is-error");
+      if (status) {
+        status.textContent = "正在保存...";
+      }
+      if (submit) {
+        submit.disabled = true;
+      }
+
+      try {
+        const formData = new FormData(form);
+        const mbti = normalizeClientMbti(formData.get("mbti"));
+        const birthDate = normalizeClientBirthDate(formData.get("birthDate"));
+        const payload = await requestApi("/users/profile", {
+          method: "PUT",
+          body: JSON.stringify({ mbti, birthDate }),
+        });
+        state.user = payload.data?.user || state.user;
+        panel.dataset.renderKey = `${state.user?.mbti || ""}:${state.user?.birthDate || ""}`;
+        if (status) {
+          status.textContent = "已保存";
+        }
+      } catch (error) {
+        status?.classList.add("is-error");
+        if (status) {
+          status.textContent = error.message || "保存失败，请稍后再试";
+        }
+      } finally {
+        if (submit) {
+          submit.disabled = false;
+        }
+      }
+    });
+  }
+
+  function ensureCompatibilityReportPage() {
+    if (window.location.pathname !== "/report") {
+      cleanupCompatibilityReportPage();
+      return;
+    }
+
+    let page = document.querySelector("#campus-compat-report");
+    if (!page) {
+      page = document.createElement("main");
+      page.id = "campus-compat-report";
+      page.className = "campus-report-page";
+      const root = document.querySelector("#root");
+      if (root?.parentNode) {
+        root.parentNode.insertBefore(page, root);
+      } else {
+        document.body.appendChild(page);
+      }
+    }
+
+    const renderKey = JSON.stringify({
+      id: state.user?.id || state.user?._id || state.user?.email || "",
+      school: state.user?.school || state.user?.university || "",
+      mbti: state.user?.mbti || "",
+      birthDate: state.user?.birthDate || state.user?.birthday || "",
+      score: getDailyBusinessScore(),
+    });
+    if (page.dataset.renderKey !== renderKey) {
+      page.dataset.renderKey = renderKey;
+      page.innerHTML = buildCompatibilityReportHtml(state.user || {});
+    }
+  }
+
+  function cleanupCompatibilityReportPage() {
+    document.querySelector("#campus-compat-report")?.remove();
+  }
+
+  function buildCompatibilityReportHtml(user) {
+    const school = cleanText(user.school || user.university) || "你的学校";
+    const mbti = normalizeClientMbti(user.mbti);
+    const birthDate = normalizeClientBirthDate(user.birthDate || user.birthday);
+    const score = getCompatibilityScore(user);
+    const sign = getZodiacSign(birthDate);
+    const season = getBirthSeason(birthDate);
+    const mbtiTone = getMbtiTone(mbti);
+    const birthLabel = birthDate ? `${formatBirthDate(birthDate)} · ${sign}` : "填写生日后生成";
+    const completionTip = mbti && birthDate
+      ? "资料已经够用了，接下来可以多补充兴趣、想认识的人和常去地点，让推荐更贴近真实校园生活。"
+      : "去个人资料补上 MBTI 和生日，合拍报告会生成更具体的开场白、节奏建议和推荐线索。";
+
+    return `
+      <nav class="campus-report-nav" aria-label="合拍报告导航">
+        <strong>校园匹配</strong>
+        <div>
+          <a href="/">首页</a>
+          <a href="/profile">个人资料</a>
+        </div>
+      </nav>
+
+      <section class="campus-report-hero">
+        <div>
+          <p class="campus-report-kicker">CAMPUS MATCH REPORT</p>
+          <h1>校园合拍报告</h1>
+          <p>根据你的学校、资料完整度、MBTI 和生日节奏，整理一份更适合当下使用的认识新朋友路线。</p>
+          <div class="campus-report-chips">
+            <span class="campus-report-chip">${escapeHtml(school)}</span>
+            <span class="campus-report-chip">${escapeHtml(mbti || "MBTI 待填写")}</span>
+            <span class="campus-report-chip">${escapeHtml(birthLabel)}</span>
+            <span class="campus-report-chip">${escapeHtml(season)}</span>
+          </div>
+        </div>
+        <div class="campus-report-score" aria-label="今日合拍度">
+          <div>
+            <strong>${score}</strong>
+            <span>今日合拍度</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="campus-report-grid" aria-label="合拍分析">
+        <article class="campus-report-card">
+          <small>同校基础</small>
+          <h3>先从共同场景开始</h3>
+          <p>${escapeHtml(school)} 的同学更容易从课程、图书馆、运动和活动聊起。先找共同场景，比一上来硬聊兴趣更自然。</p>
+        </article>
+        <article class="campus-report-card">
+          <small>性格破冰</small>
+          <h3>${escapeHtml(mbti || "补上 MBTI 更准确")}</h3>
+          <p>${escapeHtml(mbtiTone)}</p>
+        </article>
+        <article class="campus-report-card">
+          <small>生辰节奏</small>
+          <h3>${escapeHtml(birthDate ? `${sign} · ${season}` : "生日待填写")}</h3>
+          <p>${birthDate ? "可以把生日、星座和近期状态当作轻松话题，不用把它做成判断标准，重点是让开场更有温度。" : "填写生日后，这里会给你更适合当天状态的聊天节奏和话题建议。"}</p>
+        </article>
+      </section>
+
+      <section class="campus-report-tips" aria-label="今日建议">
+        <article class="campus-report-tip">
+          <small>今日开场白</small>
+          <h3>从低压力问题开始</h3>
+          <p>可以试试：“你最近在学校最常去哪里？我想找一个适合学习或散步的地方。”</p>
+        </article>
+        <article class="campus-report-tip">
+          <small>完善建议</small>
+          <h3>让推荐更懂你</h3>
+          <p>${escapeHtml(completionTip)}</p>
+        </article>
+      </section>
+
+      <div class="campus-report-actions">
+        <a href="/search.html">去发现同校同学</a>
+        <a class="secondary" href="/profile">完善合拍资料</a>
+      </div>
+    `;
+  }
+
+  function normalizeClientMbti(value) {
+    const mbti = cleanText(value).toUpperCase();
+    return /^(I|E)(N|S)(F|T)(J|P)$/.test(mbti) ? mbti : "";
+  }
+
+  function normalizeClientBirthDate(value) {
+    const raw = cleanText(value);
+    if (!raw) {
+      return "";
+    }
+
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return "";
+    }
+
+    const date = new Date(`${raw}T00:00:00.000Z`);
+    return Number.isFinite(date.getTime())
+      && date.getUTCFullYear() === Number(match[1])
+      && date.getUTCMonth() + 1 === Number(match[2])
+      && date.getUTCDate() === Number(match[3])
+      ? raw
+      : "";
+  }
+
+  function formatBirthDate(value) {
+    const birthDate = normalizeClientBirthDate(value);
+    if (!birthDate) {
+      return "生日待填写";
+    }
+
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${birthDate}T00:00:00.000Z`));
+  }
+
+  function getCompatibilityScore(user) {
+    let score = getDailyBusinessScore();
+    if (normalizeClientMbti(user?.mbti)) {
+      score += 3;
+    }
+    if (normalizeClientBirthDate(user?.birthDate || user?.birthday)) {
+      score += 3;
+    }
+    if (Array.isArray(user?.sceneTags) && user.sceneTags.length) {
+      score += 2;
+    }
+    if (Array.isArray(user?.matchModes) && user.matchModes.length) {
+      score += 2;
+    }
+    return Math.min(96, Math.max(68, score));
+  }
+
+  function getZodiacSign(value) {
+    const birthDate = normalizeClientBirthDate(value);
+    if (!birthDate) {
+      return "星座待填写";
+    }
+
+    const [, monthText, dayText] = birthDate.match(/^\d{4}-(\d{2})-(\d{2})$/) || [];
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const signs = [
+      [120, "摩羯座"],
+      [219, "水瓶座"],
+      [321, "双鱼座"],
+      [420, "白羊座"],
+      [521, "金牛座"],
+      [622, "双子座"],
+      [723, "巨蟹座"],
+      [823, "狮子座"],
+      [923, "处女座"],
+      [1024, "天秤座"],
+      [1123, "天蝎座"],
+      [1222, "射手座"],
+      [1232, "摩羯座"],
+    ];
+    const key = month * 100 + day;
+    return signs.find(([limit]) => key < limit)?.[1] || "摩羯座";
+  }
+
+  function getBirthSeason(value) {
+    const birthDate = normalizeClientBirthDate(value);
+    if (!birthDate) {
+      return "生日节奏待填写";
+    }
+
+    const month = Number(birthDate.slice(5, 7));
+    if (month >= 3 && month <= 5) {
+      return "春季节奏";
+    }
+    if (month >= 6 && month <= 8) {
+      return "夏季节奏";
+    }
+    if (month >= 9 && month <= 11) {
+      return "秋季节奏";
+    }
+    return "冬季节奏";
+  }
+
+  function getMbtiTone(type) {
+    if (!type) {
+      return "填写后可以生成更具体的破冰话题，比如适合直接邀约、慢慢聊天，还是先从共同任务开始。";
+    }
+
+    const energy = type[0] === "E" ? "你更适合从轻松互动和共同活动切入" : "你更适合从安静、稳定、有边界的话题切入";
+    const info = type[1] === "N" ? "，可以多聊想法、计划和近期灵感" : "，可以多聊课程、生活习惯和真实场景";
+    const decision = type[2] === "F" ? "，表达感受会比直接分析更容易拉近距离" : "，清楚说明想法和安排会让对方更有安全感";
+    const rhythm = type[3] === "J" ? "，节奏上适合提前约好时间。" : "，节奏上适合先轻松试探，再自然推进。";
+    return `${energy}${info}${decision}${rhythm}`;
+  }
+
   function ensureLoginStory() {
     if (window.location.pathname !== "/login") {
       cleanupLoginStory();
@@ -4099,6 +5590,7 @@
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
       document.querySelector("#campus-privacy-panel")?.remove();
+      document.querySelector("#campus-profile-compat")?.remove();
       closeAvatarSourceSheet();
       return;
     }
@@ -4112,6 +5604,7 @@
     refreshProfileMembershipDecorations();
     ensureProfileAvatarUploader();
     ensureProfilePrivacyPanel();
+    ensureProfileCompatibilityPanel();
   }
 
   function ensureProfileAvatarUploader() {
@@ -4643,7 +6136,9 @@
     ensureLegalLinksAndConsent();
     ensureLoginStory();
     await refreshUser();
+    ensureCompatibilityReportPage();
     tagResponsiveRouteSections();
+    ensureHomeBusinessModules();
     ensureProfileEnhancements();
     window.CampusUniversityOptions?.populateSelects?.(document);
     enhanceRegisterSchoolInput();

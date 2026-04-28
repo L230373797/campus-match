@@ -373,6 +373,11 @@
         height: auto;
         display: flex;
       }
+      .campus-story-carousel .swiper-slide.campus-login-card,
+      .campus-story-carousel .swiper-slide.campus-plan-card {
+        flex-direction: column;
+        align-items: stretch;
+      }
       .campus-story-carousel .campus-login-card,
       .campus-story-carousel .campus-plan-card {
         width: 100%;
@@ -576,6 +581,7 @@
       .campus-plan-badge {
         display: inline-flex;
         align-items: center;
+        align-self: flex-start;
         min-height: 28px;
         padding: 0 10px;
         border-radius: 999px;
@@ -584,6 +590,7 @@
         font-size: 12px;
         font-weight: 700;
         margin-bottom: 14px;
+        white-space: nowrap;
       }
       .campus-plan-price {
         display: flex;

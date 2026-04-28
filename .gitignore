@@ -9,6 +9,7 @@ netlify-dev.*.log
 netlify-dev.pid
 standalone*.log
 playwright-test-email.txt
+test-results/
 deno.lock
 local-data/
 deploy/generated/

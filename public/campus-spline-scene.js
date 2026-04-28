@@ -1,67 +1,163 @@
-import {
-  ACESFilmicToneMapping,
-  AmbientLight,
-  Clock,
-  Color,
-  InstancedMesh,
-  MathUtils,
-  MeshStandardMaterial,
-  Object3D,
-  PerspectiveCamera,
-  PointLight,
-  Raycaster,
-  Scene,
-  SphereGeometry,
-  SRGBColorSpace,
-  Vector2,
-  Vector3,
-  WebGLRenderer,
-} from "./assets/vendor/three.module.js";
-
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)");
 const lowPowerDevice = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const lowDetail = coarsePointer.matches || lowPowerDevice;
-const palette = [0xdff7ff, 0x8ccfff, 0xb58cff, 0xffa9d8, 0xf5f7ff];
-const dummy = new Object3D();
-const raycaster = new Raycaster();
-const planePoint = new Vector3();
-const pointer = new Vector2(0, 0);
-const targetPointer = new Vector2(0, 0);
-const worldPointer = new Vector3(0, 0, 0);
 
 let stage;
 let canvas;
-let renderer;
-let scene;
-let camera;
-let clock;
-let mesh;
-let material;
-let ambientLight;
-let pointerLight;
+let gl;
+let program;
+let vertexBuffer;
+let active = false;
 let rafId = 0;
 let resizeRafId = 0;
-let active = false;
+let lastFrameTime = 0;
+let startTime = performance.now();
+let pixelRatio = 1;
+let viewportWidth = 1;
+let viewportHeight = 1;
+let scrollProgress = 0;
 let matchFocus = 0;
 let matchFocusTarget = 0;
-let lastFrameTime = 0;
-let scrollProgress = 0;
-let count = 0;
-let positions;
-let velocities;
-let sizes;
-let maxX = 8;
-let maxY = 5;
-let maxZ = 3;
+let routeName = window.location.pathname;
+let rayOrigin = "top-center";
+let targetPointer = { x: 0.5, y: 0.5 };
+let smoothPointer = { x: 0.5, y: 0.5 };
 let orientationListening = false;
 let orientationPromptBound = false;
 let orientationBaseline = null;
 let orientationLastAt = 0;
 let orientationStatus = "unavailable";
 
+const uniforms = Object.create(null);
+
+const vertexShaderSource = `
+attribute vec2 position;
+varying vec2 vUv;
+
+void main() {
+  vUv = position * 0.5 + 0.5;
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+
+const fragmentShaderSource = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+uniform float iTime;
+uniform vec2 iResolution;
+uniform vec2 rayPos;
+uniform vec2 rayDir;
+uniform vec3 raysColor;
+uniform vec3 accentColor;
+uniform float raysSpeed;
+uniform float lightSpread;
+uniform float rayLength;
+uniform float pulsating;
+uniform float fadeDistance;
+uniform float saturation;
+uniform vec2 mousePos;
+uniform float mouseInfluence;
+uniform float noiseAmount;
+uniform float distortion;
+uniform float rayIntensity;
+uniform float rayOpacity;
+uniform float vignetteStrength;
+
+varying vec2 vUv;
+
+float noise(vec2 st) {
+  return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+float rayStrength(vec2 raySource, vec2 rayRefDirection, vec2 coord, float seedA, float seedB, float speed) {
+  vec2 sourceToCoord = coord - raySource;
+  vec2 dirNorm = normalize(sourceToCoord);
+  float cosAngle = dot(dirNorm, rayRefDirection);
+  float distortedAngle = cosAngle + distortion * sin(iTime * 2.0 + length(sourceToCoord) * 0.01) * 0.2;
+  float spreadFactor = pow(max(distortedAngle, 0.0), 1.0 / max(lightSpread, 0.001));
+  float distance = length(sourceToCoord);
+  float maxDistance = iResolution.x * rayLength;
+  float lengthFalloff = clamp((maxDistance - distance) / maxDistance, 0.0, 1.0);
+  float fadeFalloff = clamp((iResolution.x * fadeDistance - distance) / (iResolution.x * fadeDistance), 0.5, 1.0);
+  float pulse = pulsating > 0.5 ? (0.82 + 0.18 * sin(iTime * speed * 3.0)) : 1.0;
+  float baseStrength = clamp(
+    (0.45 + 0.15 * sin(distortedAngle * seedA + iTime * speed)) +
+    (0.30 + 0.20 * cos(-distortedAngle * seedB + iTime * speed)),
+    0.0,
+    1.0
+  );
+
+  return baseStrength * lengthFalloff * fadeFalloff * spreadFactor * pulse;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 coord = vec2(fragCoord.x, iResolution.y - fragCoord.y);
+  vec2 finalRayDir = rayDir;
+
+  if (mouseInfluence > 0.0) {
+    vec2 mouseScreenPos = mousePos * iResolution.xy;
+    vec2 mouseDirection = normalize(mouseScreenPos - rayPos);
+    finalRayDir = normalize(mix(rayDir, mouseDirection, mouseInfluence));
+  }
+
+  vec4 rays1 = vec4(1.0) * rayStrength(rayPos, finalRayDir, coord, 36.2214, 21.11349, 1.5 * raysSpeed);
+  vec4 rays2 = vec4(1.0) * rayStrength(rayPos, finalRayDir, coord, 22.3991, 18.0234, 1.1 * raysSpeed);
+  vec4 rays3 = vec4(1.0) * rayStrength(rayPos + vec2(iResolution.x * 0.18, 0.0), normalize(finalRayDir + vec2(-0.12, 0.04)), coord, 18.174, 31.73, 0.78 * raysSpeed);
+
+  fragColor = rays1 * 0.48 + rays2 * 0.34 + rays3 * 0.22;
+
+  if (noiseAmount > 0.0) {
+    float n = noise(coord * 0.01 + iTime * 0.1);
+    fragColor.rgb *= 1.0 - noiseAmount + noiseAmount * n;
+  }
+
+  float topBrightness = 1.0 - (coord.y / iResolution.y);
+  fragColor.x *= 0.12 + topBrightness * 0.82;
+  fragColor.y *= 0.32 + topBrightness * 0.62;
+  fragColor.z *= 0.50 + topBrightness * 0.52;
+
+  if (saturation != 1.0) {
+    float gray = dot(fragColor.rgb, vec3(0.299, 0.587, 0.114));
+    fragColor.rgb = mix(vec3(gray), fragColor.rgb, saturation);
+  }
+
+  float accentMix = smoothstep(0.15, 0.95, vUv.x + vUv.y * 0.4);
+  vec3 finalColor = mix(raysColor, accentColor, accentMix * 0.22);
+  float vignette = 1.0 - distance(vUv, vec2(0.52, 0.48)) * vignetteStrength;
+
+  fragColor.rgb *= finalColor * rayIntensity * max(vignette, 0.2);
+  fragColor.a *= rayOpacity;
+}
+
+void main() {
+  vec4 color;
+  mainImage(color, gl_FragCoord.xy);
+  gl_FragColor = color;
+}`;
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  return [
+    parseInt(value.slice(0, 2), 16) / 255,
+    parseInt(value.slice(2, 4), 16) / 255,
+    parseInt(value.slice(4, 6), 16) / 255,
+  ];
+}
+
+function frameBudget() {
+  if (prefersReducedMotion.matches) {
+    return 1000;
+  }
+
+  return lowDetail ? 1000 / 36 : 1000 / 54;
 }
 
 function angleDelta(value, baseline) {
@@ -71,8 +167,82 @@ function angleDelta(value, baseline) {
   return delta;
 }
 
-function randomSpread(range) {
-  return (Math.random() - 0.5) * range;
+function getAnchorAndDir(origin, width, height) {
+  const outside = 0.2;
+  switch (origin) {
+    case "top-left":
+      return { anchor: [0, -outside * height], dir: [0, 1] };
+    case "top-right":
+      return { anchor: [width, -outside * height], dir: [0, 1] };
+    case "left":
+      return { anchor: [-outside * width, 0.5 * height], dir: [1, 0] };
+    case "right":
+      return { anchor: [(1 + outside) * width, 0.5 * height], dir: [-1, 0] };
+    case "bottom-left":
+      return { anchor: [0, (1 + outside) * height], dir: [0, -1] };
+    case "bottom-center":
+      return { anchor: [0.5 * width, (1 + outside) * height], dir: [0, -1] };
+    case "bottom-right":
+      return { anchor: [width, (1 + outside) * height], dir: [0, -1] };
+    default:
+      return { anchor: [0.5 * width, -outside * height], dir: [0, 1] };
+  }
+}
+
+function routeConfig(route) {
+  if (route === "/search.html") {
+    return {
+      origin: "top-left",
+      focus: 0.85,
+      color: "#f7fbff",
+      accent: "#91d8ff",
+      intensity: 0.86,
+      opacity: 0.78,
+      spread: 0.95,
+      speed: 0.58,
+      distortion: 0.065,
+    };
+  }
+
+  if (route === "/upload.html") {
+    return {
+      origin: "top-right",
+      focus: 0.5,
+      color: "#f9fbff",
+      accent: "#ffbddb",
+      intensity: 0.9,
+      opacity: 0.8,
+      spread: 0.98,
+      speed: 0.54,
+      distortion: 0.07,
+    };
+  }
+
+  if (route === "/login") {
+    return {
+      origin: "top-center",
+      focus: 0.18,
+      color: "#ffffff",
+      accent: "#b9ccff",
+      intensity: 0.88,
+      opacity: 0.76,
+      spread: 0.9,
+      speed: 0.52,
+      distortion: 0.075,
+    };
+  }
+
+  return {
+    origin: "top-center",
+    focus: 0,
+    color: "#ffffff",
+    accent: "#acdfff",
+    intensity: 0.92,
+    opacity: 0.82,
+    spread: 0.92,
+    speed: 0.56,
+    distortion: 0.08,
+  };
 }
 
 function ensureStageStyles() {
@@ -92,10 +262,12 @@ function ensureStageStyles() {
       opacity: 0;
       contain: strict;
       background:
-        radial-gradient(circle at 20% 18%, rgba(98, 171, 255, .24), transparent 31%),
-        radial-gradient(circle at 78% 12%, rgba(255, 141, 214, .18), transparent 28%),
-        linear-gradient(135deg, #050711, #0a1024 46%, #171126);
+        radial-gradient(circle at 18% 16%, rgba(140, 216, 255, .18), transparent 32%),
+        radial-gradient(circle at 82% 14%, rgba(190, 168, 255, .14), transparent 31%),
+        radial-gradient(circle at 50% 112%, rgba(52, 102, 151, .18), transparent 42%),
+        linear-gradient(135deg, #050711, #07101d 48%, #130f21);
       transition: opacity .42s ease;
+      isolation: isolate;
     }
     #campus-spline-stage.is-active { opacity: 1; }
     #campus-spline-canvas {
@@ -104,14 +276,29 @@ function ensureStageStyles() {
       display: block;
       transform: translateZ(0);
     }
+    #campus-spline-stage::before,
     #campus-spline-stage::after {
       content: "";
       position: absolute;
       inset: 0;
+      pointer-events: none;
+    }
+    #campus-spline-stage::before {
       background:
-        radial-gradient(circle at 20% 84%, rgba(116, 196, 255, .10), transparent 34%),
-        radial-gradient(circle at 78% 88%, rgba(255, 155, 216, .09), transparent 34%),
-        linear-gradient(180deg, rgba(5, 7, 17, .02), rgba(5, 7, 17, .2));
+        linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 28%),
+        radial-gradient(circle at 50% -10%, rgba(255, 255, 255, .18), transparent 38%);
+      mix-blend-mode: screen;
+    }
+    #campus-spline-stage::after {
+      background:
+        radial-gradient(circle at 50% 52%, transparent 0, rgba(4, 7, 14, .28) 68%, rgba(4, 7, 14, .54) 100%),
+        linear-gradient(180deg, rgba(5, 7, 17, .03), rgba(5, 7, 17, .22));
+    }
+    #campus-spline-stage.campus-spline-fallback {
+      background:
+        linear-gradient(112deg, transparent 0 26%, rgba(255, 255, 255, .15) 34%, transparent 48%),
+        linear-gradient(125deg, transparent 0 15%, rgba(138, 215, 255, .12) 29%, transparent 48%),
+        linear-gradient(135deg, #050711, #07101d 48%, #130f21);
     }
     body[data-campus-spline="active"] {
       background: #050711 !important;
@@ -140,220 +327,122 @@ function createStage() {
   stage.appendChild(canvas);
   document.body.prepend(stage);
 
-  try {
-    renderer = new WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: !lowDetail,
-      preserveDrawingBuffer: false,
-      powerPreference: "high-performance",
-      precision: lowDetail ? "mediump" : "highp",
-    });
-  } catch {
+  gl = canvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: false,
+    powerPreference: "high-performance",
+  });
+
+  if (!gl) {
     stage.classList.add("campus-spline-fallback");
     return stage;
   }
 
-  renderer.outputColorSpace = SRGBColorSpace;
-  renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.setClearColor(0x000000, 0);
-
-  scene = new Scene();
-  clock = new Clock();
-  camera = new PerspectiveCamera(42, 1, 0.1, 100);
-  camera.position.set(0, 1.8, lowDetail ? 21 : 20);
-
-  buildScene();
-  resizeScene();
-
-  window.addEventListener("resize", requestResizeScene, { passive: true });
-  window.addEventListener("pointermove", handlePointerMove, { passive: true });
-  window.addEventListener("scroll", handleScroll, { passive: true });
-  window.addEventListener("orientationchange", resetOrientationControl, { passive: true });
-  window.screen?.orientation?.addEventListener?.("change", resetOrientationControl);
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
-  setupOrientationControl();
+  try {
+    buildProgram();
+    resizeScene();
+    window.addEventListener("resize", requestResizeScene, { passive: true });
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("orientationchange", resetOrientationControl, { passive: true });
+    window.screen?.orientation?.addEventListener?.("change", resetOrientationControl);
+    canvas.addEventListener("webglcontextlost", handleContextLost, false);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    prefersReducedMotion.addEventListener?.("change", handleMotionPreferenceChange);
+    setupOrientationControl();
+  } catch (error) {
+    console.warn("Light rays background failed to initialize:", error);
+    stage.classList.add("campus-spline-fallback");
+    gl = null;
+  }
 
   return stage;
 }
 
-function buildScene() {
-  ambientLight = new AmbientLight(0xd4ebff, 2.15);
-  scene.add(ambientLight);
+function compileShader(type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
 
-  pointerLight = new PointLight(0x9ddcff, lowDetail ? 120 : 170, 30, 1.6);
-  pointerLight.position.set(0, 3, 5);
-  scene.add(pointerLight);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(message || "Unable to compile shader.");
+  }
 
-  const geometry = new SphereGeometry(1, lowDetail ? 18 : 28, lowDetail ? 12 : 18);
-  material = new MeshStandardMaterial({
-    color: 0x101827,
-    metalness: 0.05,
-    roughness: 0.24,
-    vertexColors: false,
-    transparent: true,
-    opacity: 0.94,
-    emissive: 0x08152a,
-    emissiveIntensity: 0.2,
+  return shader;
+}
+
+function buildProgram() {
+  const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderSource);
+  const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+  program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program);
+    gl.deleteProgram(program);
+    throw new Error(message || "Unable to link shader program.");
+  }
+
+  gl.useProgram(program);
+  vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+
+  const positionLocation = gl.getAttribLocation(program, "position");
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+  [
+    "iTime",
+    "iResolution",
+    "rayPos",
+    "rayDir",
+    "raysColor",
+    "accentColor",
+    "raysSpeed",
+    "lightSpread",
+    "rayLength",
+    "pulsating",
+    "fadeDistance",
+    "saturation",
+    "mousePos",
+    "mouseInfluence",
+    "noiseAmount",
+    "distortion",
+    "rayIntensity",
+    "rayOpacity",
+    "vignetteStrength",
+  ].forEach((name) => {
+    uniforms[name] = gl.getUniformLocation(program, name);
   });
 
-  count = lowDetail ? 54 : 86;
-  mesh = new InstancedMesh(geometry, material, count);
-  mesh.instanceMatrix.setUsage(35048);
-  scene.add(mesh);
-
-  positions = new Float32Array(count * 3);
-  velocities = new Float32Array(count * 3);
-  sizes = new Float32Array(count);
-  seedBalls();
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.clearColor(0, 0, 0, 0);
 }
 
-function seedBalls() {
-  if (!mesh) {
+function resizeScene() {
+  if (!canvas || !gl) {
     return;
   }
 
-  const colorA = new Color();
-  const colorB = new Color();
-  for (let index = 0; index < count; index += 1) {
-    const base = index * 3;
-    const layer = index / Math.max(1, count - 1);
-    positions[base] = randomSpread(maxX * 1.55);
-    positions[base + 1] = randomSpread(maxY * 1.28) + maxY * 0.12;
-    positions[base + 2] = randomSpread(maxZ * 1.6);
-    velocities[base] = randomSpread(0.04);
-    velocities[base + 1] = randomSpread(0.04);
-    velocities[base + 2] = randomSpread(0.04);
-    sizes[index] = MathUtils.lerp(lowDetail ? 0.42 : 0.38, lowDetail ? 0.95 : 1.05, Math.random());
-
-    const start = palette[Math.floor(layer * (palette.length - 1))] ?? palette[0];
-    const end = palette[Math.min(palette.length - 1, Math.floor(layer * (palette.length - 1)) + 1)] ?? palette.at(-1);
-    const local = (layer * (palette.length - 1)) % 1;
-    colorA.set(start);
-    colorB.set(end);
-    mesh.setColorAt(index, colorA.lerp(colorB, local));
-  }
-
-  if (mesh.instanceColor) {
-    mesh.instanceColor.needsUpdate = true;
-  }
-  material.needsUpdate = true;
-  updateBallMatrices();
-}
-
-function handlePointerMove(event) {
-  if (!active || coarsePointer.matches || document.hidden) {
-    return;
-  }
-
-  targetPointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
-  targetPointer.y = (event.clientY / window.innerHeight - 0.5) * -2;
-}
-
-function applyOrientation(betaValue, gammaValue, force = false) {
-  if (!active || document.hidden || (!force && !coarsePointer.matches)) {
-    return;
-  }
-
-  const beta = Number(betaValue);
-  const gamma = Number(gammaValue);
-  if (!Number.isFinite(beta) || !Number.isFinite(gamma)) {
-    return;
-  }
-
-  if (!orientationBaseline) {
-    orientationBaseline = { beta, gamma };
-  }
-
-  orientationLastAt = performance.now();
-  orientationStatus = "active";
-  targetPointer.x = clamp(angleDelta(gamma, orientationBaseline.gamma) / 24, -1, 1);
-  targetPointer.y = clamp(-angleDelta(beta, orientationBaseline.beta) / 30, -1, 1);
-
-  if (prefersReducedMotion.matches) {
-    renderFrame(performance.now());
-  }
-}
-
-function handleOrientation(event) {
-  applyOrientation(event.beta, event.gamma);
-}
-
-function startOrientationListening() {
-  if (orientationListening || !("DeviceOrientationEvent" in window)) {
-    return;
-  }
-
-  orientationListening = true;
-  orientationStatus = "listening";
-  window.addEventListener("deviceorientation", handleOrientation, { passive: true });
-}
-
-function bindOrientationPrompt() {
-  if (orientationPromptBound) {
-    return;
-  }
-
-  orientationPromptBound = true;
-  const requestOnGesture = async () => {
-    document.removeEventListener("pointerdown", requestOnGesture);
-    document.removeEventListener("touchstart", requestOnGesture);
-
-    try {
-      const response = await window.DeviceOrientationEvent.requestPermission();
-      if (response === "granted") {
-        orientationStatus = "granted";
-        startOrientationListening();
-      } else {
-        orientationStatus = "denied";
-      }
-    } catch {
-      orientationStatus = "denied";
-    }
-  };
-
-  document.addEventListener("pointerdown", requestOnGesture, { passive: true, once: true });
-  document.addEventListener("touchstart", requestOnGesture, { passive: true, once: true });
-}
-
-function setupOrientationControl() {
-  if (!coarsePointer.matches || !("DeviceOrientationEvent" in window)) {
-    orientationStatus = "unavailable";
-    return;
-  }
-
-  orientationStatus = "ready";
-  if (typeof window.DeviceOrientationEvent.requestPermission === "function") {
-    bindOrientationPrompt();
-    return;
-  }
-
-  startOrientationListening();
-}
-
-function resetOrientationControl() {
-  orientationBaseline = null;
-  orientationLastAt = 0;
-  targetPointer.set(0, 0);
-}
-
-function handleScroll() {
-  const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  scrollProgress = Math.min(1, Math.max(0, window.scrollY / max));
-
-  if (active && prefersReducedMotion.matches) {
-    renderFrame(performance.now());
-  }
-}
-
-function pixelRatioForViewport() {
-  const base = Math.min(window.devicePixelRatio || 1, window.innerWidth < 640 ? 1.25 : 1.45);
-  return lowDetail ? Math.min(base, 1.1) : base;
-}
-
-function frameBudget() {
-  return lowDetail ? 1000 / 30 : 1000 / 45;
+  const rect = stage?.getBoundingClientRect();
+  viewportWidth = Math.max(1, Math.round(rect?.width || window.innerWidth || 1));
+  viewportHeight = Math.max(1, Math.round(rect?.height || window.innerHeight || 1));
+  pixelRatio = Math.min(window.devicePixelRatio || 1, lowDetail ? 1.25 : 1.75);
+  canvas.width = Math.max(1, Math.round(viewportWidth * pixelRatio));
+  canvas.height = Math.max(1, Math.round(viewportHeight * pixelRatio));
+  gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
 function requestResizeScene() {
@@ -364,194 +453,78 @@ function requestResizeScene() {
   resizeRafId = requestAnimationFrame(() => {
     resizeRafId = 0;
     resizeScene();
-    seedBalls();
-    if (active) {
-      renderFrame(performance.now());
-    }
+    renderFrame(performance.now());
   });
 }
 
-function resizeScene() {
-  if (!renderer || !camera) {
-    return;
-  }
-
-  const width = Math.max(1, window.innerWidth);
-  const height = Math.max(1, window.innerHeight);
-  renderer.setPixelRatio(pixelRatioForViewport());
-  renderer.setSize(width, height, false);
-  camera.aspect = width / height;
-  camera.fov = width < 640 ? 48 : 42;
-  camera.position.z = width < 640 ? 22 : 20;
-  camera.updateProjectionMatrix();
-  updateBounds();
-}
-
-function updateBounds() {
-  const fov = MathUtils.degToRad(camera.fov);
-  const wHeight = 2 * Math.tan(fov / 2) * camera.position.z;
-  const wWidth = wHeight * camera.aspect;
-  maxX = wWidth * (window.innerWidth < 640 ? 0.64 : 0.56);
-  maxY = wHeight * (window.innerWidth < 640 ? 0.58 : 0.54);
-  maxZ = window.innerWidth < 640 ? 2.8 : 3.2;
-}
-
-function updateWorldPointer() {
-  pointer.lerp(targetPointer, prefersReducedMotion.matches ? 0.08 : 0.075);
-  raycaster.setFromCamera(pointer, camera);
-  const distance = -camera.position.z / raycaster.ray.direction.z;
-  planePoint.copy(raycaster.ray.direction).multiplyScalar(distance).add(raycaster.ray.origin);
-  worldPointer.copy(planePoint);
-  worldPointer.x += matchFocus * maxX * 0.16;
-  worldPointer.y += 1.2 - scrollProgress * 1.4;
-  worldPointer.z = 0;
-}
-
-function updatePhysics(delta, elapsed) {
-  if (!positions || !velocities) {
-    return;
-  }
-
-  const reduced = prefersReducedMotion.matches;
-  const gravity = reduced ? 0.04 : 0.12;
-  const friction = reduced ? 0.992 : 0.986;
-  const bounce = 0.78;
-  const centerRadius = lowDetail ? 2.2 : 2.5;
-
-  for (let index = 0; index < count; index += 1) {
-    const base = index * 3;
-    const radius = sizes[index];
-    const dx = positions[base] - worldPointer.x;
-    const dy = positions[base + 1] - worldPointer.y;
-    const dz = positions[base + 2] - worldPointer.z;
-    const distance = Math.max(0.001, Math.hypot(dx, dy, dz));
-    const influence = Math.max(0, centerRadius + radius - distance);
-
-    velocities[base + 1] -= delta * gravity * radius;
-    velocities[base] += Math.sin(elapsed * 0.54 + index * 0.31) * delta * 0.008;
-    velocities[base + 2] += Math.cos(elapsed * 0.42 + index * 0.23) * delta * 0.006;
-
-    if (influence > 0) {
-      const push = influence * (reduced ? 0.34 : 0.52);
-      velocities[base] += (dx / distance) * push;
-      velocities[base + 1] += (dy / distance) * push;
-      velocities[base + 2] += (dz / distance) * push * 0.6;
-    }
-
-    velocities[base] *= friction;
-    velocities[base + 1] *= friction;
-    velocities[base + 2] *= friction;
-    const speed = Math.hypot(velocities[base], velocities[base + 1], velocities[base + 2]);
-    const maxSpeed = reduced ? 0.08 : 0.16;
-    if (speed > maxSpeed) {
-      const scale = maxSpeed / speed;
-      velocities[base] *= scale;
-      velocities[base + 1] *= scale;
-      velocities[base + 2] *= scale;
-    }
-
-    positions[base] += velocities[base];
-    positions[base + 1] += velocities[base + 1];
-    positions[base + 2] += velocities[base + 2];
-
-    if (Math.abs(positions[base]) + radius > maxX) {
-      positions[base] = Math.sign(positions[base]) * (maxX - radius);
-      velocities[base] *= -bounce;
-    }
-    if (positions[base + 1] - radius < -maxY) {
-      positions[base + 1] = -maxY + radius;
-      velocities[base + 1] *= -bounce;
-    }
-    if (positions[base + 1] + radius > maxY) {
-      positions[base + 1] = maxY - radius;
-      velocities[base + 1] *= -bounce * 0.72;
-    }
-    if (Math.abs(positions[base + 2]) + radius > maxZ) {
-      positions[base + 2] = Math.sign(positions[base + 2]) * (maxZ - radius);
-      velocities[base + 2] *= -bounce;
-    }
-  }
-
-  resolveBallCollisions();
-}
-
-function resolveBallCollisions() {
-  const passes = lowDetail ? 1 : 2;
-  for (let pass = 0; pass < passes; pass += 1) {
-    for (let index = 0; index < count; index += 1) {
-      const base = index * 3;
-      const radius = sizes[index];
-      for (let other = index + 1; other < count; other += 1) {
-        const otherBase = other * 3;
-        const otherRadius = sizes[other];
-        const dx = positions[otherBase] - positions[base];
-        const dy = positions[otherBase + 1] - positions[base + 1];
-        const dz = positions[otherBase + 2] - positions[base + 2];
-        const distance = Math.max(0.001, Math.hypot(dx, dy, dz));
-        const minDistance = (radius + otherRadius) * 0.9;
-        if (distance >= minDistance) {
-          continue;
-        }
-
-        const overlap = (minDistance - distance) * 0.5;
-        const nx = dx / distance;
-        const ny = dy / distance;
-        const nz = dz / distance;
-        positions[base] -= nx * overlap;
-        positions[base + 1] -= ny * overlap;
-        positions[base + 2] -= nz * overlap;
-        positions[otherBase] += nx * overlap;
-        positions[otherBase + 1] += ny * overlap;
-        positions[otherBase + 2] += nz * overlap;
-        velocities[base] -= nx * overlap * 0.05;
-        velocities[base + 1] -= ny * overlap * 0.05;
-        velocities[base + 2] -= nz * overlap * 0.05;
-        velocities[otherBase] += nx * overlap * 0.05;
-        velocities[otherBase + 1] += ny * overlap * 0.05;
-        velocities[otherBase + 2] += nz * overlap * 0.05;
-      }
-    }
+function handlePointerMove(event) {
+  if (event.pointerType === "mouse" || !orientationListening) {
+    const width = Math.max(window.innerWidth, 1);
+    const height = Math.max(window.innerHeight, 1);
+    targetPointer = {
+      x: clamp(event.clientX / width, 0.04, 0.96),
+      y: clamp(event.clientY / height, 0.04, 0.96),
+    };
   }
 }
 
-function updateBallMatrices() {
-  if (!mesh) {
-    return;
-  }
+function handleScroll() {
+  const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+  scrollProgress = clamp(window.scrollY / maxScroll, 0, 1);
+}
 
-  for (let index = 0; index < count; index += 1) {
-    const base = index * 3;
-    dummy.position.set(positions[base], positions[base + 1], positions[base + 2]);
-    dummy.scale.setScalar(sizes[index]);
-    dummy.updateMatrix();
-    mesh.setMatrixAt(index, dummy.matrix);
-  }
-  mesh.instanceMatrix.needsUpdate = true;
+function updateUniforms(now) {
+  const config = routeConfig(routeName);
+  const elapsed = (now - startTime) / 1000;
+  matchFocus += (matchFocusTarget - matchFocus) * (prefersReducedMotion.matches ? 0.16 : 0.055);
+  smoothPointer.x += (targetPointer.x - smoothPointer.x) * (lowDetail ? 0.105 : 0.075);
+  smoothPointer.y += (targetPointer.y - smoothPointer.y) * (lowDetail ? 0.105 : 0.075);
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const placement = getAnchorAndDir(rayOrigin, width, height);
+  const color = hexToRgb(config.color);
+  const accent = hexToRgb(config.accent);
+  const speed = prefersReducedMotion.matches ? 0.04 : config.speed + matchFocus * 0.05;
+  const intensity = config.intensity + matchFocus * 0.08 + scrollProgress * 0.045;
+  const opacity = config.opacity + matchFocus * 0.04;
+  const mouseInfluence = (lowDetail ? 0.1 : 0.16) + matchFocus * 0.05;
+
+  gl.uniform1f(uniforms.iTime, elapsed);
+  gl.uniform2f(uniforms.iResolution, width, height);
+  gl.uniform2f(uniforms.rayPos, placement.anchor[0], placement.anchor[1]);
+  gl.uniform2f(uniforms.rayDir, placement.dir[0], placement.dir[1]);
+  gl.uniform3f(uniforms.raysColor, color[0], color[1], color[2]);
+  gl.uniform3f(uniforms.accentColor, accent[0], accent[1], accent[2]);
+  gl.uniform1f(uniforms.raysSpeed, speed);
+  gl.uniform1f(uniforms.lightSpread, config.spread + scrollProgress * 0.04);
+  gl.uniform1f(uniforms.rayLength, lowDetail ? 1.72 : 1.92);
+  gl.uniform1f(uniforms.pulsating, prefersReducedMotion.matches ? 0 : 0.18);
+  gl.uniform1f(uniforms.fadeDistance, lowDetail ? 0.92 : 1.08);
+  gl.uniform1f(uniforms.saturation, 1.04);
+  gl.uniform2f(uniforms.mousePos, smoothPointer.x, smoothPointer.y);
+  gl.uniform1f(uniforms.mouseInfluence, mouseInfluence);
+  gl.uniform1f(uniforms.noiseAmount, lowDetail ? 0.014 : 0.025);
+  gl.uniform1f(uniforms.distortion, config.distortion + matchFocus * 0.012);
+  gl.uniform1f(uniforms.rayIntensity, intensity);
+  gl.uniform1f(uniforms.rayOpacity, opacity);
+  gl.uniform1f(uniforms.vignetteStrength, lowDetail ? 0.55 : 0.72);
 }
 
 function renderFrame(now) {
-  if (!active || !renderer || !scene || !camera || !mesh) {
+  if (!active || !gl || !program || !canvas) {
     return;
   }
 
-  const delta = Math.min(clock.getDelta(), 0.05);
-  const elapsed = now / 1000;
-  matchFocus += (matchFocusTarget - matchFocus) * (prefersReducedMotion.matches ? 0.08 : 0.045);
-  updateWorldPointer();
-  updatePhysics(delta, elapsed);
-  updateBallMatrices();
-
-  mesh.rotation.y = pointer.x * 0.07 + matchFocus * 0.1;
-  mesh.rotation.x = -scrollProgress * 0.06 + pointer.y * 0.04;
-  pointerLight.position.lerp(worldPointer.clone().add(new Vector3(0, 2.4, 5.5)), 0.16);
-  camera.position.x += (pointer.x * 0.32 - camera.position.x) * 0.04;
-  camera.position.y += (1.8 + pointer.y * 0.2 - camera.position.y) * 0.04;
-  camera.lookAt(matchFocus * 0.5, 0, 0);
-  renderer.render(scene, camera);
+  gl.useProgram(program);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  updateUniforms(now);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
 function animate(now = performance.now()) {
-  if (!active || !renderer || !scene || !camera || document.hidden || prefersReducedMotion.matches) {
+  if (!active || !gl || document.hidden) {
     rafId = 0;
     return;
   }
@@ -565,12 +538,11 @@ function animate(now = performance.now()) {
 }
 
 function scheduleAnimation() {
-  if (!active || rafId || document.hidden || prefersReducedMotion.matches) {
+  if (!active || rafId || document.hidden) {
     return;
   }
 
   lastFrameTime = 0;
-  clock?.getDelta();
   rafId = requestAnimationFrame(animate);
 }
 
@@ -591,18 +563,6 @@ function stop() {
     cancelAnimationFrame(rafId);
     rafId = 0;
   }
-}
-
-function routeFocus(route) {
-  if (route === "/search.html") {
-    return 1;
-  }
-
-  if (route === "/upload.html") {
-    return 0.46;
-  }
-
-  return route === "/login" ? 0.16 : 0;
 }
 
 function handleVisibilityChange() {
@@ -635,9 +595,128 @@ function handleMotionPreferenceChange() {
   scheduleAnimation();
 }
 
+function handleContextLost(event) {
+  event.preventDefault();
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+}
+
+function handleContextRestored() {
+  if (!canvas) {
+    return;
+  }
+
+  gl = canvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: false,
+    powerPreference: "high-performance",
+  });
+  if (!gl) {
+    stage?.classList.add("campus-spline-fallback");
+    return;
+  }
+
+  buildProgram();
+  resizeScene();
+  renderFrame(performance.now());
+  scheduleAnimation();
+}
+
+function startOrientationListening() {
+  if (orientationListening || typeof DeviceOrientationEvent === "undefined") {
+    return;
+  }
+
+  window.addEventListener("deviceorientation", handleDeviceOrientation, { passive: true });
+  orientationListening = true;
+  orientationStatus = "listening";
+}
+
+async function requestOrientationPermission() {
+  if (typeof DeviceOrientationEvent === "undefined") {
+    orientationStatus = "unavailable";
+    return;
+  }
+
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      orientationStatus = permission === "granted" ? "granted" : "denied";
+      if (permission === "granted") {
+        startOrientationListening();
+      }
+      return;
+    } catch {
+      orientationStatus = "denied";
+      return;
+    }
+  }
+
+  orientationStatus = "granted";
+  startOrientationListening();
+}
+
+function setupOrientationControl() {
+  if (typeof DeviceOrientationEvent === "undefined") {
+    orientationStatus = "unavailable";
+    return;
+  }
+
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    orientationStatus = "permission-required";
+    if (!orientationPromptBound) {
+      orientationPromptBound = true;
+      window.addEventListener("pointerdown", requestOrientationPermission, { once: true, passive: true });
+      window.addEventListener("touchstart", requestOrientationPermission, { once: true, passive: true });
+    }
+    return;
+  }
+
+  requestOrientationPermission();
+}
+
+function handleDeviceOrientation(event) {
+  applyOrientation(event.beta, event.gamma, false);
+}
+
+function applyOrientation(beta, gamma, simulated) {
+  if (!Number.isFinite(beta) || !Number.isFinite(gamma)) {
+    return;
+  }
+
+  if (simulated) {
+    orientationBaseline = { beta: 0, gamma: 0 };
+  } else if (!orientationBaseline) {
+    orientationBaseline = { beta, gamma };
+  }
+
+  const deltaBeta = angleDelta(beta, orientationBaseline.beta);
+  const deltaGamma = angleDelta(gamma, orientationBaseline.gamma);
+  targetPointer = {
+    x: clamp(0.5 + deltaGamma / 42, 0.1, 0.9),
+    y: clamp(0.5 + deltaBeta / 58, 0.12, 0.88),
+  };
+  orientationLastAt = Date.now();
+  orientationStatus = simulated ? "simulated" : "active";
+}
+
+function resetOrientationControl() {
+  orientationBaseline = null;
+  targetPointer = { x: 0.5, y: 0.5 };
+  smoothPointer = { x: 0.5, y: 0.5 };
+}
+
 function setRoute(route) {
   const normalized = route || window.location.pathname;
-  matchFocusTarget = routeFocus(normalized);
+  const config = routeConfig(normalized);
+  routeName = normalized;
+  rayOrigin = config.origin;
+  matchFocusTarget = config.focus;
   document.body.dataset.campusSpline = "active";
   start();
 }
@@ -664,16 +743,18 @@ window.CampusSplineScene = {
     resetOrientationControl();
     renderFrame(performance.now());
   },
+  stop,
   inspect() {
     return {
-      mode: "ballpit",
+      mode: "light-rays",
       active,
-      hasRenderer: Boolean(renderer),
-      ballCount: count,
-      canvasPixels: renderer ? renderer.domElement.width * renderer.domElement.height : 0,
+      hasRenderer: Boolean(gl && program),
+      canvasPixels: canvas ? canvas.width * canvas.height : 0,
       lowDetail,
-      pixelRatio: renderer?.getPixelRatio?.() || 0,
+      pixelRatio,
       frameBudget: frameBudget(),
+      route: routeName,
+      rayOrigin,
       orientationStatus,
       orientationListening,
       orientationPointer: {

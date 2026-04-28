@@ -10,8 +10,15 @@ const backgroundModeMeta = {
   ballpit: { label: "球", title: "球池" },
 };
 
+const videoBackgroundSources = [
+  { src: "/assets/video/campus-liquid-bg.webm", type: "video/webm" },
+  { src: "/assets/video/campus-liquid-bg.mp4", type: "video/mp4" },
+];
+const videoBackgroundPoster = "/assets/video/campus-liquid-bg-poster.jpg";
+
 let stage;
 let canvas;
+let video;
 let switcher;
 let gl;
 let program;
@@ -36,6 +43,9 @@ let orientationPromptBound = false;
 let orientationBaseline = null;
 let orientationLastAt = 0;
 let orientationStatus = "unavailable";
+let videoReady = false;
+let videoFailed = false;
+let failedVideoSources = 0;
 
 const uniforms = Object.create(null);
 
@@ -333,11 +343,32 @@ function ensureStageStyles() {
       isolation: isolate;
     }
     #campus-spline-stage.is-active { opacity: 1; }
+    #campus-spline-video,
     #campus-spline-canvas {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       display: block;
+    }
+    #campus-spline-video {
+      object-fit: cover;
+      opacity: 0;
+      filter: saturate(1.18) contrast(1.06) brightness(.86);
+      transform: scale(1.055) translateZ(0);
+      transition: opacity .65s ease, transform .18s linear;
+      will-change: opacity, transform;
+    }
+    #campus-spline-canvas {
+      opacity: 1;
       transform: translateZ(0);
+      transition: opacity .65s ease;
+    }
+    #campus-spline-stage.is-video-ready #campus-spline-video {
+      opacity: 1;
+    }
+    #campus-spline-stage.is-video-ready #campus-spline-canvas {
+      opacity: 0;
     }
     #campus-spline-stage::before,
     #campus-spline-stage::after {
@@ -345,6 +376,7 @@ function ensureStageStyles() {
       position: absolute;
       inset: 0;
       pointer-events: none;
+      z-index: 1;
     }
     #campus-spline-stage::before {
       background:
@@ -386,6 +418,9 @@ function ensureStageStyles() {
       -webkit-backdrop-filter: blur(22px) saturate(1.3);
       transform: translate3d(0, -50%, 0);
       pointer-events: auto;
+    }
+    #campus-spline-stage.is-video-ready ~ .campus-bg-switcher {
+      display: none;
     }
     .campus-bg-switcher button {
       width: 38px;
@@ -441,6 +476,7 @@ function createStage() {
   stage.id = "campus-spline-stage";
   stage.setAttribute("aria-hidden", "true");
 
+  createVideoBackground();
   canvas = document.createElement("canvas");
   canvas.id = "campus-spline-canvas";
   stage.appendChild(canvas);
@@ -481,6 +517,122 @@ function createStage() {
   }
 
   return stage;
+}
+
+function createVideoBackground() {
+  if (!stage || video) {
+    return video;
+  }
+
+  video = document.createElement("video");
+  video.id = "campus-spline-video";
+  video.muted = true;
+  video.loop = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.poster = videoBackgroundPoster;
+  video.setAttribute("muted", "");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("aria-hidden", "true");
+
+  videoBackgroundSources.forEach((sourceConfig) => {
+    const source = document.createElement("source");
+    source.src = sourceConfig.src;
+    source.type = sourceConfig.type;
+    source.addEventListener("error", handleVideoSourceError);
+    video.appendChild(source);
+  });
+
+  video.addEventListener("canplay", handleVideoReady);
+  video.addEventListener("playing", handleVideoReady);
+  video.addEventListener("error", handleVideoError);
+  video.addEventListener("stalled", handleVideoStalled);
+  stage.appendChild(video);
+  return video;
+}
+
+function canUseVideoBackground() {
+  return Boolean(video && videoReady && !videoFailed && !prefersReducedMotion.matches);
+}
+
+function usingVideoBackground() {
+  return Boolean(stage?.classList.contains("is-video-ready"));
+}
+
+function tryPlayVideo() {
+  if (!active || !video || !canUseVideoBackground() || document.hidden) {
+    return;
+  }
+
+  const playPromise = video.play();
+  if (playPromise?.catch) {
+    playPromise.catch(() => {
+      stage?.classList.remove("is-video-ready");
+      scheduleAnimation();
+    });
+  }
+}
+
+function syncVideoBackgroundState() {
+  if (!stage || !video) {
+    return;
+  }
+
+  const shouldUseVideo = active && canUseVideoBackground() && !document.hidden;
+  stage.classList.toggle("is-video-ready", shouldUseVideo);
+  updateVideoMotion();
+
+  if (shouldUseVideo) {
+    tryPlayVideo();
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    return;
+  }
+
+  video.pause();
+  renderFrame(performance.now());
+  scheduleAnimation();
+}
+
+function handleVideoReady() {
+  videoReady = true;
+  videoFailed = false;
+  syncVideoBackgroundState();
+}
+
+function handleVideoSourceError() {
+  failedVideoSources += 1;
+  if (failedVideoSources >= videoBackgroundSources.length) {
+    handleVideoError();
+  }
+}
+
+function handleVideoError() {
+  videoFailed = true;
+  stage?.classList.remove("is-video-ready");
+  renderFrame(performance.now());
+  scheduleAnimation();
+}
+
+function handleVideoStalled() {
+  if (!videoReady) {
+    stage?.classList.remove("is-video-ready");
+    scheduleAnimation();
+  }
+}
+
+function updateVideoMotion() {
+  if (!video) {
+    return;
+  }
+
+  const x = (targetPointer.x - 0.5) * (lowDetail ? 18 : 28);
+  const y = (0.5 - targetPointer.y) * (lowDetail ? 14 : 24) + scrollProgress * 10;
+  video.style.transform = `scale(1.055) translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
 }
 
 function createBackgroundSwitcher() {
@@ -633,12 +785,14 @@ function handlePointerMove(event) {
       x: clamp(event.clientX / width, 0.04, 0.96),
       y: clamp(1 - event.clientY / height, 0.04, 0.96),
     };
+    updateVideoMotion();
   }
 }
 
 function handleScroll() {
   const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
   scrollProgress = clamp(window.scrollY / maxScroll, 0, 1);
+  updateVideoMotion();
 }
 
 function updateUniforms(now) {
@@ -670,7 +824,7 @@ function updateUniforms(now) {
 }
 
 function renderFrame(now) {
-  if (!active || !gl || !program || !canvas) {
+  if (!active || usingVideoBackground() || !gl || !program || !canvas) {
     return;
   }
 
@@ -682,7 +836,7 @@ function renderFrame(now) {
 }
 
 function animate(now = performance.now()) {
-  if (!active || !gl || document.hidden) {
+  if (!active || !gl || document.hidden || usingVideoBackground()) {
     rafId = 0;
     return;
   }
@@ -696,7 +850,7 @@ function animate(now = performance.now()) {
 }
 
 function scheduleAnimation() {
-  if (!active || rafId || document.hidden) {
+  if (!active || rafId || document.hidden || usingVideoBackground()) {
     return;
   }
 
@@ -709,6 +863,7 @@ function start() {
   active = true;
   stage?.classList.add("is-active");
   handleScroll();
+  syncVideoBackgroundState();
   renderFrame(performance.now());
   scheduleAnimation();
 }
@@ -716,6 +871,8 @@ function start() {
 function stop() {
   active = false;
   stage?.classList.remove("is-active");
+  stage?.classList.remove("is-video-ready");
+  video?.pause();
   resetOrientationControl();
   if (rafId) {
     cancelAnimationFrame(rafId);
@@ -729,6 +886,7 @@ function handleVisibilityChange() {
   }
 
   if (document.hidden) {
+    video?.pause();
     if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = 0;
@@ -736,6 +894,7 @@ function handleVisibilityChange() {
     return;
   }
 
+  syncVideoBackgroundState();
   renderFrame(performance.now());
   scheduleAnimation();
 }
@@ -749,6 +908,7 @@ function handleMotionPreferenceChange() {
     cancelAnimationFrame(rafId);
     rafId = 0;
   }
+  syncVideoBackgroundState();
   renderFrame(performance.now());
   scheduleAnimation();
 }
@@ -859,6 +1019,7 @@ function applyOrientation(beta, gamma, simulated) {
     x: clamp(0.5 + deltaGamma / 42, 0.1, 0.9),
     y: clamp(0.5 + deltaBeta / 58, 0.12, 0.88),
   };
+  updateVideoMotion();
   orientationLastAt = Date.now();
   orientationStatus = simulated ? "simulated" : "active";
 }
@@ -867,6 +1028,7 @@ function resetOrientationControl() {
   orientationBaseline = null;
   targetPointer = { x: 0.5, y: 0.5 };
   smoothPointer = { x: 0.5, y: 0.5 };
+  updateVideoMotion();
 }
 
 function setRoute(route) {
@@ -910,6 +1072,12 @@ window.CampusSplineScene = {
       mode: backgroundMode,
       availableModes: [...backgroundModes],
       active,
+      renderer: usingVideoBackground() ? "video" : "webgl",
+      hasVideo: Boolean(video),
+      videoReady,
+      videoFailed,
+      videoPaused: video ? video.paused : true,
+      videoCurrentTime: video ? Number(video.currentTime.toFixed(2)) : 0,
       hasRenderer: Boolean(gl && program),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,
       lowDetail,

@@ -399,6 +399,47 @@ async function handleUsers(req, store, segments, url) {
     });
   }
 
+  if (segments[1] === "privacy-requests" && segments[2] === "cancel" && req.method === "POST") {
+    const body = await readBody(req);
+    const requestId = text(body.requestId);
+    if (!requestId) {
+      throw httpError("Choose a request to cancel", 400);
+    }
+
+    const requests = normalizePrivacyRequests(user);
+    const index = requests.findIndex((request) => request.id === requestId);
+    if (index < 0) {
+      throw httpError("Request not found", 404);
+    }
+
+    if (requests[index].status !== "pending") {
+      throw httpError("Only pending requests can be cancelled", 400);
+    }
+
+    const now = new Date().toISOString();
+    const cancelledRequest = normalizePrivacyRequest({
+      ...requests[index],
+      status: "cancelled",
+      statusLabel: privacyRequestStatusLabel("cancelled"),
+      cancelledAt: now,
+    });
+    const nextRequests = [...requests];
+    nextRequests[index] = cancelledRequest;
+    const updatedUser = {
+      ...user,
+      privacyRequests: nextRequests,
+      privacyRequestStatus: nextRequests.some((request) => request.status === "pending") ? "pending" : "none",
+      updatedAt: now,
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "Privacy request cancelled",
+      data: { request: cancelledRequest, requests: normalizePrivacyRequests(updatedUser) },
+    });
+  }
+
   if (segments[1] === "privacy-requests" && req.method === "POST") {
     const body = await readBody(req);
     const type = normalizePrivacyRequestType(body.type);
@@ -1059,12 +1100,13 @@ function privacyRequestStatusLabel(status) {
     pending: "Pending",
     completed: "Completed",
     rejected: "Rejected",
+    cancelled: "Cancelled",
   }[status] || "Pending";
 }
 
 function normalizePrivacyRequest(request) {
   const type = normalizePrivacyRequestType(request?.type) || "delete_profile";
-  const status = ["pending", "completed", "rejected"].includes(text(request?.status).toLowerCase())
+  const status = ["pending", "completed", "rejected", "cancelled"].includes(text(request?.status).toLowerCase())
     ? text(request.status).toLowerCase()
     : "pending";
 
@@ -1078,6 +1120,7 @@ function normalizePrivacyRequest(request) {
     requestedAt: request?.requestedAt || new Date().toISOString(),
     reviewedAt: request?.reviewedAt || null,
     completedAt: request?.completedAt || null,
+    cancelledAt: request?.cancelledAt || null,
     reviewedBy: text(request?.reviewedBy),
     notes: text(request?.notes),
   };

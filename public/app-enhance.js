@@ -908,6 +908,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
       }
+      .campus-privacy-actions.has-cancel {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
       .campus-privacy-reason {
         width: 100%;
         min-height: 82px;
@@ -938,6 +941,12 @@
         color: #fff;
         background: linear-gradient(180deg,#ff6b61,#ff3b30);
       }
+      .campus-privacy-button.secondary {
+        border: 1px solid rgba(255,255,255,.18);
+        color: rgba(245,248,255,.92);
+        background: rgba(255,255,255,.12);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+      }
       .campus-privacy-button:disabled {
         opacity: .55;
         cursor: wait;
@@ -947,6 +956,10 @@
         .campus-login-hero,
         .campus-login-grid,
         .campus-membership-grid {
+          grid-template-columns: 1fr;
+        }
+        .campus-privacy-actions,
+        .campus-privacy-actions.has-cancel {
           grid-template-columns: 1fr;
         }
         .campus-login-visual {
@@ -4048,6 +4061,7 @@
       latestId: latest?.id || "",
       latestStatus: latest?.status || "",
       latestNotes: latest?.notes || "",
+      latestCancelledAt: latest?.cancelledAt || "",
       fetching: state.privacyFetching,
     });
 
@@ -4060,9 +4074,10 @@
         </div>
         <div class="campus-privacy-status">${escapeHtml(statusText)}</div>
         <textarea class="campus-privacy-reason" placeholder="可以简单说明原因（选填）"></textarea>
-        <div class="campus-privacy-actions">
+        <div class="campus-privacy-actions ${pending ? "has-cancel" : ""}">
           <button class="campus-privacy-button primary" type="button" data-privacy-type="delete_profile" ${locked ? "disabled" : ""}>申请删除资料</button>
           <button class="campus-privacy-button danger" type="button" data-privacy-type="delete_account" ${locked ? "disabled" : ""}>申请注销账号</button>
+          ${pending ? `<button class="campus-privacy-button secondary" type="button" data-privacy-cancel="${escapeAttr(latest.id)}" ${state.privacyFetching ? "disabled" : ""}>撤回申请</button>` : ""}
         </div>
       `;
     }
@@ -4073,6 +4088,13 @@
       }
       button.dataset.bound = "true";
       button.addEventListener("click", () => submitPrivacyRequest(button.dataset.privacyType));
+    });
+    panel.querySelectorAll("[data-privacy-cancel]").forEach((button) => {
+      if (button.dataset.bound === "true") {
+        return;
+      }
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => cancelPrivacyRequest(button.dataset.privacyCancel));
     });
   }
 
@@ -4109,6 +4131,36 @@
     }
   }
 
+  async function cancelPrivacyRequest(requestId) {
+    const panel = document.querySelector("#campus-privacy-panel");
+    if (!panel || state.privacyFetching || !requestId) {
+      return;
+    }
+
+    const confirmed = window.confirm("确认撤回这条申请吗？撤回后可以重新提交。");
+    if (!confirmed) {
+      return;
+    }
+
+    state.privacyFetching = true;
+    renderPrivacyPanel(panel);
+
+    try {
+      const payload = await requestApi("/users/privacy-requests/cancel", {
+        method: "POST",
+        body: JSON.stringify({ requestId }),
+      });
+      state.privacyRequests = payload.data?.requests || (payload.data?.request ? [payload.data.request] : []);
+      state.privacyCheckedAt = Date.now();
+      renderPrivacyPanel(panel);
+    } catch (error) {
+      panel.querySelector(".campus-privacy-status").textContent = error.message || "撤回失败，请稍后再试";
+    } finally {
+      state.privacyFetching = false;
+      renderPrivacyPanel(panel);
+    }
+  }
+
   function privacyTypeLabel(type) {
     return type === "delete_account" ? "注销账号" : "删除资料";
   }
@@ -4118,6 +4170,7 @@
       pending: "待处理",
       completed: "已完成",
       rejected: "已驳回",
+      cancelled: "已撤回",
     }[status] || "待处理";
   }
 

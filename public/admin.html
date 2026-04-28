@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>校园匹配管理员端</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #101827;
+        --muted: #64748b;
+        --line: rgba(148, 163, 184, .36);
+        --glass: rgba(255, 255, 255, .74);
+        --blue: #087fff;
+        --red: #ff3b30;
+        --green: #16a34a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 20% 10%, rgba(8, 127, 255, .25), transparent 32rem),
+          radial-gradient(circle at 78% 16%, rgba(255, 45, 85, .20), transparent 30rem),
+          linear-gradient(135deg, #eef7ff 0%, #f9fbff 48%, #fff4f7 100%);
+      }
+
+      a {
+        color: var(--blue);
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 56px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 28px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .mark {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, .76);
+        border: 1px solid rgba(255, 255, 255, .82);
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .10);
+        font-weight: 900;
+        color: var(--blue);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(24px, 4vw, 40px);
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-weight: 650;
+      }
+
+      .glass {
+        background: var(--glass);
+        border: 1px solid rgba(255, 255, 255, .82);
+        border-radius: 24px;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .12), inset 0 1px rgba(255, 255, 255, .75);
+        backdrop-filter: blur(22px) saturate(1.35);
+        -webkit-backdrop-filter: blur(22px) saturate(1.35);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        margin-bottom: 18px;
+      }
+
+      .stats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .68);
+        border: 1px solid rgba(255, 255, 255, .78);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .button {
+        min-height: 42px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 17px;
+        color: #fff;
+        background: linear-gradient(180deg, #1a8cff, #087fff);
+        box-shadow: 0 14px 30px rgba(8, 127, 255, .24);
+        font-weight: 850;
+        cursor: pointer;
+      }
+
+      .button.secondary {
+        color: var(--ink);
+        background: rgba(255, 255, 255, .72);
+        border: 1px solid rgba(148, 163, 184, .38);
+        box-shadow: none;
+      }
+
+      .button.danger {
+        background: linear-gradient(180deg, #ff6b61, var(--red));
+        box-shadow: 0 14px 30px rgba(255, 59, 48, .20);
+      }
+
+      .button:disabled {
+        opacity: .62;
+        cursor: wait;
+      }
+
+      .login {
+        width: min(460px, 100%);
+        margin: 10vh auto 0;
+        padding: 26px;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .76);
+        color: var(--ink);
+        outline: none;
+      }
+
+      input {
+        min-height: 48px;
+        padding: 0 14px;
+      }
+
+      textarea {
+        min-height: 90px;
+        padding: 13px 14px;
+        resize: vertical;
+      }
+
+      .message {
+        margin-top: 14px;
+        color: var(--red);
+        font-size: 14px;
+        font-weight: 750;
+      }
+
+      .queue {
+        display: grid;
+        gap: 14px;
+      }
+
+      .empty,
+      .loading {
+        padding: 44px 22px;
+        text-align: center;
+        color: var(--muted);
+        font-weight: 750;
+      }
+
+      .review-card {
+        padding: 18px;
+      }
+
+      .review-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 14px;
+      }
+
+      .name {
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .meta {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .badge {
+        border-radius: 999px;
+        padding: 7px 11px;
+        background: rgba(245, 158, 11, .14);
+        color: #b45309;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 14px 0;
+      }
+
+      .detail {
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .56);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .detail strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--ink);
+      }
+
+      .campus-card {
+        display: grid;
+        gap: 10px;
+        margin: 12px 0 14px;
+      }
+
+      .campus-card img {
+        width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, .06);
+        border: 1px solid rgba(148, 163, 184, .30);
+      }
+
+      .review-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          width: min(100% - 24px, 1120px);
+          padding-top: 18px;
+        }
+
+        .topbar,
+        .toolbar,
+        .review-head,
+        .review-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .topbar,
+        .toolbar {
+          display: grid;
+        }
+
+        .details {
+          grid-template-columns: 1fr;
+        }
+
+        .actions,
+        .review-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .review-actions {
+          justify-content: stretch;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section id="login-view" class="login glass">
+        <div class="brand">
+          <div class="mark">管</div>
+          <div>
+            <h1>管理员端</h1>
+            <p class="subtitle">登录后处理校园认证审核。</p>
+          </div>
+        </div>
+        <form id="login-form" class="form-grid">
+          <label>
+            管理员邮箱
+            <input id="email" type="email" autocomplete="email" required placeholder="admin@qq.com" />
+          </label>
+          <label>
+            密码
+            <input id="password" type="password" autocomplete="current-password" required placeholder="请输入密码" />
+          </label>
+          <button class="button" type="submit">进入管理员端</button>
+          <p id="login-message" class="message" role="status"></p>
+        </form>
+      </section>
+
+      <section id="admin-view" class="hidden">
+        <header class="topbar">
+          <div class="brand">
+            <div class="mark">管</div>
+            <div>
+              <h1>校园认证审核</h1>
+              <p class="subtitle" id="admin-subtitle">管理员端</p>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="button secondary" href="/">回到用户端</a>
+            <button id="logout" class="button secondary" type="button">退出</button>
+          </div>
+        </header>
+
+        <div class="toolbar glass">
+          <div class="stats">
+            <span class="pill" id="pending-count">待审核 0</span>
+            <span class="pill" id="last-refresh">尚未刷新</span>
+          </div>
+          <button id="refresh" class="button" type="button">刷新列表</button>
+        </div>
+
+        <div id="notice" class="message" role="status"></div>
+        <div id="queue" class="queue"></div>
+      </section>
+    </main>
+    <script src="/admin.js" defer></script>
+  </body>
+</html>

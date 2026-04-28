@@ -95,7 +95,7 @@
   function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
-      body:not([data-campus-admin="true"]) a[href="/admin/verification"] { display: none !important; }
+      a[href="/admin/verification"] { display: none !important; }
       .ios-tab-item,
       .campus-unread-anchor {
         position: relative;
@@ -2853,16 +2853,7 @@
       return;
     }
 
-    if (!currentToken()) {
-      history.replaceState(null, "", "/login");
-      queueEnhance();
-      return;
-    }
-
-    if (state.checkedAt && document.body.dataset.campusAdmin !== "true") {
-      history.replaceState(null, "", "/profile");
-      queueEnhance();
-    }
+    window.location.replace("/admin.html");
   }
 
   function enhanceAuthPage() {

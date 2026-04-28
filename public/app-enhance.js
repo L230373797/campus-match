@@ -29,6 +29,7 @@
     },
   ];
   const MEMBERSHIP_LABELS = new Set(["免费用户", "校园会员", "高级会员", "会员已过期"]);
+  const AVATAR_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
   const AUDIENCE_COPY_REPLACEMENTS = new Map([
     ["01 / 业务定位", "01 / 为什么这里不同"],
     ["不是一起全抛出来，而是边滑边看到重点", "先确认感觉，再慢慢了解彼此"],
@@ -1010,6 +1011,57 @@
         opacity: .55;
         cursor: wait;
       }
+      .campus-avatar-control {
+        position: relative;
+        display: inline-grid;
+        justify-items: center;
+        align-content: start;
+        gap: 8px;
+      }
+      .campus-avatar-control img {
+        object-fit: cover;
+      }
+      .campus-avatar-upload-input {
+        display: none !important;
+      }
+      .campus-avatar-upload-trigger,
+      .campus-avatar-upload-prompt {
+        cursor: pointer;
+      }
+      .campus-avatar-control > .campus-avatar-upload-trigger {
+        top: 64px !important;
+        right: -4px !important;
+        bottom: auto !important;
+      }
+      .campus-avatar-upload-trigger:disabled,
+      .campus-avatar-upload-prompt:disabled {
+        opacity: .58;
+        cursor: wait;
+      }
+      .campus-avatar-upload-prompt {
+        width: 100%;
+        min-height: 32px;
+        border: 1px solid rgba(255,255,255,.18);
+        border-radius: 999px;
+        padding: 0 12px;
+        color: rgba(255,255,255,.92);
+        background: rgba(255,255,255,.11);
+        box-shadow: inset 0 1px rgba(255,255,255,.16);
+        font-size: 12px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+      .campus-avatar-upload-status {
+        min-height: 14px;
+        max-width: 112px;
+        color: rgba(226,238,255,.64);
+        font-size: 11px;
+        line-height: 1.25;
+        text-align: center;
+      }
+      .campus-avatar-upload-status.is-error {
+        color: #ffb4ab;
+      }
 
       @media (max-width: 900px) {
         .campus-login-hero,
@@ -1272,6 +1324,18 @@
           width: 82px !important;
           height: 82px !important;
           border-radius: 1.6rem !important;
+        }
+        body[data-campus-route="/profile"] .campus-avatar-upload-prompt {
+          min-height: 30px;
+          padding: 0 10px;
+          font-size: 12px;
+        }
+        body[data-campus-route="/profile"] .campus-avatar-control > .campus-avatar-upload-trigger {
+          top: 50px !important;
+        }
+        body[data-campus-route="/profile"] .campus-avatar-upload-status {
+          max-width: 82px;
+          font-size: 10px;
         }
         body[data-campus-route="/profile"] .campus-profile-summary-card [class*="rounded-[1.5rem]"] {
           border-radius: 1.2rem !important;
@@ -2976,6 +3040,10 @@
     })[char]);
   }
 
+  function escapeAttr(value) {
+    return escapeHtml(value);
+  }
+
   function rewriteAudienceCopy(root = document) {
     root.querySelectorAll("p, span, div, label, button, h1, h2, h3, strong, a").forEach((node) => {
       if (node.children.length) {
@@ -3994,7 +4062,202 @@
     }
 
     refreshProfileMembershipDecorations();
+    ensureProfileAvatarUploader();
     ensureProfilePrivacyPanel();
+  }
+
+  function ensureProfileAvatarUploader() {
+    if (window.location.pathname !== "/profile" || !document.querySelector("#root")) {
+      return;
+    }
+
+    const summary = document.querySelector(".campus-profile-summary-card");
+    const avatarWrap = findProfileAvatarWrap(summary);
+    if (!summary || !avatarWrap) {
+      return;
+    }
+
+    avatarWrap.classList.add("campus-avatar-control");
+
+    let input = avatarWrap.querySelector(".campus-avatar-upload-input");
+    if (!input) {
+      input = document.createElement("input");
+      input.className = "campus-avatar-upload-input";
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp,image/*";
+      avatarWrap.appendChild(input);
+    }
+
+    if (input.dataset.bound !== "true") {
+      input.dataset.bound = "true";
+      input.addEventListener("change", handleAvatarFileSelect);
+    }
+
+    const iconButton = avatarWrap.querySelector("button:not(.campus-avatar-upload-prompt)");
+    if (iconButton) {
+      iconButton.type = "button";
+      iconButton.classList.add("campus-avatar-upload-trigger");
+      iconButton.setAttribute("aria-label", "更换头像");
+      iconButton.setAttribute("title", "拍照或从相册选择头像");
+      bindAvatarUploadButton(iconButton, input);
+    }
+
+    let promptButton = avatarWrap.querySelector(".campus-avatar-upload-prompt");
+    if (!promptButton) {
+      promptButton = document.createElement("button");
+      promptButton.type = "button";
+      promptButton.className = "campus-avatar-upload-prompt";
+      promptButton.textContent = "换头像";
+      avatarWrap.appendChild(promptButton);
+    }
+    bindAvatarUploadButton(promptButton, input);
+
+    let status = avatarWrap.querySelector(".campus-avatar-upload-status");
+    if (!status) {
+      status = document.createElement("span");
+      status.className = "campus-avatar-upload-status";
+      status.textContent = "拍照 / 相册";
+      avatarWrap.appendChild(status);
+    }
+  }
+
+  function findProfileAvatarWrap(summary) {
+    if (!summary) {
+      return null;
+    }
+
+    const image = summary.querySelector('img[alt*="头像"], img[src*="dicebear"]');
+    return image?.closest(".relative") || image?.parentElement?.parentElement || null;
+  }
+
+  function bindAvatarUploadButton(button, input) {
+    if (!button || !input || button.dataset.avatarUploadBound === "true") {
+      return;
+    }
+
+    button.dataset.avatarUploadBound = "true";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      input.click();
+    });
+  }
+
+  async function handleAvatarFileSelect(event) {
+    const input = event.currentTarget;
+    const avatarWrap = input.closest(".campus-avatar-control");
+    const summary = input.closest(".campus-profile-summary-card");
+    const file = input.files?.[0];
+    if (!file || !avatarWrap || !summary) {
+      return;
+    }
+
+    const contentType = normalizeAvatarFileType(file);
+    if (!contentType) {
+      setAvatarUploadStatus(avatarWrap, "请选择 JPG、PNG 或 WebP 图片", true);
+      input.value = "";
+      return;
+    }
+
+    if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
+      setAvatarUploadStatus(avatarWrap, "图片不能超过 3MB", true);
+      input.value = "";
+      return;
+    }
+
+    setAvatarUploading(avatarWrap, true);
+    setAvatarUploadStatus(avatarWrap, "正在更新...", false);
+
+    try {
+      const data = await readFileAsDataUrl(file);
+      const payload = await requestApi("/uploads/avatar", {
+        method: "POST",
+        body: JSON.stringify({ contentType, data }),
+      });
+      const avatar = payload.data?.imageUrl || payload.data?.user?.avatar;
+      if (payload.data?.user) {
+        state.user = payload.data.user;
+        state.membership = normalizeMembership(state.user?.membership);
+      }
+      updateProfileAvatarDom(summary, avatar);
+      setAvatarUploadStatus(avatarWrap, "头像已更新", false);
+      refreshUser(true).catch(() => {});
+      setTimeout(() => {
+        if (document.body.contains(avatarWrap)) {
+          setAvatarUploadStatus(avatarWrap, "拍照 / 相册", false);
+        }
+      }, 2200);
+    } catch (error) {
+      setAvatarUploadStatus(avatarWrap, error.message || "头像更新失败", true);
+    } finally {
+      setAvatarUploading(avatarWrap, false);
+      input.value = "";
+    }
+  }
+
+  function normalizeAvatarFileType(file) {
+    const type = String(file.type || "").split(";")[0].trim().toLowerCase();
+    if (["image/jpeg", "image/png", "image/webp"].includes(type)) {
+      return type;
+    }
+
+    const name = String(file.name || "").toLowerCase();
+    if (/\.(jpe?g)$/.test(name)) {
+      return "image/jpeg";
+    }
+    if (/\.png$/.test(name)) {
+      return "image/png";
+    }
+    if (/\.webp$/.test(name)) {
+      return "image/webp";
+    }
+    return "";
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("没有读取到图片，请重新选择"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setAvatarUploading(avatarWrap, uploading) {
+    avatarWrap.dataset.avatarUploading = uploading ? "true" : "false";
+    avatarWrap.querySelectorAll(".campus-avatar-upload-trigger, .campus-avatar-upload-prompt")
+      .forEach((button) => {
+        button.disabled = uploading;
+      });
+  }
+
+  function setAvatarUploadStatus(avatarWrap, message, isError) {
+    const status = avatarWrap.querySelector(".campus-avatar-upload-status");
+    if (!status) {
+      return;
+    }
+
+    status.textContent = message;
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function updateProfileAvatarDom(summary, avatar) {
+    if (!avatar) {
+      return;
+    }
+
+    const image = summary.querySelector(".campus-avatar-control img") || summary.querySelector('img[alt*="头像"]');
+    if (image) {
+      image.src = avatar;
+      image.alt = "我的头像";
+      image.classList.add("object-cover");
+      return;
+    }
+
+    const slot = summary.querySelector(".campus-avatar-control [class*='w-24'][class*='h-24']");
+    if (slot) {
+      slot.innerHTML = `<img src="${escapeAttr(avatar)}" alt="我的头像" class="w-full h-full rounded-[1.5rem] bg-white/90 object-cover">`;
+    }
   }
 
   function findMembershipButton() {

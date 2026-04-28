@@ -114,6 +114,27 @@ await check("campus card upload", async () => {
   assert(uploaded.data?.imageUrl?.startsWith("/api/uploads/campus-cards/"), "upload should return image URL");
 });
 
+await check("avatar upload and profile persistence", async () => {
+  const uploaded = await call("/uploads/avatar", {
+    method: "POST",
+    token: state.user.token,
+    body: {
+      contentType: "image/png",
+      data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+    },
+  });
+  assert(uploaded.data?.imageUrl?.startsWith("/api/uploads/avatars/"), "avatar upload should return image URL");
+  assert(uploaded.data?.user?.avatar === uploaded.data.imageUrl, "avatar should be written to returned user");
+  state.user.user = uploaded.data.user;
+
+  const me = await call("/auth/me", { token: state.user.token });
+  assert(me.data?.user?.avatar === uploaded.data.imageUrl, "avatar should persist on profile");
+
+  const imageResponse = await apiHandler(new Request(`http://launch.local${uploaded.data.imageUrl}`), { blobStore });
+  assert(imageResponse.ok, "avatar image should be readable");
+  assert(imageResponse.headers.get("content-type") === "image/png", "avatar image should keep image content type");
+});
+
 await check("operator reviews campus verification", async () => {
   const pending = await call("/users/verification/pending", { token: state.operator.token });
   assert(

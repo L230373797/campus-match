@@ -8,6 +8,8 @@ const STORE_NAME = "campus-match-data";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const EMAIL_CODE_TTL_MS = 1000 * 60 * 10;
 const EMAIL_CODE_RESEND_MS = 1000 * 60;
+const IMAGE_UPLOAD_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 const MEMBERSHIP_PLAN_LIBRARY = {
   free: {
     id: "free",
@@ -578,7 +580,7 @@ async function handleUsers(req, store, segments, url) {
 async function handleUploads(req, store, segments) {
   if (req.method === "GET" && segments.length >= 2) {
     const key = segments.slice(1).join("/");
-    if (!key.startsWith("campus-cards/")) {
+    if (!["campus-cards/", "avatars/"].some((prefix) => key.startsWith(prefix))) {
       throw httpError("文件不存在", 404);
     }
 
@@ -598,24 +600,7 @@ async function handleUploads(req, store, segments) {
   if (segments[1] === "campus-card" && req.method === "POST") {
     const user = await requireUser(req, store);
     const body = await readBody(req);
-    const contentType = text(body.contentType).toLowerCase();
-    const data = text(body.data);
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
-      throw httpError("只支持 JPG、PNG 或 WebP 图片", 400);
-    }
-
-    const base64 = data.includes(",") ? data.split(",").pop() : data;
-    const buffer = Buffer.from(base64, "base64");
-    if (!buffer.length) {
-      throw httpError("图片内容为空", 400);
-    }
-
-    if (buffer.length > 3 * 1024 * 1024) {
-      throw httpError("图片不能超过 3MB", 400);
-    }
-
-    const extension = extensionFromContentType(contentType);
+    const { buffer, extension } = parseImageUpload(body);
     const fileId = makeId("card");
     const key = `uploads/campus-cards/${user.id}/${fileId}.${extension}`;
     await store.set(key, buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
@@ -636,6 +621,30 @@ async function handleUploads(req, store, segments) {
       success: true,
       message: "校园卡已上传，认证申请已提交",
       data: { imageUrl: campusCardImage, user: publicUser(updatedUser) },
+    }, 201);
+  }
+
+  if (segments[1] === "avatar" && req.method === "POST") {
+    const user = await requireUser(req, store);
+    const body = await readBody(req);
+    const { buffer, extension } = parseImageUpload(body);
+    const fileId = makeId("avatar");
+    const key = `uploads/avatars/${user.id}/${fileId}.${extension}`;
+    await store.set(key, buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+
+    const avatar = `/api/uploads/avatars/${user.id}/${fileId}.${extension}`;
+    await deleteStoredAvatar(store, user.avatar);
+    const updatedUser = {
+      ...user,
+      avatar,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "头像已更新",
+      data: { imageUrl: avatar, user: publicUser(updatedUser) },
     }, 201);
   }
 
@@ -1190,6 +1199,7 @@ async function reviewPrivacyRequest(store, targetUser, { requestId, status, note
 async function applyPrivacyRequestCompletion(store, user, request, now) {
   await redactUserMessagesAndMatches(store, user, now);
   await deleteStoredCampusCard(store, user.campusCardImage);
+  await deleteStoredAvatar(store, user.avatar);
 
   if (request.type === "delete_account") {
     return {
@@ -1247,13 +1257,25 @@ function anonymizeUserProfile(user, now, deleted) {
 }
 
 async function deleteStoredCampusCard(store, campusCardImage) {
-  const image = text(campusCardImage);
+  await deleteStoredUpload(store, campusCardImage, "campus-cards/");
+}
+
+async function deleteStoredAvatar(store, avatar) {
+  await deleteStoredUpload(store, avatar, "avatars/");
+}
+
+async function deleteStoredUpload(store, uploadUrl, allowedPrefix) {
+  const image = text(uploadUrl);
   if (!image.startsWith("/api/uploads/")) {
     return;
   }
 
-  const key = `uploads/${image.replace(/^\/api\/uploads\//, "")}`;
-  await store.delete(key).catch(() => {});
+  const key = image.replace(/^\/api\/uploads\//, "");
+  if (!key.startsWith(allowedPrefix)) {
+    return;
+  }
+
+  await store.delete(`uploads/${key}`).catch(() => {});
 }
 
 async function redactUserMessagesAndMatches(store, user, now) {
@@ -1887,6 +1909,30 @@ function extensionFromContentType(contentType) {
     "image/png": "png",
     "image/webp": "webp",
   }[contentType] || "bin";
+}
+
+function parseImageUpload(body) {
+  const contentType = text(body.contentType).split(";")[0].trim().toLowerCase();
+  const data = text(body.data);
+
+  if (!IMAGE_UPLOAD_CONTENT_TYPES.has(contentType)) {
+    throw httpError("只支持 JPG、PNG 或 WebP 图片", 400);
+  }
+
+  const base64 = data.includes(",") ? data.split(",").pop() : data;
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length) {
+    throw httpError("图片内容为空", 400);
+  }
+
+  if (buffer.length > IMAGE_UPLOAD_MAX_BYTES) {
+    throw httpError("图片不能超过 3MB", 400);
+  }
+
+  return {
+    buffer,
+    extension: extensionFromContentType(contentType),
+  };
 }
 
 function contentTypeFromKey(key) {

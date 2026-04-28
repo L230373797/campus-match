@@ -4055,8 +4055,8 @@
     const pending = latest?.status === "pending";
     const locked = pending || state.privacyFetching;
     const statusText = latest
-      ? `${privacyTypeLabel(latest.type)}：${privacyStatusLabel(latest.status)}${latest.requestedAt ? `，提交于 ${formatPrivacyDate(latest.requestedAt)}` : ""}${latest.notes ? `。备注：${latest.notes}` : ""}`
-      : "当前没有待处理的隐私请求。";
+      ? `${privacyTypeLabel(latest.type)}：${privacyStatusLabel(latest.status)}${latest.requestedAt ? `，提交于 ${formatPrivacyDate(latest.requestedAt)}` : ""}${latest.notes ? `。说明：${latest.notes}` : ""}`
+      : "你现在没有正在处理的申请。";
     const renderKey = JSON.stringify({
       latestId: latest?.id || "",
       latestStatus: latest?.status || "",
@@ -4069,13 +4069,13 @@
       panel.dataset.renderKey = renderKey;
       panel.innerHTML = `
         <div>
-          <h3>资料与账号处理</h3>
-          <p>你可以申请清空个人资料，或申请注销账号。处理完成前不会立刻删除。</p>
+          <h3>账号与个人资料</h3>
+          <p>想重新整理资料，或准备离开校园匹配时，可以在这里提交申请。处理完成前，你的资料和账号会先保留。</p>
         </div>
         <div class="campus-privacy-status">${escapeHtml(statusText)}</div>
         <textarea class="campus-privacy-reason" placeholder="可以简单说明原因（选填）"></textarea>
         <div class="campus-privacy-actions ${pending ? "has-cancel" : ""}">
-          <button class="campus-privacy-button primary" type="button" data-privacy-type="delete_profile" ${locked ? "disabled" : ""}>申请删除资料</button>
+          <button class="campus-privacy-button primary" type="button" data-privacy-type="delete_profile" ${locked ? "disabled" : ""}>申请清空资料</button>
           <button class="campus-privacy-button danger" type="button" data-privacy-type="delete_account" ${locked ? "disabled" : ""}>申请注销账号</button>
           ${pending ? `<button class="campus-privacy-button secondary" type="button" data-privacy-cancel="${escapeAttr(latest.id)}" ${state.privacyFetching ? "disabled" : ""}>撤回申请</button>` : ""}
         </div>
@@ -4105,7 +4105,7 @@
     }
 
     if (type === "delete_account") {
-      const confirmed = window.confirm("确认申请注销账号吗？管理员完成处理后，你将无法再登录这个账号。");
+      const confirmed = window.confirm("确认申请注销账号吗？处理完成后，你将无法再登录这个账号。");
       if (!confirmed) {
         return;
       }

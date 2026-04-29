@@ -21,6 +21,12 @@ powershell -ExecutionPolicy Bypass -File scripts/windows/start-local-mysql-site.
 
 This starts the standalone site with the local MySQL configuration from `.env.local` and opens the login page automatically.
 
+For day-to-day use on the desktop, open the combined project console:
+
+```powershell
+powershell -STA -ExecutionPolicy Bypass -File scripts/windows/campus-project-console.ps1
+```
+
 ## Docker Compose run
 
 Install Docker Desktop first.

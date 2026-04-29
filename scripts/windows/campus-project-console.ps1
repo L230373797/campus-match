@@ -169,11 +169,30 @@ function Get-LatestBackupSummary {
   return "$(Decode-Text "5pyA6L+R5aSH5Lu977ya") $($latest.LastWriteTime.ToString("yyyy-MM-dd HH:mm"))  $($latest.Name)  $(Decode-Text "5aSn5bCP") $(Format-FileSize $latest.Length)"
 }
 
+function Get-LocalSiteSummary {
+  $url = "http://127.0.0.1:3138/api/health"
+  try {
+    $response = Invoke-RestMethod -Uri $url -TimeoutSec 2
+    if ($response.success -eq $true -and $response.data.status -eq "ok") {
+      return "$(Decode-Text "5pys5Zyw572R56uZ5q2j5bi46L+Q6KGM")  127.0.0.1:3138"
+    }
+
+    return "$(Decode-Text "5pys5Zyw572R56uZ6L+e5o6l5aSx6LSl"): unexpected response"
+  } catch {
+    return "$(Decode-Text "5pys5Zyw572R56uZ5pyq5ZCv5Yqo")  127.0.0.1:3138"
+  }
+}
+
 $actions = @(
   @{
     Label = "5omT5byA5pys5Zyw572R56uZ"
     Hint = "5ZCv5Yqo5pys5ZywIE15U1FMIOeJiOe9keermQ=="
     Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" }
+  },
+  @{
+    Label = "5omT5byA5pys5Zyw566h55CG5ZGY56uv"
+    Hint = "6L+b5YWl5pys5Zyw566h55CG6aG16Z2i"
+    Run = { Open-Url "http://127.0.0.1:3138/admin" }
   },
   @{
     Label = "5omT5byA5pWw5o2u5bqT"
@@ -226,6 +245,7 @@ if ($CheckOnly.IsPresent) {
   Write-Host "Campus project console OK."
   Write-Host "Project root: $ProjectRoot"
   Write-Host "Actions: $($actions.Count)"
+  Write-Host "Local site: $(Get-LocalSiteSummary)"
   Write-Host "Database: $(Get-DatabaseSummary)"
   Write-Host "Latest backup: $(Get-LatestBackupSummary)"
   exit 0
@@ -274,18 +294,20 @@ $subtitle.AutoSize = $true
 $subtitle.Location = New-Object System.Drawing.Point(34, 72)
 $form.Controls.Add($subtitle)
 
+$siteValue = $null
 $databaseValue = $null
 $backupValue = $null
 
 function Add-InfoCard {
   param(
     [int]$X,
+    [int]$Width,
     [string]$TitleBase64,
     [ref]$ValueLabelRef
   )
 
   $panel = New-Object System.Windows.Forms.Panel
-  $panel.Size = New-Object System.Drawing.Size(336, 74)
+  $panel.Size = New-Object System.Drawing.Size($Width, 74)
   $panel.Location = New-Object System.Drawing.Point($X, 108)
   $panel.BackColor = [System.Drawing.Color]::White
   $panel.BorderStyle = "FixedSingle"
@@ -305,15 +327,16 @@ function Add-InfoCard {
   $value.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
   $value.AutoEllipsis = $true
   $value.AutoSize = $false
-  $value.Size = New-Object System.Drawing.Size(304, 34)
+  $value.Size = New-Object System.Drawing.Size(($Width - 28), 34)
   $value.Location = New-Object System.Drawing.Point(14, 34)
   $panel.Controls.Add($value)
 
   $ValueLabelRef.Value = $value
 }
 
-Add-InfoCard -X 34 -TitleBase64 "5pWw5o2u5bqT54q25oCB" -ValueLabelRef ([ref]$databaseValue)
-Add-InfoCard -X 394 -TitleBase64 "5pyA6L+R5aSH5Lu9" -ValueLabelRef ([ref]$backupValue)
+Add-InfoCard -X 34 -Width 220 -TitleBase64 "5pys5Zyw572R56uZ54q25oCB" -ValueLabelRef ([ref]$siteValue)
+Add-InfoCard -X 274 -Width 220 -TitleBase64 "5pWw5o2u5bqT54q25oCB" -ValueLabelRef ([ref]$databaseValue)
+Add-InfoCard -X 514 -Width 220 -TitleBase64 "5pyA6L+R5aSH5Lu9" -ValueLabelRef ([ref]$backupValue)
 
 $refreshButton = New-Object System.Windows.Forms.Button
 $refreshButton.Text = Decode-Text "5Yi35paw54q25oCB"
@@ -399,9 +422,11 @@ for ($i = 0; $i -lt $actions.Count; $i += 1) {
 }
 
 function Update-InfoCards {
+  $siteValue.Text = Decode-Text "5q2j5Zyo5qOA5p+lLi4u"
   $databaseValue.Text = Decode-Text "5q2j5Zyo5qOA5p+lLi4u"
   $backupValue.Text = Decode-Text "5q2j5Zyo5qOA5p+lLi4u"
   $form.Refresh()
+  $siteValue.Text = Get-LocalSiteSummary
   $databaseValue.Text = Get-DatabaseSummary
   $backupValue.Text = Get-LatestBackupSummary
 }

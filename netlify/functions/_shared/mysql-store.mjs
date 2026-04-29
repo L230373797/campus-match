@@ -66,9 +66,11 @@ async function ensureSchema(pool, database) {
   }
 
   await pool.query(`
-    CREATE DATABASE IF NOT EXISTS \`${database.replace(/`/g, "``")}\`
-      CHARACTER SET utf8mb4
-      COLLATE utf8mb4_unicode_ci
+    CREATE TABLE IF NOT EXISTS app_meta (
+      meta_key VARCHAR(100) PRIMARY KEY,
+      meta_value JSON NULL,
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await pool.query(`
@@ -83,6 +85,8 @@ async function ensureSchema(pool, database) {
       college VARCHAR(255) NULL,
       campus_zone VARCHAR(255) NULL,
       dorm_area VARCHAR(255) NULL,
+      mbti VARCHAR(4) NULL,
+      birth_date DATE NULL,
       bio TEXT NULL,
       schedule_text TEXT NULL,
       ideal_scene TEXT NULL,
@@ -112,6 +116,8 @@ async function ensureSchema(pool, database) {
       INDEX users_school_idx (school),
       INDEX users_major_idx (major),
       INDEX users_grade_idx (grade),
+      INDEX users_mbti_idx (mbti),
+      INDEX users_birth_date_idx (birth_date),
       INDEX users_verification_idx (verification_status),
       INDEX users_is_admin_idx (is_admin)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -175,7 +181,127 @@ async function ensureSchema(pool, database) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await ensureUserSchemaCompatibility(pool, database);
+  await ensureDashboardTables(pool);
+  await refreshDashboardTables(pool);
+
   schemaReady = true;
+}
+
+async function ensureUserSchemaCompatibility(pool, database) {
+  await ensureColumn(pool, database, "users", "mbti", "VARCHAR(4) NULL AFTER dorm_area");
+  await ensureColumn(pool, database, "users", "birth_date", "DATE NULL AFTER mbti");
+  await ensureIndex(pool, database, "users", "users_mbti_idx", "CREATE INDEX users_mbti_idx ON users (mbti)");
+  await ensureIndex(pool, database, "users", "users_birth_date_idx", "CREATE INDEX users_birth_date_idx ON users (birth_date)");
+}
+
+async function ensureColumn(pool, database, table, column, definition) {
+  const [rows] = await pool.execute(`
+    SELECT COUNT(*) AS count
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?
+  `, [database, table, column]);
+
+  if (Number(rows?.[0]?.count || 0) > 0) {
+    return;
+  }
+
+  await pool.query(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${quoteIdentifier(column)} ${definition}`);
+}
+
+async function ensureIndex(pool, database, table, indexName, createSql) {
+  const [rows] = await pool.execute(`
+    SELECT COUNT(*) AS count
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?
+  `, [database, table, indexName]);
+
+  if (Number(rows?.[0]?.count || 0) > 0) {
+    return;
+  }
+
+  await pool.query(createSql);
+}
+
+async function ensureDashboardTables(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`看板_用户列表\` (
+      \`用户ID\` VARCHAR(80) PRIMARY KEY,
+      \`邮箱\` VARCHAR(255) NULL,
+      \`昵称\` VARCHAR(255) NULL,
+      \`学校\` VARCHAR(255) NULL,
+      \`年级\` VARCHAR(120) NULL,
+      \`专业\` VARCHAR(255) NULL,
+      \`学院\` VARCHAR(255) NULL,
+      \`MBTI\` VARCHAR(4) NULL,
+      \`生日\` DATE NULL,
+      \`认证状态\` VARCHAR(32) NULL,
+      \`会员类型\` VARCHAR(64) NULL,
+      \`是否管理员\` VARCHAR(8) NULL,
+      \`注册时间\` DATETIME(3) NULL,
+      \`更新时间\` DATETIME(3) NULL,
+      INDEX \`看板用户学校索引\` (\`学校\`),
+      INDEX \`看板用户认证索引\` (\`认证状态\`),
+      INDEX \`看板用户更新时间索引\` (\`更新时间\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`看板_匹配记录\` (
+      \`匹配ID\` VARCHAR(80) PRIMARY KEY,
+      \`用户A昵称\` VARCHAR(255) NULL,
+      \`用户A邮箱\` VARCHAR(255) NULL,
+      \`用户B昵称\` VARCHAR(255) NULL,
+      \`用户B邮箱\` VARCHAR(255) NULL,
+      \`是否已互相展示身份\` VARCHAR(8) NULL,
+      \`匹配时间\` DATETIME(3) NULL,
+      \`最后消息时间\` DATETIME(3) NULL,
+      INDEX \`看板匹配最后消息索引\` (\`最后消息时间\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`看板_聊天记录\` (
+      \`消息ID\` VARCHAR(120) PRIMARY KEY,
+      \`匹配ID\` VARCHAR(80) NULL,
+      \`发送人昵称\` VARCHAR(255) NULL,
+      \`发送人邮箱\` VARCHAR(255) NULL,
+      \`消息类型\` VARCHAR(32) NULL,
+      \`内容\` TEXT NULL,
+      \`发送时间\` DATETIME(3) NULL,
+      INDEX \`看板聊天匹配索引\` (\`匹配ID\`),
+      INDEX \`看板聊天时间索引\` (\`发送时间\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`看板_待认证用户\` (
+      \`用户ID\` VARCHAR(80) PRIMARY KEY,
+      \`邮箱\` VARCHAR(255) NULL,
+      \`昵称\` VARCHAR(255) NULL,
+      \`学校\` VARCHAR(255) NULL,
+      \`年级\` VARCHAR(120) NULL,
+      \`专业\` VARCHAR(255) NULL,
+      \`认证状态\` VARCHAR(32) NULL,
+      \`提交时间\` DATETIME(3) NULL,
+      \`校园卡图片\` TEXT NULL,
+      INDEX \`看板待认证提交时间索引\` (\`提交时间\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`看板_会员概览\` (
+      \`用户ID\` VARCHAR(80) PRIMARY KEY,
+      \`邮箱\` VARCHAR(255) NULL,
+      \`昵称\` VARCHAR(255) NULL,
+      \`会员类型\` VARCHAR(64) NULL,
+      \`会员状态\` VARCHAR(64) NULL,
+      \`到期时间\` VARCHAR(80) NULL,
+      \`更新时间\` DATETIME(3) NULL,
+      INDEX \`看板会员类型索引\` (\`会员类型\`),
+      INDEX \`看板会员状态索引\` (\`会员状态\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 class MysqlStore {
@@ -342,6 +468,7 @@ class MysqlStore {
     if (key.startsWith("messages/")) {
       const matchId = key.slice("messages/".length);
       await this.pool.execute("DELETE FROM messages WHERE match_id = ?", [matchId]);
+      await refreshDashboardTables(this.pool);
       return;
     }
 
@@ -417,13 +544,13 @@ async function upsertUser(pool, user) {
   await pool.execute(`
     INSERT INTO users (
       id, email, student_id, nickname, school, grade, major, college, campus_zone, dorm_area,
-      bio, schedule_text, ideal_scene, relationship_goal, allow_anonymous_match, allow_offline_events,
+      mbti, birth_date, bio, schedule_text, ideal_scene, relationship_goal, allow_anonymous_match, allow_offline_events,
       campus_card_image, avatar, is_verified, verification_status, verification_badge,
       verification_requested_at, verification_reviewed_at, verification_notes, membership_json, stats_json,
       tags_json, scene_tags_json, match_modes_json, skipped_ids_json, is_admin, password_hash,
       password_salt, created_at, updated_at, raw_json
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON),
@@ -440,6 +567,8 @@ async function upsertUser(pool, user) {
       college = VALUES(college),
       campus_zone = VALUES(campus_zone),
       dorm_area = VALUES(dorm_area),
+      mbti = VALUES(mbti),
+      birth_date = VALUES(birth_date),
       bio = VALUES(bio),
       schedule_text = VALUES(schedule_text),
       ideal_scene = VALUES(ideal_scene),
@@ -477,6 +606,8 @@ async function upsertUser(pool, user) {
     user.college || null,
     user.campusZone || null,
     user.dormArea || null,
+    user.mbti || null,
+    toMysqlDate(user.birthDate || user.birthday),
     user.bio || null,
     user.schedule || null,
     user.idealScene || null,
@@ -504,6 +635,7 @@ async function upsertUser(pool, user) {
     toMysqlDateTime(user.updatedAt),
     jsonString(user),
   ]);
+  await refreshDashboardTables(pool);
 }
 
 async function upsertMatch(pool, match) {
@@ -544,6 +676,7 @@ async function upsertMatch(pool, match) {
     toMysqlDateTime(match.updatedAt),
     jsonString(match),
   ]);
+  await refreshDashboardTables(pool);
 }
 
 async function replaceMessages(pool, matchId, messages) {
@@ -569,12 +702,138 @@ async function replaceMessages(pool, matchId, messages) {
       ]);
     }
     await connection.commit();
+    await refreshDashboardTables(pool);
   } catch (error) {
     await connection.rollback();
     throw error;
   } finally {
     connection.release();
   }
+}
+
+async function refreshDashboardTables(pool) {
+  const dashboardTables = [
+    "看板_会员概览",
+    "看板_待认证用户",
+    "看板_聊天记录",
+    "看板_匹配记录",
+    "看板_用户列表",
+  ];
+
+  for (const table of dashboardTables) {
+    await pool.query(`DELETE FROM ${quoteIdentifier(table)}`);
+  }
+
+  await pool.query(`
+    INSERT INTO \`看板_用户列表\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`学校\`, \`年级\`, \`专业\`, \`学院\`,
+      \`MBTI\`, \`生日\`, \`认证状态\`, \`会员类型\`, \`是否管理员\`, \`注册时间\`, \`更新时间\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      school,
+      grade,
+      major,
+      college,
+      mbti,
+      birth_date,
+      verification_status,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.planId')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.type')), 'null'),
+        'free'
+      ) AS membership_type,
+      CASE WHEN is_admin = 1 THEN '是' ELSE '否' END,
+      created_at,
+      updated_at
+    FROM users
+    ORDER BY updated_at DESC, created_at DESC
+  `);
+
+  await pool.query(`
+    INSERT INTO \`看板_匹配记录\` (
+      \`匹配ID\`, \`用户A昵称\`, \`用户A邮箱\`, \`用户B昵称\`, \`用户B邮箱\`,
+      \`是否已互相展示身份\`, \`匹配时间\`, \`最后消息时间\`
+    )
+    SELECT
+      m.id,
+      ua.nickname,
+      ua.email,
+      ub.nickname,
+      ub.email,
+      CASE WHEN m.identity_revealed = 1 THEN '是' ELSE '否' END,
+      m.matched_at,
+      m.last_message_at
+    FROM matches m
+    LEFT JOIN users ua ON ua.id = m.participant_a
+    LEFT JOIN users ub ON ub.id = m.participant_b
+    ORDER BY m.last_message_at DESC, m.matched_at DESC
+  `);
+
+  await pool.query(`
+    INSERT INTO \`看板_聊天记录\` (
+      \`消息ID\`, \`匹配ID\`, \`发送人昵称\`, \`发送人邮箱\`, \`消息类型\`, \`内容\`, \`发送时间\`
+    )
+    SELECT
+      msg.id,
+      msg.match_id,
+      COALESCE(sender.nickname, msg.sender_nickname),
+      sender.email,
+      msg.message_type,
+      msg.content,
+      msg.created_at
+    FROM messages msg
+    LEFT JOIN users sender ON sender.id = msg.sender_id
+    ORDER BY msg.created_at DESC
+  `);
+
+  await pool.query(`
+    INSERT INTO \`看板_待认证用户\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`学校\`, \`年级\`, \`专业\`,
+      \`认证状态\`, \`提交时间\`, \`校园卡图片\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      school,
+      grade,
+      major,
+      verification_status,
+      verification_requested_at,
+      campus_card_image
+    FROM users
+    WHERE verification_status IN ('pending', 'rejected')
+    ORDER BY verification_requested_at DESC, updated_at DESC
+  `);
+
+  await pool.query(`
+    INSERT INTO \`看板_会员概览\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`会员类型\`, \`会员状态\`, \`到期时间\`, \`更新时间\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.planId')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.type')), 'null'),
+        'free'
+      ) AS membership_type,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.status')), 'null'),
+        'active'
+      ) AS membership_status,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.expiresAt')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.expiredAt')), 'null')
+      ) AS expires_at,
+      updated_at
+    FROM users
+    ORDER BY updated_at DESC
+  `);
 }
 
 function pairKeyFromParticipants(participants) {
@@ -633,8 +892,33 @@ function toMysqlDateTime(value) {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
 }
 
+function toMysqlDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function toInt(value) {
   return value ? 1 : 0;
+}
+
+function quoteIdentifier(value) {
+  return `\`${String(value).replace(/`/g, "``")}\``;
 }
 
 function decodeCursor(cursor) {

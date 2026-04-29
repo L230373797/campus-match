@@ -13,6 +13,14 @@ npm run standalone
 
 Open [http://127.0.0.1:3000/login](http://127.0.0.1:3000/login).
 
+On Windows, you can also run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/start-local-mysql-site.ps1
+```
+
+This starts the standalone site with the local MySQL configuration from `.env.local` and opens the login page automatically.
+
 ## Docker Compose run
 
 Install Docker Desktop first.

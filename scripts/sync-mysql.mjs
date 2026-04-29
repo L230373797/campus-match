@@ -14,6 +14,7 @@ if (args.help) {
 }
 
 loadDotEnv(path.resolve(".env.local"));
+loadDotEnvOverride(args.env ? path.resolve(args.env) : "");
 
 try {
   const apiBase = normalizeBaseUrl(args.api || process.env.CAMPUS_API_BASE || DEFAULT_API_BASE);
@@ -24,7 +25,7 @@ try {
     ? emptyExportData()
     : await loadExportData({ source, apiBase, sanitizeUsers: false });
 
-  await syncMysql(config, database, exportData);
+  await syncMysql(config, database, exportData, { useExistingDatabase: args.useExistingDatabase });
   console.log(`MySQL synced to ${config.host}:${config.port}/${database}`);
   console.log(`Imported ${exportData.counts.users} users, ${exportData.counts.matches} matches, ${exportData.counts.messages} messages.`);
 } catch (error) {
@@ -42,10 +43,14 @@ function parseArgs(argv) {
       parsed.api = argv[++index];
     } else if (item === "--source") {
       parsed.source = argv[++index];
+    } else if (item === "--env") {
+      parsed.env = argv[++index];
     } else if (item === "--database") {
       parsed.database = argv[++index];
     } else if (item === "--schema-only") {
       parsed.schemaOnly = true;
+    } else if (item === "--use-existing-database") {
+      parsed.useExistingDatabase = true;
     }
   }
   return parsed;
@@ -57,8 +62,11 @@ function printHelp() {
 Options:
   --api <url>         API base URL. Defaults to ${DEFAULT_API_BASE}
   --source <mode>     blobs or api. Defaults to blobs
+  --env <file>        Load extra env vars from a file, overriding .env.local
   --database <name>   MySQL database name. Defaults to ${DEFAULT_DATABASE}
   --schema-only       Create/update schema without importing data
+  --use-existing-database
+                      Connect to an existing database and skip CREATE DATABASE / USE
   -h, --help          Show this help text
 
 Environment:
@@ -67,6 +75,9 @@ Environment:
   MYSQL_DATABASE
   MYSQL_USER
   MYSQL_PASSWORD
+  MYSQL_SSL
+  MYSQL_SSL_REJECT_UNAUTHORIZED
+  MYSQL_SSL_CA
   CAMPUS_API_BASE
   CAMPUS_SYNC_SOURCE
   CAMPUS_ADMIN_EMAIL
@@ -91,23 +102,68 @@ function getMysqlConfig(database) {
     user,
     password,
     database,
+    ssl: mysqlSslConfigFromEnv(),
   };
 }
 
-async function syncMysql(config, database, exportData) {
+function mysqlSslConfigFromEnv() {
+  const enabled = String(process.env.MYSQL_SSL || "").trim().toLowerCase();
+  if (!["1", "true", "required", "require"].includes(enabled)) {
+    return undefined;
+  }
+
+  return {
+    rejectUnauthorized: String(process.env.MYSQL_SSL_REJECT_UNAUTHORIZED || "true").toLowerCase() !== "false",
+    ...(process.env.MYSQL_SSL_CA ? { ca: process.env.MYSQL_SSL_CA } : {}),
+  };
+}
+
+function loadDotEnvOverride(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return;
+  }
+
+  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) {
+      continue;
+    }
+
+    process.env[match[1]] = stripQuotes(match[2].trim());
+  }
+}
+
+function stripQuotes(value) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1);
+  }
+
+  return value;
+}
+
+async function syncMysql(config, database, exportData, { useExistingDatabase = false } = {}) {
   const connection = await mysql.createConnection({
     host: config.host,
     port: config.port,
     user: config.user,
     password: config.password,
+    ...(useExistingDatabase ? { database } : {}),
     multipleStatements: true,
     charset: "utf8mb4",
+    ssl: config.ssl,
   });
 
   try {
-    await ensureSchema(connection, database);
+    await ensureSchema(connection, database, { createDatabase: !useExistingDatabase });
     await ensureUserSchemaCompatibility(connection, database);
-    await connection.changeUser({ database });
+    if (!useExistingDatabase) {
+      await connection.changeUser({ database });
+    }
     await connection.beginTransaction();
 
     await clearTables(connection);
@@ -135,12 +191,16 @@ async function syncMysql(config, database, exportData) {
   }
 }
 
-async function ensureSchema(connection, database) {
+async function ensureSchema(connection, database, { createDatabase = true } = {}) {
   const schemaPath = path.resolve("db", "mysql", "schema.sql");
   const sql = fs.readFileSync(schemaPath, "utf8");
-  const normalized = sql
-    .replace(/CREATE DATABASE IF NOT EXISTS campus_match/gi, `CREATE DATABASE IF NOT EXISTS ${quoteIdentifier(database)}`)
-    .replace(/USE campus_match;/gi, `USE ${quoteIdentifier(database)};`);
+  const normalized = createDatabase
+    ? sql
+      .replace(/CREATE DATABASE IF NOT EXISTS campus_match/gi, `CREATE DATABASE IF NOT EXISTS ${quoteIdentifier(database)}`)
+      .replace(/USE campus_match;/gi, `USE ${quoteIdentifier(database)};`)
+    : sql
+      .replace(/CREATE DATABASE IF NOT EXISTS campus_match\s+CHARACTER SET utf8mb4\s+COLLATE utf8mb4_unicode_ci;\s*/i, "")
+      .replace(/USE campus_match;\s*/i, "");
   await connection.query(normalized);
 }
 

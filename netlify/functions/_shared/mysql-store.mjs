@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import mysql from "mysql2/promise";
 
 let pool;
@@ -31,7 +32,33 @@ function getMysqlConfig(env) {
     password,
     database,
     port: Number(env("MYSQL_PORT") || 3306),
+    ssl: getMysqlSslConfig(env),
   };
+}
+
+function getMysqlSslConfig(env) {
+  const enabled = String(env("MYSQL_SSL") || "").trim().toLowerCase();
+  if (!["1", "true", "required", "require"].includes(enabled)) {
+    return undefined;
+  }
+
+  const ca = env("MYSQL_SSL_CA") || readOptionalFile(env("MYSQL_SSL_CA_PATH"));
+  return {
+    rejectUnauthorized: String(env("MYSQL_SSL_REJECT_UNAUTHORIZED") || "true").toLowerCase() !== "false",
+    ...(ca ? { ca } : {}),
+  };
+}
+
+function readOptionalFile(filePath) {
+  if (!filePath) {
+    return "";
+  }
+
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 async function getPool(config) {
@@ -49,6 +76,7 @@ async function getPool(config) {
       database: config.database,
       charset: "utf8mb4",
       dateStrings: true,
+      ssl: config.ssl,
       waitForConnections: true,
       connectionLimit: 5,
       queueLimit: 0,

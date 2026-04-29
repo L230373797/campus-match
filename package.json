@@ -7,6 +7,7 @@
     "dev": "netlify dev",
     "deploy": "netlify deploy --prod",
     "check:launch": "node scripts/launch-smoke-test.mjs",
+    "check:mysql:production": "node scripts/check-production-mysql.mjs",
     "sync:db": "node scripts/sync-local-db.mjs",
     "sync:mysql": "node scripts/sync-mysql.mjs",
     "standalone": "node server/index.mjs"

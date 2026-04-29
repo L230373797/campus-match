@@ -183,11 +183,154 @@ function Get-LocalSiteSummary {
   }
 }
 
+function New-HealthResult {
+  param(
+    [string]$NameBase64,
+    [string]$Level,
+    [string]$Detail
+  )
+
+  return [PSCustomObject]@{
+    Name = Decode-Text $NameBase64
+    Level = $Level
+    Detail = $Detail
+  }
+}
+
+function Test-LocalSiteHealth {
+  $summary = Get-LocalSiteSummary
+  if ($summary.Contains((Decode-Text "5pys5Zyw572R56uZ5q2j5bi46L+Q6KGM"))) {
+    return New-HealthResult "5pys5Zyw572R56uZ" "OK" $summary
+  }
+
+  return New-HealthResult "5pys5Zyw572R56uZ" "WARN" (Decode-Text "5pys5Zyw572R56uZ5rKh5pyJ5ZCv5Yqo77yM6ZyA6KaB5pe254K54oCc5omT5byA5pys5Zyw572R56uZ4oCd")
+}
+
+function Test-DatabaseHealth {
+  $summary = Get-DatabaseSummary
+  if ($summary.Contains((Decode-Text "5pWw5o2u5bqT6L+e5o6l5q2j5bi4"))) {
+    return New-HealthResult "5pWw5o2u5bqT" "OK" $summary
+  }
+
+  return New-HealthResult "5pWw5o2u5bqT" "FAIL" $summary
+}
+
+function Test-BackupHealth {
+  $backupDir = Join-Path ([Environment]::GetFolderPath("Desktop")) "campus-match-db-backups"
+  $latest = $null
+  if (Test-Path -LiteralPath $backupDir) {
+    $latest = Get-ChildItem -LiteralPath $backupDir -Filter "*.sql" -File -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+  }
+
+  if (!$latest) {
+    return New-HealthResult "5aSH5Lu9" "WARN" (Decode-Text "5rKh5pyJ5om+5Yiw5aSH5Lu95paH5Lu2")
+  }
+
+  $age = New-TimeSpan -Start $latest.LastWriteTime -End (Get-Date)
+  $detail = "$(Decode-Text "5pyA6L+R5aSH5Lu95q2j5bi4"): $($latest.LastWriteTime.ToString("yyyy-MM-dd HH:mm"))  $($latest.Name)"
+  if ($age.TotalDays -gt 7) {
+    return New-HealthResult "5aSH5Lu9" "WARN" "$(Decode-Text "5aSH5Lu96LaF6L+HIDcg5aSp5pyq5pu05paw"): $($latest.LastWriteTime.ToString("yyyy-MM-dd HH:mm"))"
+  }
+
+  return New-HealthResult "5aSH5Lu9" "OK" $detail
+}
+
+function Invoke-GitText {
+  param([string[]]$Arguments)
+
+  $errorFile = [IO.Path]::GetTempFileName()
+  try {
+    $output = & git -C $ProjectRoot @Arguments 2>$errorFile
+    if ($LASTEXITCODE -ne 0) {
+      $errorText = (Get-Content -LiteralPath $errorFile -Raw -ErrorAction SilentlyContinue).Trim()
+      if (!$errorText) { $errorText = "Exit code $LASTEXITCODE" }
+      throw $errorText
+    }
+    return ($output -join "`n").Trim()
+  } finally {
+    Remove-Item -LiteralPath $errorFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Test-GitHealth {
+  try {
+    $statusText = Invoke-GitText -Arguments @("status", "--short")
+    if ($statusText) {
+      return New-HealthResult "R2l0SHViIOWQjOatpQ==" "WARN" (Decode-Text "5pys5Zyw5pyJ5pyq5o+Q5Lqk5pS55Yqo")
+    }
+
+    try {
+      Invoke-GitText -Arguments @("fetch", "--quiet", "origin", "netlify-current-source") | Out-Null
+    } catch {
+      return New-HealthResult "R2l0SHViIOWQjOatpQ==" "WARN" "$(Decode-Text "5peg5rOV5qOA5p+lIEdpdEh1YiDnirbmgIE="): $($_.Exception.Message)"
+    }
+
+    $localHead = Invoke-GitText -Arguments @("rev-parse", "HEAD")
+    $remoteHead = Invoke-GitText -Arguments @("rev-parse", "origin/netlify-current-source")
+    if ($localHead -ne $remoteHead) {
+      return New-HealthResult "R2l0SHViIOWQjOatpQ==" "WARN" (Decode-Text "5pys5Zyw5ZKMIEdpdEh1YiDmj5DkuqTkuI3kuIDoh7Q=")
+    }
+
+    return New-HealthResult "R2l0SHViIOWQjOatpQ==" "OK" (Decode-Text "5bey5ZKMIEdpdEh1YiDlkIzmraU=")
+  } catch {
+    return New-HealthResult "R2l0SHViIOWQjOatpQ==" "WARN" "$(Decode-Text "5peg5rOV5qOA5p+lIEdpdEh1YiDnirbmgIE="): $($_.Exception.Message)"
+  }
+}
+
+function Get-HealthCheckResults {
+  return @(
+    Test-LocalSiteHealth
+    Test-DatabaseHealth
+    Test-BackupHealth
+    Test-GitHealth
+  )
+}
+
+function Show-HealthCheckReport {
+  $results = Get-HealthCheckResults
+  $lines = New-Object System.Collections.Generic.List[string]
+  $lines.Add((Decode-Text "5L2T5qOA57uT5p6c"))
+  $lines.Add("")
+
+  foreach ($result in $results) {
+    $label = $result.Level
+    $lines.Add("[$label] $($result.Name) - $($result.Detail)")
+  }
+
+  $lines.Add("")
+  if ($results.Level -contains "FAIL" -or $results.Level -contains "WARN") {
+    $lines.Add((Decode-Text "5Y+R546w6ZyA6KaB5YWz5rOo55qE6aG555uu"))
+  } else {
+    $lines.Add((Decode-Text "5pyq5Y+R546w6Zi75aGe6Zeu6aKY"))
+  }
+
+  $icon = [System.Windows.Forms.MessageBoxIcon]::Information
+  if ($results.Level -contains "FAIL") {
+    $icon = [System.Windows.Forms.MessageBoxIcon]::Error
+  } elseif ($results.Level -contains "WARN") {
+    $icon = [System.Windows.Forms.MessageBoxIcon]::Warning
+  }
+
+  [System.Windows.Forms.MessageBox]::Show(
+    ($lines -join [Environment]::NewLine),
+    (Decode-Text "5L2T5qOA57uT5p6c"),
+    [System.Windows.Forms.MessageBoxButtons]::OK,
+    $icon
+  ) | Out-Null
+}
+
 $actions = @(
   @{
     Label = "5omT5byA5pys5Zyw572R56uZ"
     Hint = "5ZCv5Yqo5pys5ZywIE15U1FMIOeJiOe9keermQ=="
     Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" }
+  },
+  @{
+    Label = "5LiA6ZSu5L2T5qOA"
+    Hint = "5qOA5p+l572R56uZ44CBTXlTUUzjgIHlpIfku73lkowgR2l0SHViIOWQjOatpQ=="
+    Run = { Show-HealthCheckReport }
   },
   @{
     Label = "5omT5byA5pys5Zyw566h55CG5ZGY56uv"
@@ -248,6 +391,10 @@ if ($CheckOnly.IsPresent) {
   Write-Host "Local site: $(Get-LocalSiteSummary)"
   Write-Host "Database: $(Get-DatabaseSummary)"
   Write-Host "Latest backup: $(Get-LatestBackupSummary)"
+  Write-Host "Health:"
+  foreach ($result in Get-HealthCheckResults) {
+    Write-Host "  [$($result.Level)] $($result.Name): $($result.Detail)"
+  }
   exit 0
 }
 
@@ -268,8 +415,8 @@ Add-Type -AssemblyName System.Drawing
 $form = New-Object System.Windows.Forms.Form
 $form.Text = Decode-Text "5qCh5Zut6aG555uu5o6n5Yi25Y+w"
 $form.StartPosition = "CenterScreen"
-$form.Size = New-Object System.Drawing.Size(780, 735)
-$form.MinimumSize = New-Object System.Drawing.Size(720, 680)
+$form.Size = New-Object System.Drawing.Size(780, 815)
+$form.MinimumSize = New-Object System.Drawing.Size(720, 760)
 $form.BackColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
 
 $fontTitle = New-Object System.Drawing.Font("Microsoft YaHei UI", 20, [System.Drawing.FontStyle]::Bold)
@@ -353,7 +500,7 @@ $status.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
 $status.AutoSize = $false
 $status.TextAlign = "MiddleLeft"
 $status.Size = New-Object System.Drawing.Size(680, 28)
-$status.Location = New-Object System.Drawing.Point(34, 660)
+$status.Location = New-Object System.Drawing.Point(34, 740)
 $status.Text = "Ready."
 $form.Controls.Add($status)
 
@@ -445,7 +592,7 @@ $closeButton = New-Object System.Windows.Forms.Button
 $closeButton.Text = Decode-Text "5YWz6Zet"
 $closeButton.Font = $fontButton
 $closeButton.Size = New-Object System.Drawing.Size(120, 36)
-$closeButton.Location = New-Object System.Drawing.Point(606, 610)
+$closeButton.Location = New-Object System.Drawing.Point(606, 690)
 $closeButton.BackColor = [System.Drawing.Color]::FromArgb(226, 232, 240)
 $closeButton.FlatStyle = "Flat"
 $closeButton.Add_Click({ $form.Close() })

@@ -106,6 +106,7 @@ async function syncMysql(config, database, exportData) {
 
   try {
     await ensureSchema(connection, database);
+    await ensureUserSchemaCompatibility(connection, database);
     await connection.changeUser({ database });
     await connection.beginTransaction();
 
@@ -142,6 +143,41 @@ async function ensureSchema(connection, database) {
   await connection.query(normalized);
 }
 
+async function ensureUserSchemaCompatibility(connection, database) {
+  await ensureColumn(connection, database, "users", "mbti", "VARCHAR(4) NULL AFTER dorm_area");
+  await ensureColumn(connection, database, "users", "birth_date", "DATE NULL AFTER mbti");
+  await ensureIndex(connection, database, "users", "users_mbti_idx", "CREATE INDEX users_mbti_idx ON users (mbti)");
+  await ensureIndex(connection, database, "users", "users_birth_date_idx", "CREATE INDEX users_birth_date_idx ON users (birth_date)");
+}
+
+async function ensureColumn(connection, database, table, column, definition) {
+  const [rows] = await connection.execute(`
+    SELECT COUNT(*) AS count
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?
+  `, [database, table, column]);
+
+  if (Number(rows?.[0]?.count || 0) > 0) {
+    return;
+  }
+
+  await connection.query(`ALTER TABLE ${quoteIdentifier(database)}.${quoteIdentifier(table)} ADD COLUMN ${quoteIdentifier(column)} ${definition}`);
+}
+
+async function ensureIndex(connection, database, table, indexName, createSql) {
+  const [rows] = await connection.execute(`
+    SELECT COUNT(*) AS count
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?
+  `, [database, table, indexName]);
+
+  if (Number(rows?.[0]?.count || 0) > 0) {
+    return;
+  }
+
+  await connection.query(createSql);
+}
+
 async function clearTables(connection) {
   await connection.query(`
     DELETE FROM messages;
@@ -171,7 +207,7 @@ async function insertUser(connection, user) {
   await connection.execute(`
     INSERT INTO users (
       id, email, student_id, nickname, school, grade, major, college, campus_zone, dorm_area,
-      bio, schedule_text, ideal_scene, relationship_goal, allow_anonymous_match, allow_offline_events,
+      mbti, birth_date, bio, schedule_text, ideal_scene, relationship_goal, allow_anonymous_match, allow_offline_events,
       campus_card_image, avatar, is_verified, verification_status, verification_badge,
       verification_requested_at, verification_reviewed_at, verification_notes, membership_json, stats_json,
       tags_json, scene_tags_json, match_modes_json, skipped_ids_json, is_admin, password_hash,
@@ -179,7 +215,7 @@ async function insertUser(connection, user) {
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON),
       CAST(? AS JSON), CAST(? AS JSON), CAST(? AS JSON), CAST(? AS JSON), ?, ?,
       ?, ?, ?, CAST(? AS JSON)
@@ -195,6 +231,8 @@ async function insertUser(connection, user) {
     user.college || null,
     user.campusZone || null,
     user.dormArea || null,
+    normalizeMysqlMbti(user.mbti),
+    normalizeMysqlDate(user.birthDate || user.birthday),
     user.bio || null,
     user.schedule || null,
     user.idealScene || null,
@@ -297,6 +335,21 @@ function toMysqlDateTime(value) {
   const seconds = pad(date.getUTCSeconds());
   const milliseconds = String(date.getUTCMilliseconds()).padStart(3, "0");
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+}
+
+function normalizeMysqlMbti(value) {
+  const mbti = String(value || "").trim().toUpperCase();
+  return /^(I|E)(N|S)(F|T)(J|P)$/.test(mbti) ? mbti : null;
+}
+
+function normalizeMysqlDate(value) {
+  const raw = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return null;
+  }
+
+  const date = new Date(`${raw}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) ? raw : null;
 }
 
 function pad(value) {

@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
   college VARCHAR(255) NULL,
   campus_zone VARCHAR(255) NULL,
   dorm_area VARCHAR(255) NULL,
+  mbti VARCHAR(4) NULL,
+  birth_date DATE NULL,
   bio TEXT NULL,
   schedule_text TEXT NULL,
   ideal_scene TEXT NULL,
@@ -50,6 +52,8 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX users_school_idx (school),
   INDEX users_major_idx (major),
   INDEX users_grade_idx (grade),
+  INDEX users_mbti_idx (mbti),
+  INDEX users_birth_date_idx (birth_date),
   INDEX users_verification_idx (verification_status),
   INDEX users_is_admin_idx (is_admin)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

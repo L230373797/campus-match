@@ -125,6 +125,7 @@ async function syncMysql(config, database, exportData) {
       await insertMessage(connection, message, index);
     }
 
+    await refreshDashboardTables(connection);
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -180,12 +181,122 @@ async function ensureIndex(connection, database, table, indexName, createSql) {
 
 async function clearTables(connection) {
   await connection.query(`
+    DELETE FROM \`看板_会员概览\`;
+    DELETE FROM \`看板_待认证用户\`;
+    DELETE FROM \`看板_聊天记录\`;
+    DELETE FROM \`看板_匹配记录\`;
+    DELETE FROM \`看板_用户列表\`;
     DELETE FROM messages;
     DELETE FROM matches;
     DELETE FROM sessions;
     DELETE FROM email_verification_codes;
     DELETE FROM users;
     DELETE FROM app_meta;
+  `);
+}
+
+async function refreshDashboardTables(connection) {
+  await connection.query(`
+    INSERT INTO \`看板_用户列表\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`学校\`, \`年级\`, \`专业\`, \`学院\`,
+      \`MBTI\`, \`生日\`, \`认证状态\`, \`会员类型\`, \`是否管理员\`, \`注册时间\`, \`更新时间\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      school,
+      grade,
+      major,
+      college,
+      mbti,
+      birth_date,
+      verification_status,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.planId')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.type')), 'null'),
+        'free'
+      ) AS membership_type,
+      CASE WHEN is_admin = 1 THEN '是' ELSE '否' END,
+      created_at,
+      updated_at
+    FROM users
+    ORDER BY updated_at DESC, created_at DESC;
+
+    INSERT INTO \`看板_匹配记录\` (
+      \`匹配ID\`, \`用户A昵称\`, \`用户A邮箱\`, \`用户B昵称\`, \`用户B邮箱\`,
+      \`是否已互相展示身份\`, \`匹配时间\`, \`最后消息时间\`
+    )
+    SELECT
+      m.id,
+      ua.nickname,
+      ua.email,
+      ub.nickname,
+      ub.email,
+      CASE WHEN m.identity_revealed = 1 THEN '是' ELSE '否' END,
+      m.matched_at,
+      m.last_message_at
+    FROM matches m
+    LEFT JOIN users ua ON ua.id = m.participant_a
+    LEFT JOIN users ub ON ub.id = m.participant_b
+    ORDER BY m.last_message_at DESC, m.matched_at DESC;
+
+    INSERT INTO \`看板_聊天记录\` (
+      \`消息ID\`, \`匹配ID\`, \`发送人昵称\`, \`发送人邮箱\`, \`消息类型\`, \`内容\`, \`发送时间\`
+    )
+    SELECT
+      msg.id,
+      msg.match_id,
+      COALESCE(sender.nickname, msg.sender_nickname),
+      sender.email,
+      msg.message_type,
+      msg.content,
+      msg.created_at
+    FROM messages msg
+    LEFT JOIN users sender ON sender.id = msg.sender_id
+    ORDER BY msg.created_at DESC;
+
+    INSERT INTO \`看板_待认证用户\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`学校\`, \`年级\`, \`专业\`,
+      \`认证状态\`, \`提交时间\`, \`校园卡图片\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      school,
+      grade,
+      major,
+      verification_status,
+      verification_requested_at,
+      campus_card_image
+    FROM users
+    WHERE verification_status IN ('pending', 'rejected')
+    ORDER BY verification_requested_at DESC, updated_at DESC;
+
+    INSERT INTO \`看板_会员概览\` (
+      \`用户ID\`, \`邮箱\`, \`昵称\`, \`会员类型\`, \`会员状态\`, \`到期时间\`, \`更新时间\`
+    )
+    SELECT
+      id,
+      email,
+      nickname,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.planId')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.type')), 'null'),
+        'free'
+      ) AS membership_type,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.status')), 'null'),
+        'active'
+      ) AS membership_status,
+      COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.expiresAt')), 'null'),
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(membership_json, '$.expiredAt')), 'null')
+      ) AS expires_at,
+      updated_at
+    FROM users
+    ORDER BY updated_at DESC;
   `);
 }
 

@@ -107,3 +107,72 @@ CREATE TABLE IF NOT EXISTS messages (
   INDEX messages_sender_idx (sender_id),
   INDEX messages_created_idx (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `看板_用户列表` (
+  `用户ID` VARCHAR(80) PRIMARY KEY,
+  `邮箱` VARCHAR(255) NULL,
+  `昵称` VARCHAR(255) NULL,
+  `学校` VARCHAR(255) NULL,
+  `年级` VARCHAR(120) NULL,
+  `专业` VARCHAR(255) NULL,
+  `学院` VARCHAR(255) NULL,
+  `MBTI` VARCHAR(4) NULL,
+  `生日` DATE NULL,
+  `认证状态` VARCHAR(32) NULL,
+  `会员类型` VARCHAR(64) NULL,
+  `是否管理员` VARCHAR(8) NULL,
+  `注册时间` DATETIME(3) NULL,
+  `更新时间` DATETIME(3) NULL,
+  INDEX `看板用户学校索引` (`学校`),
+  INDEX `看板用户认证索引` (`认证状态`),
+  INDEX `看板用户更新时间索引` (`更新时间`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `看板_匹配记录` (
+  `匹配ID` VARCHAR(80) PRIMARY KEY,
+  `用户A昵称` VARCHAR(255) NULL,
+  `用户A邮箱` VARCHAR(255) NULL,
+  `用户B昵称` VARCHAR(255) NULL,
+  `用户B邮箱` VARCHAR(255) NULL,
+  `是否已互相展示身份` VARCHAR(8) NULL,
+  `匹配时间` DATETIME(3) NULL,
+  `最后消息时间` DATETIME(3) NULL,
+  INDEX `看板匹配最后消息索引` (`最后消息时间`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `看板_聊天记录` (
+  `消息ID` VARCHAR(120) PRIMARY KEY,
+  `匹配ID` VARCHAR(80) NULL,
+  `发送人昵称` VARCHAR(255) NULL,
+  `发送人邮箱` VARCHAR(255) NULL,
+  `消息类型` VARCHAR(32) NULL,
+  `内容` TEXT NULL,
+  `发送时间` DATETIME(3) NULL,
+  INDEX `看板聊天匹配索引` (`匹配ID`),
+  INDEX `看板聊天时间索引` (`发送时间`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `看板_待认证用户` (
+  `用户ID` VARCHAR(80) PRIMARY KEY,
+  `邮箱` VARCHAR(255) NULL,
+  `昵称` VARCHAR(255) NULL,
+  `学校` VARCHAR(255) NULL,
+  `年级` VARCHAR(120) NULL,
+  `专业` VARCHAR(255) NULL,
+  `认证状态` VARCHAR(32) NULL,
+  `提交时间` DATETIME(3) NULL,
+  `校园卡图片` TEXT NULL,
+  INDEX `看板待认证提交时间索引` (`提交时间`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `看板_会员概览` (
+  `用户ID` VARCHAR(80) PRIMARY KEY,
+  `邮箱` VARCHAR(255) NULL,
+  `昵称` VARCHAR(255) NULL,
+  `会员类型` VARCHAR(64) NULL,
+  `会员状态` VARCHAR(64) NULL,
+  `到期时间` VARCHAR(80) NULL,
+  `更新时间` DATETIME(3) NULL,
+  INDEX `看板会员类型索引` (`会员类型`),
+  INDEX `看板会员状态索引` (`会员状态`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

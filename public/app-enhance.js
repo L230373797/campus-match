@@ -1142,31 +1142,24 @@
         }
       }
       .campus-scroll-reveal {
-        opacity: 0;
-        transform: translate3d(0, 28px, 0) scale(.985);
-        filter: blur(12px);
-        clip-path: inset(0 0 10% 0 round 20px);
-        transition:
-          opacity .74s cubic-bezier(.16, 1, .3, 1),
-          transform .74s cubic-bezier(.16, 1, .3, 1),
-          filter .74s cubic-bezier(.16, 1, .3, 1),
-          clip-path .74s cubic-bezier(.16, 1, .3, 1);
-        transition-delay: var(--campus-reveal-delay, 0ms);
-        will-change: opacity, transform, filter, clip-path;
+        opacity: 1;
+        transform: none;
+        filter: none;
+        clip-path: none;
       }
       .campus-scroll-reveal.is-visible {
         opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
+        transform: none;
         filter: blur(0);
-        clip-path: inset(0 0 0 0 round 0);
+        clip-path: none;
       }
       .campus-scroll-reveal.campus-scroll-reveal-text {
-        transform: translate3d(0, 18px, 0);
-        clip-path: inset(0 0 48% 0);
+        transform: none;
+        clip-path: none;
       }
       .campus-scroll-reveal.campus-scroll-reveal-text.is-visible {
-        transform: translate3d(0, 0, 0);
-        clip-path: inset(0 0 0 0);
+        transform: none;
+        clip-path: none;
       }
       .campus-scroll-reveal-text .campus-reveal-line {
         display: block;
@@ -1215,9 +1208,8 @@
       }
       @media (max-width: 640px) {
         .campus-scroll-reveal {
-          transform: translate3d(0, 20px, 0) scale(.99);
-          filter: blur(8px);
-          transition-duration: .58s;
+          transform: none;
+          filter: none;
         }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -4719,7 +4711,7 @@
 
     let index = 0;
     candidates.forEach((node) => {
-      if (node.dataset.campusRevealReady === "true" || shouldSkipScrollReveal(node)) {
+      if (!isRevealTextTarget(node) || node.dataset.campusRevealReady === "true" || shouldSkipScrollReveal(node)) {
         return;
       }
 
@@ -4738,31 +4730,33 @@
 
   function scrollRevealCandidates() {
     const selectors = [
-      "body[data-campus-route='/login'] .campus-login-hero",
-      "body[data-campus-route='/login'] .campus-login-card",
-      "body[data-campus-route='/login'] .campus-ios-preview-card",
-      "body[data-campus-route='/login'] .campus-login-step",
+      "body[data-campus-route='/login'] .campus-login-hero h1",
       "body[data-campus-route='/login'] .campus-login-hero p",
       "body[data-campus-route='/login'] .campus-login-card h3",
       "body[data-campus-route='/login'] .campus-login-card p",
-      "body[data-campus-route='/matches'] a[href*='/chat/']",
-      "body:not([data-campus-route^='/chat/']) .apple-card",
-      "body:not([data-campus-route^='/chat/']) main section",
-      "body:not([data-campus-route^='/chat/']) main article",
-      ".campus-business-heading",
       ".campus-business-heading h2",
       ".campus-business-heading p",
-      ".campus-business-feature",
-      ".campus-business-feed-card",
-      ".campus-business-channel",
-      ".campus-plan-card",
-      ".campus-activity-center-card",
-      ".campus-profile-hero",
-      ".campus-profile-card",
-      ".campus-compatibility-card",
-      ".campus-privacy-card",
+      ".campus-business-feature h3",
+      ".campus-business-feature p",
+      ".campus-business-feed-card h3",
+      ".campus-business-feed-card p",
+      ".campus-plan-card h3",
+      ".campus-plan-card p",
+      ".campus-activity-center-card span",
+      ".campus-activity-center-card small",
+      ".campus-profile-hero h1",
+      ".campus-profile-hero h2",
+      ".campus-profile-hero p",
+      ".campus-profile-card h2",
+      ".campus-profile-card h3",
+      ".campus-profile-card p",
+      ".campus-compatibility-card h2",
+      ".campus-compatibility-card p",
+      ".campus-privacy-card h2",
+      ".campus-privacy-card p",
       "h1",
       "h2",
+      "h3",
     ];
     return Array.from(new Set(selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))));
   }

@@ -136,14 +136,17 @@
     activitySummary: null,
     activityCheckedAt: 0,
     activityFetching: false,
+    activityModalType: "liked",
     privacyRequests: [],
     privacyCheckedAt: 0,
     privacyFetching: false,
+    imageFallbackInstalled: false,
     baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
   injectStyles();
   patchFetch();
+  installCampusImageFallbacks();
   patchHistoryMethod("pushState");
   patchHistoryMethod("replaceState");
 
@@ -1003,6 +1006,20 @@
         height: 100%;
         object-fit: cover;
       }
+      .campus-avatar-fallback {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        border-radius: inherit;
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        font-weight: 950;
+      }
+      .campus-avatar-control .campus-avatar-fallback {
+        border-radius: 1.5rem;
+        font-size: 2rem;
+      }
       .campus-activity-main {
         min-width: 0;
       }
@@ -1043,6 +1060,43 @@
         font-size: 13px;
         font-weight: 900;
         white-space: nowrap;
+      }
+      button.campus-activity-action {
+        border: 0;
+        cursor: pointer;
+      }
+      .campus-activity-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .campus-activity-danger {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 13px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.12);
+        color: rgba(255,255,255,.86);
+        background: rgba(255,255,255,.08);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .campus-activity-action:disabled,
+      .campus-activity-danger:disabled {
+        cursor: progress;
+        opacity: .62;
+      }
+      .campus-activity-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
       }
       .campus-activity-empty {
         padding: 34px 18px;
@@ -2266,9 +2320,13 @@
         .campus-activity-card {
           grid-template-columns: 50px minmax(0, 1fr);
         }
+        .campus-activity-actions,
         .campus-activity-action {
           grid-column: 2;
           justify-self: start;
+        }
+        .campus-activity-actions {
+          justify-content: flex-start;
         }
         .campus-profile-compat-panel {
           padding: 16px;
@@ -3770,6 +3828,64 @@
     }
 
     return payload || {};
+  }
+
+  function installCampusImageFallbacks() {
+    if (state.imageFallbackInstalled) {
+      return;
+    }
+
+    state.imageFallbackInstalled = true;
+    document.addEventListener("error", (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || image.dataset.campusFallbackApplied === "true") {
+        return;
+      }
+
+      const isCampusAvatar = image.src.includes("/api/uploads/avatars/")
+        || Boolean(image.closest(".campus-avatar-control, .campus-activity-avatar"));
+      if (!isCampusAvatar) {
+        return;
+      }
+
+      image.dataset.campusFallbackApplied = "true";
+      const fallback = document.createElement("span");
+      fallback.className = "campus-avatar-fallback";
+      fallback.textContent = avatarFallbackLabel(image);
+      image.replaceWith(fallback);
+    }, true);
+
+    setTimeout(() => applyCampusAvatarFallbacks(document), 120);
+  }
+
+  function applyCampusAvatarFallbacks(root = document) {
+    root.querySelectorAll("img").forEach((image) => {
+      const isCampusAvatar = image.src.includes("/api/uploads/avatars/")
+        || Boolean(image.closest(".campus-avatar-control, .campus-activity-avatar"));
+      if (!isCampusAvatar || image.dataset.campusFallbackApplied === "true") {
+        return;
+      }
+
+      if (image.complete && image.naturalWidth === 0) {
+        image.dataset.campusFallbackApplied = "true";
+        const fallback = document.createElement("span");
+        fallback.className = "campus-avatar-fallback";
+        fallback.textContent = avatarFallbackLabel(image);
+        image.replaceWith(fallback);
+      }
+    });
+  }
+
+  function avatarFallbackLabel(image) {
+    const alt = textFromImageAlt(image);
+    const nickname = state.user?.nickname || alt || "同";
+    return String(nickname).trim().slice(0, 1) || "同";
+  }
+
+  function textFromImageAlt(image) {
+    return String(image.getAttribute("alt") || "")
+      .replace(/我的头像|头像/g, "")
+      .trim();
   }
 
   function apiPathFromFetchUrl(url) {
@@ -6005,6 +6121,8 @@
       status.textContent = "";
       avatarWrap.appendChild(status);
     }
+
+    applyCampusAvatarFallbacks(avatarWrap);
   }
 
   function ensureAvatarFileInput(avatarWrap, source) {
@@ -6347,6 +6465,19 @@
       </div>
     `;
     modal.addEventListener("click", (event) => {
+      const activityButton = event.target.closest("[data-activity-action]");
+      if (activityButton) {
+        handleActivityAction(activityButton).catch((error) => {
+          renderActivityModal(state.activityModalType, {
+            error: error.message || "操作失败，请稍后再试",
+            liked: [],
+            footprints: [],
+            counts: {},
+          });
+        });
+        return;
+      }
+
       if (event.target === modal || event.target.closest("[data-close-activity]")) {
         closeActivityModal();
       }
@@ -6357,6 +6488,7 @@
 
   async function openActivityModal(type) {
     const modal = ensureActivityModalShell();
+    state.activityModalType = type;
     document.body.dataset.campusActivityModal = "open";
     updateScrollLock();
     renderActivityModal(type, { loading: true });
@@ -6372,6 +6504,44 @@
   function closeActivityModal() {
     delete document.body.dataset.campusActivityModal;
     updateScrollLock();
+  }
+
+  async function handleActivityAction(button) {
+    const action = button.dataset.activityAction;
+    const targetId = button.dataset.activityTarget || "";
+    let path = "";
+
+    if (action === "dismiss-liked" && targetId) {
+      path = `/users/activity/liked/${encodeURIComponent(targetId)}`;
+    } else if (action === "remove-footprint" && targetId) {
+      path = `/users/activity/footprints/${encodeURIComponent(targetId)}`;
+    } else if (action === "clear-footprints") {
+      path = "/users/activity/footprints";
+    }
+
+    if (!path) {
+      return;
+    }
+
+    if (action === "clear-footprints" && !window.confirm("确定清空所有足迹吗？")) {
+      return;
+    }
+
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = "处理中...";
+    try {
+      const payload = await requestApi(path, { method: "DELETE" });
+      state.activitySummary = payload.data || { liked: [], footprints: [], counts: {} };
+      state.activityCheckedAt = Date.now();
+      updateProfileActivityCounts();
+      renderActivityModal(state.activityModalType, state.activitySummary);
+    } finally {
+      if (document.body.contains(button)) {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
   }
 
   function renderActivityModal(type, summary = {}) {
@@ -6402,10 +6572,16 @@
     }
 
     body.innerHTML = `
+      ${!isLiked ? `
+        <div class="campus-activity-toolbar">
+          <button class="campus-activity-danger" type="button" data-activity-action="clear-footprints">清空足迹</button>
+        </div>
+      ` : ""}
       <div class="campus-activity-list">
         ${items.map((item) => renderActivityItem(item, isLiked)).join("")}
       </div>
     `;
+    applyCampusAvatarFallbacks(body);
   }
 
   function renderActivityItem(item, isLiked) {
@@ -6417,11 +6593,19 @@
     const avatar = profile.avatar
       ? `<img src="${escapeAttr(profile.avatar)}" alt="${escapeAttr(title)}" loading="lazy" />`
       : escapeHtml(String(title).slice(0, 1) || "同");
-    const action = isLiked && item.matchId
-      ? `<a class="campus-activity-action" href="/chat/${escapeAttr(item.matchId)}">去聊天</a>`
-      : id
-        ? `<a class="campus-activity-action" href="/search.html">再看看</a>`
-        : `<span class="campus-activity-action">已记录</span>`;
+    const action = isLiked
+      ? `
+        <div class="campus-activity-actions">
+          ${item.matchId ? `<a class="campus-activity-action" href="/chat/${escapeAttr(item.matchId)}">去聊天</a>` : ""}
+          ${id ? `<button class="campus-activity-danger" type="button" data-activity-action="dismiss-liked" data-activity-target="${escapeAttr(id)}">取消喜欢</button>` : ""}
+        </div>
+      `
+      : `
+        <div class="campus-activity-actions">
+          ${id ? `<a class="campus-activity-action" href="/search.html">再看看</a>` : ""}
+          ${id ? `<button class="campus-activity-danger" type="button" data-activity-action="remove-footprint" data-activity-target="${escapeAttr(id)}">移除</button>` : `<span class="campus-activity-action">已记录</span>`}
+        </div>
+      `;
 
     return `
       <article class="campus-activity-card">

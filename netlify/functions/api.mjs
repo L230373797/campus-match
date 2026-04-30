@@ -222,6 +222,7 @@ async function handleAuth(req, store, segments) {
       membership: createDefaultMembership(now),
       stats: { matches: 0, likes: 0, views: 0 },
       skippedIds: [],
+      dismissedLikedIds: [],
       createdAt: now,
       updatedAt: now,
       ...passwordRecord,
@@ -435,6 +436,30 @@ async function handleUsers(req, store, segments, url) {
   if (segments[1] === "activity" && req.method === "GET") {
     const activity = await buildUserActivity(store, user);
     return json({ success: true, data: activity });
+  }
+
+  if (segments[1] === "activity" && segments[2] === "liked" && segments[3] && req.method === "DELETE") {
+    const targetId = decodePathSegment(segments[3]);
+    const updatedUser = removeActivityRecord(user, "like", targetId, new Date().toISOString());
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "已从喜欢列表移除",
+      data: await buildUserActivity(store, updatedUser),
+    });
+  }
+
+  if (segments[1] === "activity" && segments[2] === "footprints" && req.method === "DELETE") {
+    const targetId = segments[3] ? decodePathSegment(segments[3]) : "";
+    const updatedUser = targetId
+      ? removeActivityRecord(user, "skip", targetId, new Date().toISOString())
+      : clearFootprintActivity(user, new Date().toISOString());
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: targetId ? "已移除这条足迹" : "足迹已清空",
+      data: await buildUserActivity(store, updatedUser),
+    });
   }
 
   if (segments[1] === "privacy-requests" && segments[2] === "cancel" && req.method === "POST") {
@@ -916,6 +941,7 @@ async function listMatchesForUser(store, userId) {
 }
 
 async function buildUserActivity(store, user) {
+  const dismissedLikedIds = new Set(uniqueTextValues(user.dismissedLikedIds || []));
   const [matches, activityLog] = await Promise.all([
     listMatchesForUser(store, user.id),
     Promise.resolve(normalizeActivityLog(user.activityLog)),
@@ -931,21 +957,27 @@ async function buildUserActivity(store, user) {
       .map((item) => [item.userId, item]),
   );
 
-  const liked = matches.map((match) => {
-    const profile = match.user || {};
-    const profileId = profile.id || profile._id;
-    const log = likedLogByUserId.get(profileId);
-    return {
-      id: match.id,
-      type: "like",
-      matchId: match.id,
-      actionAt: log?.createdAt || match.matchedAt || match.lastMessageAt,
-      profile,
-      lastMessageAt: match.lastMessageAt,
-      lastMessagePreview: match.lastMessagePreview,
-      unreadCount: match.unreadCount || 0,
-    };
-  });
+  const liked = matches
+    .map((match) => {
+      const profile = match.user || {};
+      const profileId = profile.id || profile._id;
+      if (!profileId || dismissedLikedIds.has(profileId)) {
+        return null;
+      }
+
+      const log = likedLogByUserId.get(profileId);
+      return {
+        id: match.id,
+        type: "like",
+        matchId: match.id,
+        actionAt: log?.createdAt || match.matchedAt || match.lastMessageAt,
+        profile,
+        lastMessageAt: match.lastMessageAt,
+        lastMessagePreview: match.lastMessagePreview,
+        unreadCount: match.unreadCount || 0,
+      };
+    })
+    .filter(Boolean);
 
   const footprintIds = uniqueTextValues([
     ...activityLog.filter((item) => item.type === "skip").map((item) => item.userId),
@@ -994,6 +1026,47 @@ function rememberActivity(user, type, profile, now = new Date().toISOString()) {
   return {
     ...user,
     activityLog: [entry, ...activityLog].slice(0, 120),
+    dismissedLikedIds: type === "like"
+      ? uniqueTextValues(user.dismissedLikedIds || []).filter((id) => id !== targetId)
+      : uniqueTextValues(user.dismissedLikedIds || []),
+    updatedAt: now,
+  };
+}
+
+function removeActivityRecord(user, type, targetId, now = new Date().toISOString()) {
+  const normalizedTargetId = text(targetId);
+  if (!normalizedTargetId) {
+    return { ...user, updatedAt: now };
+  }
+
+  const activityLog = normalizeActivityLog(user.activityLog)
+    .filter((item) => !(item.type === type && item.userId === normalizedTargetId));
+  const nextUser = {
+    ...user,
+    activityLog,
+    updatedAt: now,
+  };
+
+  if (type === "skip") {
+    nextUser.skippedIds = uniqueTextValues(user.skippedIds || [])
+      .filter((id) => id !== normalizedTargetId);
+  }
+
+  if (type === "like") {
+    nextUser.dismissedLikedIds = uniqueTextValues([
+      ...(user.dismissedLikedIds || []),
+      normalizedTargetId,
+    ]);
+  }
+
+  return nextUser;
+}
+
+function clearFootprintActivity(user, now = new Date().toISOString()) {
+  return {
+    ...user,
+    skippedIds: [],
+    activityLog: normalizeActivityLog(user.activityLog).filter((item) => item.type !== "skip"),
     updatedAt: now,
   };
 }
@@ -1085,6 +1158,7 @@ async function saveUser(store, user) {
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    dismissedLikedIds: Array.isArray(user.dismissedLikedIds) ? user.dismissedLikedIds.map(text).filter(Boolean) : [],
     activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
@@ -1524,7 +1598,7 @@ function isActiveUser(user) {
 
 function publicUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
 
   return {
     ...safeUser,
@@ -1536,7 +1610,7 @@ function publicUser(user) {
 
 function adminExportUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, activityLog, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, activityLog, ...safeUser } = normalizedUser;
   return {
     ...safeUser,
     id: normalizedUser.id,
@@ -1883,6 +1957,7 @@ function normalizeUserRecord(user) {
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    dismissedLikedIds: Array.isArray(user.dismissedLikedIds) ? user.dismissedLikedIds.map(text).filter(Boolean) : [],
     activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
@@ -2476,6 +2551,14 @@ function normalizeBirthDate(value) {
 
 function text(value) {
   return String(value || "").trim();
+}
+
+function decodePathSegment(value) {
+  try {
+    return decodeURIComponent(text(value));
+  } catch {
+    return text(value);
+  }
 }
 
 function arrayOfText(value) {

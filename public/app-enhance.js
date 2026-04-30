@@ -1204,13 +1204,13 @@
       .campus-scroll-reveal-text.campus-scroll-scrub-text .campus-reveal-line > .campus-reveal-word,
       .campus-scroll-reveal-text.campus-scroll-scrub-text.is-visible .campus-reveal-line > .campus-reveal-word {
         display: inline-block;
-        opacity: var(--campus-word-opacity, .08);
-        transform: translate3d(0, var(--campus-word-y, 24px), 0);
-        filter: blur(var(--campus-word-blur, 8px));
+        opacity: var(--campus-word-opacity, .06);
+        transform: translate3d(0, var(--campus-word-y, 36px), 0);
+        filter: blur(var(--campus-word-blur, 10px));
         transition:
-          opacity .08s linear,
-          transform .08s linear,
-          filter .08s linear;
+          opacity .26s ease,
+          transform .3s cubic-bezier(.16, 1, .3, 1),
+          filter .3s cubic-bezier(.16, 1, .3, 1);
         will-change: opacity, transform, filter;
       }
       @media (max-width: 640px) {
@@ -4954,16 +4954,16 @@
       node.style.transformOrigin = "0% 50%";
       node.style.transform = `rotate(${rotate.toFixed(3)}deg)`;
 
-      const wordProgress = clampNumber((viewportHeight * .86 - rect.top) / Math.max(viewportHeight * .44 + rect.height, 1), 0, 1);
+      const wordProgress = clampNumber((viewportHeight * .82 - rect.top) / Math.max(viewportHeight * .78 + rect.height, 1), 0, 1);
       const words = Array.from(node.querySelectorAll(".campus-reveal-word"));
       const total = Math.max(1, words.length);
       words.forEach((word, index) => {
-        const stagger = Math.min(.54, index * Math.min(.06, .78 / total));
-        const progress = clampNumber((wordProgress - stagger) / .34, 0, 1);
-        const eased = 1 - Math.pow(1 - progress, 2.35);
-        word.style.setProperty("--campus-word-opacity", String((.08 + eased * .92).toFixed(3)));
-        word.style.setProperty("--campus-word-blur", `${(8 * (1 - eased)).toFixed(2)}px`);
-        word.style.setProperty("--campus-word-y", `${(28 * (1 - eased)).toFixed(2)}px`);
+        const stagger = Math.min(.68, index * Math.min(.085, 1.05 / total));
+        const progress = clampNumber((wordProgress - stagger) / .48, 0, 1);
+        const eased = 1 - Math.pow(1 - progress, 1.55);
+        word.style.setProperty("--campus-word-opacity", String((.06 + eased * .94).toFixed(3)));
+        word.style.setProperty("--campus-word-blur", `${(10 * (1 - eased)).toFixed(2)}px`);
+        word.style.setProperty("--campus-word-y", `${(42 * (1 - eased)).toFixed(2)}px`);
       });
     });
   }

@@ -4714,11 +4714,6 @@
       if (!isRevealTextTarget(node) || node.dataset.campusRevealReady === "true" || shouldSkipScrollReveal(node)) {
         return;
       }
-      if (shouldKeepHeroHeadingStatic(node)) {
-        node.dataset.campusRevealReady = "static";
-        node.classList.remove("campus-scroll-reveal", "campus-scroll-reveal-text", "campus-scroll-scrub-text", "is-visible");
-        return;
-      }
 
       const delay = Math.min(index % 9, 8) * 42;
       node.dataset.campusRevealReady = "true";
@@ -4735,39 +4730,38 @@
 
   function scrollRevealCandidates() {
     const selectors = [
-      "body[data-campus-route='/login'] .campus-login-hero h1",
-      "body[data-campus-route='/login'] .campus-login-hero p",
-      "body[data-campus-route='/login'] .campus-login-card h3",
-      "body[data-campus-route='/login'] .campus-login-card p",
-      ".campus-business-heading h2",
-      ".campus-business-heading p",
-      ".campus-business-feature h3",
-      ".campus-business-feature p",
-      ".campus-business-feed-card h3",
-      ".campus-business-feed-card p",
-      ".campus-plan-card h3",
-      ".campus-plan-card p",
-      ".campus-activity-center-card span",
-      ".campus-activity-center-card small",
-      ".campus-profile-hero h1",
-      ".campus-profile-hero h2",
-      ".campus-profile-hero p",
-      ".campus-profile-card h2",
-      ".campus-profile-card h3",
-      ".campus-profile-card p",
-      ".campus-compatibility-card h2",
-      ".campus-compatibility-card p",
-      ".campus-privacy-card h2",
-      ".campus-privacy-card p",
-      "h1",
-      "h2",
-      "h3",
+      "#root h1",
+      "#root h2",
+      "#root h3",
+      "#root h4",
+      "#root h5",
+      "#root h6",
+      "#root p",
+      "#root small",
+      "#root strong",
+      "#root em",
+      "#root li",
+      "#root dt",
+      "#root dd",
+      "#root blockquote",
+      "#root figcaption",
+      "#root label",
+      "#root button",
+      "#root a",
+      "#root span",
+      "#root div",
     ];
     return Array.from(new Set(selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))));
   }
 
   function shouldSkipScrollReveal(node) {
     if (!node?.isConnected || node.dataset.campusRevealSkip === "true") {
+      return true;
+    }
+    if (node.classList?.contains("campus-reveal-line") || node.classList?.contains("campus-reveal-word")) {
+      return true;
+    }
+    if (node.closest("input, textarea, select, option, [contenteditable='true']")) {
       return true;
     }
     if (node.closest("#campus-unread-pill, #campus-chat-profile-drawer, #campus-avatar-sheet, #campus-membership-modal, #campus-activity-modal, .campus-quick-actions, .ios-tab-bar, .ios-tabbar, [data-campus-nav-badge='true']")) {
@@ -4779,26 +4773,7 @@
       return true;
     }
 
-    let current = node;
-    while (current && current !== document.body) {
-      const position = getComputedStyle(current).position;
-      if (position === "fixed" || position === "sticky") {
-        return true;
-      }
-      current = current.parentElement;
-    }
     return false;
-  }
-
-  function shouldKeepHeroHeadingStatic(node) {
-    if (!["H1", "H2"].includes(node?.tagName)) {
-      return false;
-    }
-
-    const rect = node.getBoundingClientRect();
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
-    const fontSize = parseFloat(getComputedStyle(node).fontSize) || 0;
-    return fontSize >= 32 && rect.top >= 0 && rect.top < viewportHeight * .58;
   }
 
   function isRevealHeading(node) {
@@ -4809,25 +4784,41 @@
     if (!node) {
       return false;
     }
-    if (["H1", "H2", "H3"].includes(node.tagName)) {
-      return true;
+    const allowedTags = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "SMALL", "STRONG", "EM", "LI", "DT", "DD", "BLOCKQUOTE", "FIGCAPTION", "LABEL", "BUTTON", "A", "SPAN", "DIV"]);
+    if (!allowedTags.has(node.tagName)) {
+      return false;
     }
-    if (node.matches?.(".campus-login-hero p, .campus-login-card p, .campus-business-heading p")) {
-      return true;
+
+    const text = cleanText(node.textContent).replace(/\s+/g, " ");
+    if (text.length < 2 || text.length > 180) {
+      return false;
     }
-    return node.classList?.contains("campus-business-heading") && !node.querySelector("h1, h2, h3, p");
+
+    const leafishTags = new Set(["DIV", "SPAN", "SMALL", "STRONG", "EM", "LABEL", "LI", "DT", "DD", "BUTTON", "A"]);
+    if (leafishTags.has(node.tagName)) {
+      const elementChildren = Array.from(node.children).filter((child) => child.tagName !== "BR");
+      if (elementChildren.length) {
+        return false;
+      }
+    }
+
+    if (node.querySelector?.("h1, h2, h3, h4, h5, h6, p, div, article, section, ul, ol, li, button, a, input, textarea, select, svg, img, video, canvas")) {
+      return false;
+    }
+
+    return true;
   }
 
   function prepareScrollRevealText(node) {
     if (!node || node.dataset.campusRevealTextReady === "true" || state.scrollRevealReduced) {
       return;
     }
-    if (node.querySelector("a, button, input, textarea, select, svg, img, video, canvas")) {
+    if (node.querySelector("a, button, input, textarea, select, svg, img, video, canvas, .campus-reveal-line, .campus-reveal-word")) {
       return;
     }
 
     const text = cleanText(node.textContent).replace(/\s+/g, " ");
-    if (text.length < 6) {
+    if (text.length < 2) {
       return;
     }
 

@@ -87,7 +87,7 @@ export default async (req, context) => {
     }
 
     if (segments[0] === "admin") {
-      return await handleAdmin(req, store, segments);
+      return await handleAdmin(req, store, segments, url);
     }
 
     if (segments[0] === "membership") {
@@ -256,7 +256,7 @@ async function handleAuth(req, store, segments) {
   return json({ success: false, message: "接口不存在" }, 404);
 }
 
-async function handleAdmin(req, store, segments) {
+async function handleAdmin(req, store, segments, url) {
   const user = await requireUser(req, store);
   requireAdmin(user);
 
@@ -270,6 +270,14 @@ async function handleAdmin(req, store, segments) {
     return json({
       success: true,
       data: buildAdminOverview(users, matches, messages),
+    });
+  }
+
+  if (segments[1] === "users" && req.method === "GET") {
+    const users = await listUsers(store);
+    return json({
+      success: true,
+      data: buildAdminUsersPayload(users, url),
     });
   }
 
@@ -1435,6 +1443,118 @@ function buildAdminOverview(users, matches, messages) {
         content: text(message.content).slice(0, 80),
         createdAt: message.createdAt,
       })),
+  };
+}
+
+function buildAdminUsersPayload(users, url) {
+  const query = text(url.searchParams.get("q")).toLowerCase();
+  const status = text(url.searchParams.get("status") || "all").toLowerCase();
+  const activeUsers = users.map(normalizeUserRecord).filter(isActiveUser);
+  const paidMembers = activeUsers.filter((user) => normalizeMembershipRecord(user.membership, user.createdAt).planId !== "free");
+  let filteredUsers = activeUsers;
+
+  if (query) {
+    filteredUsers = filteredUsers.filter((user) => {
+      const haystack = [
+        user.nickname,
+        user.email,
+        user.studentId,
+        user.school,
+        user.major,
+        user.grade,
+        user.college,
+      ].map((item) => text(item).toLowerCase()).join(" ");
+      return haystack.includes(query);
+    });
+  }
+
+  if (status !== "all") {
+    filteredUsers = filteredUsers.filter((user) => {
+      const membership = normalizeMembershipRecord(user.membership, user.createdAt);
+      if (status === "member") {
+        return membership.planId !== "free" && membership.status === "active";
+      }
+      if (status === "verified") {
+        return Boolean(user.isVerified || user.verificationStatus === "approved");
+      }
+      return text(user.verificationStatus || "unverified") === status;
+    });
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    query,
+    status,
+    counts: {
+      all: activeUsers.length,
+      verified: activeUsers.filter((user) => user.isVerified || user.verificationStatus === "approved").length,
+      pending: activeUsers.filter((user) => user.verificationStatus === "pending").length,
+      rejected: activeUsers.filter((user) => user.verificationStatus === "rejected").length,
+      members: paidMembers.length,
+      filtered: filteredUsers.length,
+    },
+    users: filteredUsers
+      .slice()
+      .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))
+      .slice(0, 80)
+      .map(adminUserSummary),
+  };
+}
+
+function adminUserSummary(user) {
+  const membership = normalizeMembershipRecord(user.membership, user.createdAt);
+  const readiness = calculateProfileReadiness(user);
+  const privacyRequests = normalizePrivacyRequests(user);
+  const latestPrivacyRequest = privacyRequests
+    .slice()
+    .sort((a, b) => String(b.requestedAt || "").localeCompare(String(a.requestedAt || "")))[0] || null;
+
+  return {
+    id: user.id,
+    email: user.email,
+    studentId: user.studentId,
+    nickname: user.nickname,
+    school: user.school,
+    grade: user.grade,
+    major: user.major,
+    college: user.college,
+    avatar: user.avatar,
+    isAdmin: hasAdminAccess(user),
+    isVerified: Boolean(user.isVerified || user.verificationStatus === "approved"),
+    verificationStatus: text(user.verificationStatus || "unverified"),
+    verificationBadge: user.verificationBadge,
+    verificationRequestedAt: user.verificationRequestedAt,
+    membership: {
+      planId: membership.planId,
+      title: membership.title,
+      status: membership.status,
+      expiresAt: membership.expiresAt,
+    },
+    stats: normalizeUserStats(user.stats),
+    readiness,
+    latestPrivacyRequest: latestPrivacyRequest ? {
+      type: latestPrivacyRequest.type,
+      status: latestPrivacyRequest.status,
+      requestedAt: latestPrivacyRequest.requestedAt,
+    } : null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function calculateProfileReadiness(user) {
+  const checks = [
+    Boolean(user.avatar),
+    Boolean(user.nickname && user.bio && user.school && user.major && user.grade),
+    Boolean((user.tags || []).length || (user.sceneTags || []).length || (user.matchModes || []).length),
+    Boolean(user.mbti && user.birthDate),
+    Boolean(user.isVerified || user.verificationStatus === "approved" || user.verificationStatus === "pending"),
+  ];
+  const completed = checks.filter(Boolean).length;
+  return {
+    score: Math.round((completed / checks.length) * 100),
+    completed,
+    total: checks.length,
   };
 }
 

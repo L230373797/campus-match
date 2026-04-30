@@ -3,6 +3,9 @@
     token: localStorage.getItem("token") || "",
     user: null,
     overview: null,
+    users: [],
+    userQuery: "",
+    userStatus: "all",
     pendingUsers: [],
     privacyRequests: [],
     activeTab: "overview",
@@ -22,6 +25,7 @@
   const logoutButton = document.querySelector("#logout");
   const adminTitle = document.querySelector("#admin-view h1");
   const overviewTab = document.querySelector("#tab-overview");
+  const usersTab = document.querySelector("#tab-users");
   const verificationTab = document.querySelector("#tab-verification");
   const privacyTab = document.querySelector("#tab-privacy");
 
@@ -29,6 +33,7 @@
   refreshButton.addEventListener("click", () => loadCurrentQueue());
   logoutButton.addEventListener("click", logout);
   overviewTab.addEventListener("click", () => switchTab("overview"));
+  usersTab.addEventListener("click", () => switchTab("users"));
   verificationTab.addEventListener("click", () => switchTab("verification"));
   privacyTab.addEventListener("click", () => switchTab("privacy"));
 
@@ -100,6 +105,7 @@
 
     state.activeTab = tab;
     overviewTab.classList.toggle("active", tab === "overview");
+    usersTab.classList.toggle("active", tab === "users");
     verificationTab.classList.toggle("active", tab === "verification");
     privacyTab.classList.toggle("active", tab === "privacy");
     if (adminTitle) {
@@ -112,6 +118,9 @@
   function loadCurrentQueue() {
     if (state.activeTab === "overview") {
       return loadOverview();
+    }
+    if (state.activeTab === "users") {
+      return loadUsers();
     }
     return state.activeTab === "privacy" ? loadPrivacyRequests() : loadPendingUsers();
   }
@@ -136,6 +145,35 @@
     } finally {
       refreshButton.disabled = false;
       refreshButton.textContent = "刷新看板";
+    }
+  }
+
+  async function loadUsers() {
+    setNotice("");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "正在刷新...";
+    queue.innerHTML = `<div class="loading glass">正在读取用户列表...</div>`;
+
+    try {
+      const params = new URLSearchParams();
+      if (state.userQuery) {
+        params.set("q", state.userQuery);
+      }
+      if (state.userStatus !== "all") {
+        params.set("status", state.userStatus);
+      }
+      const payload = await requestApi(`/admin/users${params.toString() ? `?${params}` : ""}`);
+      state.users = payload.data?.users || [];
+      const counts = payload.data?.counts || {};
+      pendingCount.textContent = `用户 ${counts.filtered ?? state.users.length}`;
+      lastRefresh.textContent = `更新于 ${formatTime(payload.data?.generatedAt)}`;
+      renderUsers(payload.data || {});
+    } catch (error) {
+      queue.innerHTML = "";
+      setNotice(error.message || "用户列表读取失败");
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "刷新用户";
     }
   }
 
@@ -195,6 +233,95 @@
           </div>
         </article>
       </section>
+    `;
+  }
+
+  function renderUsers(payload) {
+    const counts = payload.counts || {};
+    const users = state.users || [];
+    queue.innerHTML = `
+      <section class="user-tools glass">
+        <input id="user-search" type="search" placeholder="搜索昵称、邮箱、学校、专业" value="${escapeAttr(state.userQuery)}" />
+        <select id="user-status">
+          ${[
+            ["all", `全部用户 ${counts.all ?? ""}`],
+            ["verified", `已认证 ${counts.verified ?? ""}`],
+            ["pending", `待认证 ${counts.pending ?? ""}`],
+            ["rejected", `认证驳回 ${counts.rejected ?? ""}`],
+            ["member", `会员 ${counts.members ?? ""}`],
+          ].map(([value, label]) => `<option value="${value}" ${state.userStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </section>
+      ${users.length ? `
+        <section class="user-grid">
+          ${users.map(renderUserManageCard).join("")}
+        </section>
+      ` : `<div class="empty glass">没有找到符合条件的用户。</div>`}
+    `;
+
+    const searchInput = queue.querySelector("#user-search");
+    const statusSelect = queue.querySelector("#user-status");
+    let searchTimer = 0;
+    searchInput?.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        state.userQuery = searchInput.value.trim();
+        loadUsers();
+      }, 260);
+    });
+    statusSelect?.addEventListener("change", () => {
+      state.userStatus = statusSelect.value;
+      loadUsers();
+    });
+  }
+
+  function renderUserManageCard(user) {
+    const readiness = user.readiness?.score ?? 0;
+    const status = verificationLabel(user.verificationStatus, user.isVerified);
+    const latestPrivacy = user.latestPrivacyRequest
+      ? `${privacyTypeLabel(user.latestPrivacyRequest.type)} · ${privacyStatusLabel(user.latestPrivacyRequest.status)}`
+      : "无资料请求";
+    const avatar = escapeHtml(firstNameLetter(user.nickname || user.email));
+
+    return `
+      <article class="user-card glass">
+        <div class="user-head">
+          <div class="user-avatar">${avatar}</div>
+          <div class="user-name">
+            <h2>${escapeHtml(user.nickname || "未命名用户")}</h2>
+            <p class="meta">${escapeHtml(user.email || "未填写邮箱")}</p>
+          </div>
+        </div>
+
+        <div class="user-badges">
+          <span class="user-badge ${status.tone}">${escapeHtml(status.label)}</span>
+          <span class="user-badge ${user.membership?.planId !== "free" ? "good" : ""}">${escapeHtml(user.membership?.title || "免费用户")}</span>
+          ${user.isAdmin ? `<span class="user-badge good">管理员</span>` : ""}
+        </div>
+
+        <p class="meta">${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · ") || "资料未填写完整")}</p>
+
+        <div class="readiness" style="--score: ${Number(readiness) || 0}%">
+          <div class="readiness-head">
+            <span>主页准备度</span>
+            <strong>${escapeHtml(readiness)}%</strong>
+          </div>
+          <div class="readiness-bar"><span></span></div>
+        </div>
+
+        <div class="user-metrics">
+          <span class="pill">匹配 ${escapeHtml(user.stats?.matches || 0)}</span>
+          <span class="pill">喜欢 ${escapeHtml(user.stats?.likes || 0)}</span>
+          <span class="pill">浏览 ${escapeHtml(user.stats?.views || 0)}</span>
+        </div>
+
+        <div class="details">
+          <div class="detail"><strong>学号</strong>${escapeHtml(user.studentId || "未填写")}</div>
+          <div class="detail"><strong>学院</strong>${escapeHtml(user.college || "未填写")}</div>
+          <div class="detail"><strong>资料请求</strong>${escapeHtml(latestPrivacy)}</div>
+          <div class="detail"><strong>加入时间</strong>${escapeHtml(formatTime(user.createdAt))}</div>
+        </div>
+      </article>
     `;
   }
 
@@ -477,9 +604,36 @@
   function tabTitle(tab) {
     return {
       overview: "数据看板",
+      users: "用户管理",
       verification: "认证队列",
       privacy: "账号资料请求",
     }[tab] || "运营后台";
+  }
+
+  function verificationLabel(status, isVerified) {
+    if (isVerified || status === "approved") {
+      return { label: "已认证", tone: "good" };
+    }
+    if (status === "pending") {
+      return { label: "待认证", tone: "warn" };
+    }
+    if (status === "rejected") {
+      return { label: "认证驳回", tone: "danger" };
+    }
+    return { label: "未认证", tone: "" };
+  }
+
+  function privacyStatusLabel(status) {
+    return {
+      pending: "待处理",
+      completed: "已完成",
+      rejected: "已驳回",
+      cancelled: "已撤回",
+    }[status] || "无状态";
+  }
+
+  function firstNameLetter(value) {
+    return String(value || "用").trim().slice(0, 1).toUpperCase() || "用";
   }
 
   function formatTime(value) {
@@ -496,7 +650,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value || "").replace(/[&<>"']/g, (char) => ({
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",

@@ -229,6 +229,141 @@
         white-space: nowrap;
       }
 
+      .user-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 190px;
+        gap: 12px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+
+      .user-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .user-card {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .user-head {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .user-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        color: var(--blue);
+        background: rgba(255, 255, 255, .74);
+        border: 1px solid rgba(148, 163, 184, .28);
+        font-weight: 950;
+      }
+
+      .user-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .user-name {
+        min-width: 0;
+      }
+
+      .user-name h2 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 19px;
+      }
+
+      .user-badges,
+      .user-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .user-badge {
+        min-height: 28px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0 10px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, .62);
+        border: 1px solid rgba(148, 163, 184, .22);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .user-badge.good {
+        color: #047857;
+        background: rgba(16, 185, 129, .14);
+      }
+
+      .user-badge.warn {
+        color: #b45309;
+        background: rgba(245, 158, 11, .16);
+      }
+
+      .user-badge.danger {
+        color: #b91c1c;
+        background: rgba(239, 68, 68, .14);
+      }
+
+      .user-card .meta {
+        word-break: break-word;
+      }
+
+      .readiness {
+        display: grid;
+        gap: 8px;
+      }
+
+      .readiness-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .readiness-bar {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .20);
+      }
+
+      .readiness-bar span {
+        display: block;
+        height: 100%;
+        width: var(--score, 0%);
+        border-radius: inherit;
+        background: linear-gradient(90deg, #52b6ff, #087fff, #ffb8cf);
+      }
+
+      select {
+        min-height: 48px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .76);
+        color: var(--ink);
+        outline: none;
+      }
+
       .pill {
         display: inline-flex;
         align-items: center;
@@ -457,7 +592,9 @@
         }
 
         .overview-grid,
-        .overview-panels {
+        .overview-panels,
+        .user-tools,
+        .user-grid {
           grid-template-columns: 1fr;
         }
 
@@ -514,6 +651,7 @@
 
         <div class="tabs glass">
           <button id="tab-overview" class="tab active" type="button">数据看板</button>
+          <button id="tab-users" class="tab" type="button">用户管理</button>
           <button id="tab-verification" class="tab" type="button">认证队列</button>
           <button id="tab-privacy" class="tab" type="button">账号资料请求</button>
         </div>

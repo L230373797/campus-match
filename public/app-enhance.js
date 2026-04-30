@@ -134,6 +134,13 @@
     unreadCheckedAt: 0,
     messageThreads: new Map(),
     chatMatches: new Map(),
+    chatTypingByMatch: new Map(),
+    chatPresenceTimer: null,
+    chatPresenceMatchId: "",
+    chatPresenceFetching: false,
+    chatTypingActive: false,
+    chatTypingLastSentAt: 0,
+    chatTypingIdleTimer: null,
     activitySummary: null,
     activityCheckedAt: 0,
     activityFetching: false,
@@ -320,6 +327,18 @@
         font-variant-numeric: tabular-nums;
         letter-spacing: 0;
       }
+      body[data-campus-route^="/chat/"] .campus-message-read-state {
+        display: block;
+        margin-top: 5px;
+        color: rgba(255,255,255,.78);
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 850;
+        text-align: right;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-read-state.is-unread {
+        color: rgba(255,255,255,.58);
+      }
       body[data-campus-route^="/chat/"] .campus-chat-avatar {
         flex: 0 0 34px;
         width: 34px;
@@ -471,6 +490,51 @@
         background: rgba(255,255,255,.72);
         box-shadow: inset 0 0 0 1px rgba(148,163,184,.18), 0 10px 24px rgba(15,23,42,.07);
         cursor: pointer;
+      }
+      .campus-chat-typing-indicator {
+        width: min(100%, 760px);
+        min-height: 28px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 auto 8px;
+        padding: 0 14px;
+        color: rgba(255,255,255,.82);
+        font-size: 12px;
+        font-weight: 850;
+        text-shadow: 0 1px 12px rgba(15,23,42,.24);
+        opacity: 1;
+        transform: translateY(0);
+        transition: opacity .18s ease, transform .18s ease;
+      }
+      .campus-chat-typing-indicator[hidden] {
+        display: flex !important;
+        opacity: 0;
+        transform: translateY(4px);
+        pointer-events: none;
+      }
+      .campus-chat-typing-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .campus-chat-typing-dots i {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: .45;
+        animation: campusTypingPulse 1s ease-in-out infinite;
+      }
+      .campus-chat-typing-dots i:nth-child(2) {
+        animation-delay: .16s;
+      }
+      .campus-chat-typing-dots i:nth-child(3) {
+        animation-delay: .32s;
+      }
+      @keyframes campusTypingPulse {
+        0%, 100% { transform: translateY(0); opacity: .35; }
+        50% { transform: translateY(-3px); opacity: .95; }
       }
       .campus-chat-profile-drawer {
         position: fixed;
@@ -680,6 +744,10 @@
         .campus-chat-quick-openers {
           width: calc(100% - 18px);
           margin-bottom: 10px;
+        }
+        .campus-chat-typing-indicator {
+          width: calc(100% - 18px);
+          margin-bottom: 6px;
         }
         .campus-chat-drawer-panel {
           top: auto;
@@ -4392,6 +4460,9 @@
       if (payload.data?.match) {
         rememberChatMatch(matchId, payload.data.match);
       }
+      if (payload.data?.typing) {
+        rememberChatTyping(matchId, payload.data.typing);
+      }
 
       if (method === "GET" && Array.isArray(payload.data?.messages)) {
         state.messageThreads.set(matchId, payload.data.messages);
@@ -4403,6 +4474,7 @@
       setTimeout(() => {
         ensureChatTools();
         enhanceChatTimeline();
+        renderChatTypingIndicator(matchId);
       }, 90);
     }).catch(() => {
       // Some responses are not JSON; nothing to remember.
@@ -4431,6 +4503,19 @@
     }
 
     state.chatMatches.set(id, match);
+    if (match.typing) {
+      rememberChatTyping(id, match.typing);
+    }
+  }
+
+  function rememberChatTyping(matchId, typing) {
+    const id = cleanText(matchId);
+    if (!id) {
+      return;
+    }
+
+    const activeUsers = Array.isArray(typing?.activeUsers) ? typing.activeUsers : [];
+    state.chatTypingByMatch.set(id, { activeUsers });
   }
 
   function currentChatMatchId() {
@@ -4693,6 +4778,8 @@
       .filter((node) => !node.children.length && messages.some((message) => cleanText(message.content) === cleanText(node.textContent)));
     const usedNodes = new Set();
     let previousDateKey = "";
+    const lastOwnMessage = [...messages].reverse().find(isCurrentUserSender);
+    const lastOwnMessageId = messageClientId(lastOwnMessage);
 
     messages.forEach((message) => {
       const content = cleanText(message.content);
@@ -4719,6 +4806,7 @@
       bubble.classList.toggle("is-mine", mine);
       bubble.classList.toggle("is-theirs", !mine);
       ensureMessageAvatar(row, bubble, mine, message, match);
+      updateMessageReadReceipt(bubble, message, match, mine, messageClientId(message) === lastOwnMessageId);
 
       const timeNode = Array.from(bubble.querySelectorAll("span")).find((node) => !node.children.length);
       const messageAt = message.createdAt || message.time;
@@ -4771,6 +4859,34 @@
     renderAvatarNode(avatar, user, mine ? "我" : "同");
   }
 
+  function updateMessageReadReceipt(bubble, message, match, mine, isLastOwnMessage) {
+    let receipt = Array.from(bubble.children).find((child) => child.classList?.contains("campus-message-read-state"));
+    if (!mine || !isLastOwnMessage) {
+      receipt?.remove();
+      return;
+    }
+
+    if (!receipt) {
+      receipt = document.createElement("span");
+      receipt.className = "campus-message-read-state";
+      bubble.appendChild(receipt);
+    }
+
+    const read = isMessageReadByOther(message, match);
+    receipt.textContent = read ? "已读" : "未读";
+    receipt.classList.toggle("is-unread", !read);
+  }
+
+  function isMessageReadByOther(message, match) {
+    const readTime = Date.parse(match?.otherReadAt || 0);
+    const messageTime = Date.parse(message?.createdAt || message?.time || 0);
+    return Number.isFinite(readTime) && Number.isFinite(messageTime) && readTime >= messageTime;
+  }
+
+  function messageClientId(message) {
+    return cleanText(message?.id || message?._id || `${message?.createdAt || ""}:${message?.content || ""}`);
+  }
+
   function directChildWithin(parent, node) {
     let current = node;
     while (current?.parentElement && current.parentElement !== parent) {
@@ -4805,6 +4921,8 @@
     if (!window.location.pathname.startsWith("/chat/")) {
       document.querySelector("#campus-chat-header-assist")?.remove();
       document.querySelector("#campus-chat-quick-openers")?.remove();
+      document.querySelector("#campus-chat-typing-indicator")?.remove();
+      stopChatPresence();
       closeChatProfileDrawer();
       return;
     }
@@ -4817,6 +4935,9 @@
     const match = currentChatMatch();
     ensureChatHeader(matchId, match);
     ensureChatQuickOpeners(matchId, match);
+    ensureChatTypingReporter(matchId);
+    ensureChatPresence(matchId);
+    renderChatTypingIndicator(matchId);
     ensureChatProfileDrawer(matchId, match);
   }
 
@@ -4908,6 +5029,170 @@
       button.addEventListener("click", () => {
         fillChatComposer(button.dataset.chatOpener || button.textContent || "");
       });
+    });
+  }
+
+  function ensureChatTypingReporter(matchId) {
+    const field = findChatComposerField();
+    if (!field) {
+      return;
+    }
+
+    if (field.dataset.campusTypingBound !== matchId) {
+      field.dataset.campusTypingBound = matchId;
+      field.addEventListener("input", () => {
+        const active = Boolean(cleanText(field.value));
+        window.clearTimeout(state.chatTypingIdleTimer);
+        if (active) {
+          reportChatTyping(matchId, true);
+          state.chatTypingIdleTimer = window.setTimeout(() => {
+            reportChatTyping(matchId, false);
+          }, 2800);
+        } else {
+          reportChatTyping(matchId, false);
+        }
+      });
+      field.addEventListener("blur", () => {
+        window.clearTimeout(state.chatTypingIdleTimer);
+        reportChatTyping(matchId, false);
+      });
+    }
+
+    const composer = findChatComposerContainer();
+    if (composer && composer.dataset.campusTypingSubmitBound !== matchId) {
+      composer.dataset.campusTypingSubmitBound = matchId;
+      composer.addEventListener("click", (event) => {
+        const button = event.target.closest?.("button");
+        if (!button || button.closest("#campus-chat-quick-openers")) {
+          return;
+        }
+        setTimeout(() => {
+          reportChatTyping(matchId, false);
+        }, 250);
+      });
+    }
+  }
+
+  function ensureChatPresence(matchId) {
+    if (state.chatPresenceMatchId !== matchId) {
+      stopChatPresence();
+      state.chatPresenceMatchId = matchId;
+    }
+
+    if (!state.chatPresenceTimer) {
+      refreshChatPresence(matchId).catch(() => {});
+      state.chatPresenceTimer = window.setInterval(() => {
+        refreshChatPresence(matchId).catch(() => {});
+      }, 3500);
+    }
+  }
+
+  function stopChatPresence() {
+    if (state.chatPresenceTimer) {
+      clearInterval(state.chatPresenceTimer);
+      state.chatPresenceTimer = null;
+    }
+    if (state.chatTypingActive && state.chatPresenceMatchId) {
+      sendChatTyping(state.chatPresenceMatchId, false).catch(() => {});
+    }
+    window.clearTimeout(state.chatTypingIdleTimer);
+    state.chatPresenceMatchId = "";
+    state.chatPresenceFetching = false;
+    state.chatTypingActive = false;
+    state.chatTypingLastSentAt = 0;
+  }
+
+  async function refreshChatPresence(matchId = currentChatMatchId()) {
+    if (!matchId || !currentToken() || !window.location.pathname.startsWith("/chat/") || state.chatPresenceFetching) {
+      return;
+    }
+
+    state.chatPresenceFetching = true;
+    try {
+      const payload = await requestApi(`/messages/${encodeURIComponent(matchId)}/typing`);
+      if (payload.data?.match) {
+        rememberChatMatch(matchId, payload.data.match);
+      }
+      if (payload.data?.typing) {
+        rememberChatTyping(matchId, payload.data.typing);
+      }
+      enhanceChatTimeline();
+      renderChatTypingIndicator(matchId);
+    } catch {
+      // Presence is a soft signal; keep the chat usable if it fails.
+    } finally {
+      state.chatPresenceFetching = false;
+    }
+  }
+
+  function reportChatTyping(matchId, active) {
+    if (!matchId || !currentToken()) {
+      return;
+    }
+
+    const now = Date.now();
+    if (active && state.chatTypingActive && now - state.chatTypingLastSentAt < 2500) {
+      return;
+    }
+    if (!active && !state.chatTypingActive && now - state.chatTypingLastSentAt < 500) {
+      return;
+    }
+
+    state.chatTypingActive = active;
+    state.chatTypingLastSentAt = now;
+    sendChatTyping(matchId, active).catch(() => {});
+  }
+
+  async function sendChatTyping(matchId, active) {
+    await requestApi(`/messages/${encodeURIComponent(matchId)}/typing`, {
+      method: "POST",
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  function renderChatTypingIndicator(matchId = currentChatMatchId()) {
+    if (!window.location.pathname.startsWith("/chat/")) {
+      document.querySelector("#campus-chat-typing-indicator")?.remove();
+      return;
+    }
+
+    const anchor = document.querySelector("#campus-chat-quick-openers") || findChatComposerContainer();
+    if (!anchor?.parentElement) {
+      return;
+    }
+
+    let indicator = document.querySelector("#campus-chat-typing-indicator");
+    if (!indicator) {
+      indicator = document.createElement("div");
+      indicator.id = "campus-chat-typing-indicator";
+      indicator.className = "campus-chat-typing-indicator";
+      indicator.setAttribute("aria-live", "polite");
+    }
+    if (indicator.parentElement !== anchor.parentElement || indicator.nextElementSibling !== anchor) {
+      anchor.parentElement.insertBefore(indicator, anchor);
+    }
+
+    const users = activeChatTypingUsers(matchId);
+    indicator.hidden = !users.length;
+    if (!users.length) {
+      indicator.textContent = "";
+      return;
+    }
+
+    const match = state.chatMatches.get(matchId) || null;
+    const name = cleanText(match?.user?.nickname) || "对方";
+    indicator.innerHTML = `
+      <span>${escapeHtml(name)}正在输入</span>
+      <span class="campus-chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    `;
+  }
+
+  function activeChatTypingUsers(matchId) {
+    const typing = state.chatTypingByMatch.get(matchId);
+    const now = Date.now();
+    return (typing?.activeUsers || []).filter((entry) => {
+      const typedAt = Date.parse(entry.updatedAt || 0);
+      return Number.isFinite(typedAt) && now - typedAt < 9000;
     });
   }
 
@@ -5146,7 +5431,11 @@
     try {
       const payload = await requestApi("/matches");
       const matches = payload.data?.matches || [];
+      rememberChatMatches(matches);
       syncUnreadIndicators(matches, payload.data?.unreadTotal);
+      if (window.location.pathname.startsWith("/chat/")) {
+        enhanceChatTimeline();
+      }
       state.unreadCheckedAt = Date.now();
     } catch {
       // Transient network errors should not interrupt the page.

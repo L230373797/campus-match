@@ -8,6 +8,7 @@ const STORE_NAME = "campus-match-data";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const EMAIL_CODE_TTL_MS = 1000 * 60 * 10;
 const EMAIL_CODE_RESEND_MS = 1000 * 60;
+const TYPING_TTL_MS = 1000 * 8;
 const IMAGE_UPLOAD_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 const MEMBERSHIP_PLAN_LIBRARY = {
@@ -864,6 +865,10 @@ async function handleMessages(req, store, segments, url) {
     throw httpError("匹配不存在", 404);
   }
 
+  if (segments[2] === "typing") {
+    return handleMessageTyping(req, store, match, user);
+  }
+
   if (req.method === "GET") {
     const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
     const limit = clampNumber(url.searchParams.get("limit"), 1, 100, 20);
@@ -879,6 +884,7 @@ async function handleMessages(req, store, segments, url) {
       data: {
         messages: messages.slice(start, end),
         match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+        typing: serializeTyping(updatedMatch, user.id),
         pagination: { page, limit, total: messages.length },
       },
     });
@@ -915,6 +921,7 @@ async function handleMessages(req, store, segments, url) {
       data: {
         message,
         match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+        typing: serializeTyping(updatedMatch, user.id),
       },
     }, 201);
   }
@@ -928,6 +935,38 @@ async function handleMessages(req, store, segments, url) {
       updatedAt: new Date().toISOString(),
     });
     return json({ success: true, message: "聊天记录已清空" });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleMessageTyping(req, store, match, user) {
+  if (req.method === "GET") {
+    const messages = await getMessages(store, match.id);
+    const otherProfile = await findOtherProfile(store, match, user.id);
+    return json({
+      success: true,
+      data: {
+        match: serializeMatch(match, user.id, otherProfile, messages),
+        typing: serializeTyping(match, user.id),
+      },
+    });
+  }
+
+  if (req.method === "POST") {
+    const body = await readBody(req);
+    const active = body.active !== false && body.isTyping !== false;
+    const updatedMatch = updateTypingState(match, user.id, active);
+    await saveMatch(store, updatedMatch);
+    const messages = await getMessages(store, match.id);
+    const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
+    return json({
+      success: true,
+      data: {
+        match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+        typing: serializeTyping(updatedMatch, user.id),
+      },
+    });
   }
 
   return json({ success: false, message: "接口不存在" }, 404);
@@ -1668,6 +1707,9 @@ function serializeMatch(match, viewerId, otherProfile, messages = []) {
   const lastMessageAt = match.lastMessageAt || lastMessage?.createdAt || match.matchedAt;
   const lastMessagePreview = text(match.lastMessagePreview) || text(lastMessage?.content);
   const lastMessageSenderId = text(match.lastMessageSenderId) || senderIdForMessage(lastMessage || {});
+  const otherId = (match.participants || []).find((participant) => participant !== viewerId) || "";
+  const otherReadAt = match.readAtByUser?.[otherId] || null;
+  const lastOwnMessage = [...messages].reverse().find((message) => senderIdForMessage(message) === viewerId);
   return {
     id: match.id,
     _id: match.id,
@@ -1679,8 +1721,49 @@ function serializeMatch(match, viewerId, otherProfile, messages = []) {
     unreadCount,
     hasUnread: unreadCount > 0,
     readAt: match.readAtByUser?.[viewerId] || null,
+    otherReadAt,
+    lastOwnMessageRead: Boolean(lastOwnMessage && isMessageReadAt(lastOwnMessage, otherReadAt)),
+    typing: serializeTyping(match, viewerId),
     user: otherProfile || null,
   };
+}
+
+function serializeTyping(match, viewerId, now = Date.now()) {
+  const typingByUser = match.typingByUser || {};
+  return {
+    activeUsers: Object.entries(typingByUser)
+      .filter(([userId, entry]) => {
+        if (userId === viewerId || entry?.active === false) {
+          return false;
+        }
+        const typedAt = Date.parse(entry?.updatedAt || entry);
+        return Number.isFinite(typedAt) && now - typedAt < TYPING_TTL_MS;
+      })
+      .map(([userId, entry]) => ({
+        userId,
+        updatedAt: entry?.updatedAt || entry,
+      })),
+  };
+}
+
+function updateTypingState(match, userId, active, now = new Date().toISOString()) {
+  const typingByUser = { ...(match.typingByUser || {}) };
+  if (active) {
+    typingByUser[userId] = { active: true, updatedAt: now };
+  } else {
+    delete typingByUser[userId];
+  }
+
+  return {
+    ...match,
+    typingByUser,
+  };
+}
+
+function isMessageReadAt(message, readAt) {
+  const readTime = Date.parse(readAt || 0);
+  const messageTime = Date.parse(message?.createdAt || message?.time || 0);
+  return Number.isFinite(readTime) && Number.isFinite(messageTime) && readTime >= messageTime;
 }
 
 function calculateUnreadCount(match, viewerId, messages = []) {

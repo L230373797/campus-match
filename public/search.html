@@ -475,7 +475,7 @@
       }
       .match-actions {
         display: grid;
-        grid-template-columns: .82fr .9fr 1.12fr;
+        grid-template-columns: .78fr .82fr .95fr 1.08fr;
         gap: 12px;
         margin-top: 18px;
       }
@@ -487,6 +487,11 @@
         color: rgba(240, 246, 255, .92);
         background: rgba(255, 255, 255, .1);
         border: 1px solid rgba(255, 255, 255, .16);
+      }
+      .match-actions .less {
+        color: rgba(240, 246, 255, .92);
+        background: rgba(255, 255, 255, .12);
+        border: 1px solid rgba(255, 255, 255, .18);
       }
       .match-actions .back {
         color: rgba(240, 246, 255, .82);
@@ -595,7 +600,7 @@
         }
         .match-actions .back {
           grid-column: 1 / -1;
-          order: 3;
+          order: 4;
           min-height: 46px;
         }
         .match-visual {
@@ -726,6 +731,23 @@
         statusBox.textContent = message;
       }
 
+      async function resetRecommendations() {
+        if (!token) {
+          render(demoUsers, { locked: true });
+          setStatus("登录后可以重新整理真实推荐。");
+          return;
+        }
+
+        setStatus("正在重新整理推荐...");
+        try {
+          await request("/api/users/recommendations/reset", { method: "POST" });
+          setStatus("已经重新打开推荐池。");
+          await runSearch();
+        } catch (error) {
+          setStatus(error.message || "重新推荐没有成功，可以稍后再试。");
+        }
+      }
+
       async function request(path, options = {}) {
         const response = await fetch(path, {
           ...options,
@@ -781,6 +803,7 @@
             <div class="match-actions">
               <button class="back" type="button" data-back ${deckHistory.length ? "" : "disabled"}>回退</button>
               <button class="skip" type="button" data-skip="${userId}">略过</button>
+              <button class="less" type="button" data-less="${userId}" ${locked ? "disabled" : ""}>少看这类</button>
               <button class="super" type="button" data-super="${userId}" ${locked ? "disabled" : ""}>${locked ? "登录后可用" : "更感兴趣"}</button>
             </div>
           </div>
@@ -809,11 +832,12 @@
               <p class="match-bio">可以试试兴趣、院系、活动或常去地点，比如图书馆、夜跑、摄影。</p>
               <div class="match-actions">
                 <button class="skip" type="button" disabled>先到这里</button>
-                <button type="button" disabled>晚点再看看</button>
+                <button class="super" type="button" data-reset-recommendations ${lockedPreview ? "disabled" : ""}>重新推荐</button>
               </div>
             </div>
           `;
           results.appendChild(empty);
+          empty.querySelector("[data-reset-recommendations]")?.addEventListener("click", resetRecommendations);
           return;
         }
 
@@ -827,6 +851,7 @@
           card.innerHTML = cardHtml(user, stackIndex, lockedPreview);
           const likeButton = card.querySelector("[data-super]");
           const skipButton = card.querySelector("[data-skip]");
+          const lessButton = card.querySelector("[data-less]");
           const backButton = card.querySelector("[data-back]");
 
           likeButton?.addEventListener("click", async (event) => {
@@ -850,6 +875,27 @@
             }
           });
           skipButton?.addEventListener("click", () => swipeTopCard("left"));
+          lessButton?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            if (lockedPreview) {
+              setStatus("登录后可以让推荐少出现类似资料。");
+              return;
+            }
+
+            button.disabled = true;
+            button.textContent = "正在调整...";
+            try {
+              await request(`/api/matches/block-type/${button.dataset.less}`, { method: "POST" });
+              setStatus("以后会少推荐类似资料。");
+              swipeTopCard("left", { alreadySkipped: true });
+            } catch (error) {
+              button.textContent = error.message || "调整失败";
+              setTimeout(() => {
+                button.disabled = false;
+                button.textContent = "少看这类";
+              }, 1800);
+            }
+          });
           backButton?.addEventListener("click", restorePreviousCard);
 
           if (stackIndex === 0) {

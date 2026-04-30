@@ -223,6 +223,7 @@ async function handleAuth(req, store, segments) {
       stats: { matches: 0, likes: 0, views: 0 },
       skippedIds: [],
       dismissedLikedIds: [],
+      dismissedRecommendationSignals: [],
       createdAt: now,
       updatedAt: now,
       ...passwordRecord,
@@ -634,6 +635,20 @@ async function handleUsers(req, store, segments, url) {
     });
   }
 
+  if (segments[1] === "recommendations" && segments[2] === "reset" && req.method === "POST") {
+    const now = new Date().toISOString();
+    const updatedUser = resetRecommendationMemory(user, now);
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "已重新整理推荐",
+      data: {
+        user: publicUser(updatedUser),
+        activity: await buildUserActivity(store, updatedUser),
+      },
+    });
+  }
+
   if (segments[1] === "search" && req.method === "GET") {
     const result = await searchUsers(store, user, url);
     return json({ success: true, data: result });
@@ -760,6 +775,37 @@ async function handleMatches(req, store, segments) {
     );
     await saveUser(store, updatedUser);
     return json({ success: true, message: "已跳过" });
+  }
+
+  if (segments[1] === "block-type" && segments[2] && req.method === "POST") {
+    const target = await findPublicProfile(store, segments[2]);
+    if (!target) {
+      throw httpError("用户不存在", 404);
+    }
+
+    if ((target.id || target._id) === user.id) {
+      throw httpError("不能屏蔽自己的资料类型", 400);
+    }
+
+    const now = new Date().toISOString();
+    const skippedIds = new Set(user.skippedIds || []);
+    skippedIds.add(target.id || target._id || segments[2]);
+    const skippedUser = rememberActivity(
+      { ...user, skippedIds: [...skippedIds] },
+      "skip",
+      target,
+      now,
+    );
+    const updatedUser = rememberRecommendationSignalDismissal(skippedUser, target, now);
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "后续会少推荐类似资料",
+      data: {
+        user: publicUser(updatedUser),
+        blockedSignals: recommendationSignalsForDismissal(target),
+      },
+    });
   }
 
   if (segments[1] && segments[2] === "read" && req.method === "POST") {
@@ -1102,6 +1148,46 @@ function clearFootprintActivity(user, now = new Date().toISOString()) {
   };
 }
 
+function resetRecommendationMemory(user, now = new Date().toISOString()) {
+  const resetUser = clearFootprintActivity(user, now);
+  return {
+    ...resetUser,
+    dismissedRecommendationSignals: [],
+    updatedAt: now,
+  };
+}
+
+function rememberRecommendationSignalDismissal(user, profile, now = new Date().toISOString()) {
+  const signals = recommendationSignalsForDismissal(profile);
+  if (!signals.length) {
+    return { ...user, updatedAt: now };
+  }
+
+  return {
+    ...user,
+    dismissedRecommendationSignals: uniqueTextValues([
+      ...arrayOfText(user.dismissedRecommendationSignals),
+      ...signals,
+    ]).slice(0, 30),
+    updatedAt: now,
+  };
+}
+
+function recommendationSignalsForDismissal(profile) {
+  return uniqueTextValues([
+    profile?.major,
+    profile?.college,
+    profile?.campusZone,
+    profile?.dormArea,
+    ...(profile?.sceneTags || []),
+    ...(profile?.matchModes || []),
+    ...(profile?.tags || []),
+  ])
+    .map((item) => item.toLowerCase())
+    .filter((item) => item.length >= 2)
+    .slice(0, 8);
+}
+
 function normalizeActivityLog(activityLog) {
   if (!Array.isArray(activityLog)) {
     return [];
@@ -1174,6 +1260,8 @@ async function buildRecommendationContext(store, viewer) {
     ...activityLog.filter((item) => item.type === "skip").map((item) => item.userId),
   ]);
   const dismissedLikedIds = uniqueTextValues(viewer.dismissedLikedIds || []);
+  const dismissedRecommendationSignals = uniqueTextValues(viewer.dismissedRecommendationSignals || [])
+    .map((item) => item.toLowerCase());
   const viewerSignals = collectRecommendationSignals(viewer);
   const affinitySignals = uniqueTextValues([
     ...viewerSignals,
@@ -1193,6 +1281,7 @@ async function buildRecommendationContext(store, viewer) {
     likedIds,
     skippedIds,
     dismissedLikedIds,
+    dismissedRecommendationSignals,
     likedProfiles,
     likedSchools: new Set(uniqueTextValues(likedProfiles.map((profile) => profile.school))),
     likedMajors: new Set(uniqueTextValues(likedProfiles.map((profile) => profile.major))),
@@ -1268,6 +1357,11 @@ function scoreRecommendedUser(user, context) {
     reasons.push("接近你喜欢过的类型");
   }
 
+  const dismissedOverlap = countOverlap(context.dismissedRecommendationSignals, collectRecommendationSignals(user));
+  if (dismissedOverlap) {
+    score -= Math.min(30, dismissedOverlap * 10);
+  }
+
   const mbtiScore = mbtiAffinityScore(viewer.mbti, user.mbti);
   if (mbtiScore > 0) {
     score += mbtiScore;
@@ -1312,12 +1406,16 @@ function buildRecommendationSummary(context) {
   if (context.affinitySignals.length) {
     signals.push("参考兴趣偏好");
   }
+  if (context.dismissedRecommendationSignals.length) {
+    signals.push("减少重复类型");
+  }
 
   return {
     signals: signals.slice(0, 4),
     ignored: {
       liked: context.likedIds.length,
       skipped: context.skippedIds.length,
+      types: context.dismissedRecommendationSignals.length,
     },
   };
 }
@@ -1442,6 +1540,7 @@ async function saveUser(store, user) {
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
     dismissedLikedIds: Array.isArray(user.dismissedLikedIds) ? user.dismissedLikedIds.map(text).filter(Boolean) : [],
+    dismissedRecommendationSignals: Array.isArray(user.dismissedRecommendationSignals) ? user.dismissedRecommendationSignals.map(text).filter(Boolean) : [],
     activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
@@ -1881,7 +1980,7 @@ function isActiveUser(user) {
 
 function publicUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, dismissedRecommendationSignals, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
 
   return {
     ...safeUser,
@@ -1893,7 +1992,7 @@ function publicUser(user) {
 
 function adminExportUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, activityLog, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, dismissedRecommendationSignals, activityLog, ...safeUser } = normalizedUser;
   return {
     ...safeUser,
     id: normalizedUser.id,
@@ -2241,6 +2340,7 @@ function normalizeUserRecord(user) {
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
     dismissedLikedIds: Array.isArray(user.dismissedLikedIds) ? user.dismissedLikedIds.map(text).filter(Boolean) : [],
+    dismissedRecommendationSignals: Array.isArray(user.dismissedRecommendationSignals) ? user.dismissedRecommendationSignals.map(text).filter(Boolean) : [],
     activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",

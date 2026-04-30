@@ -243,6 +243,190 @@
         border-color: rgba(255,45,85,.34) !important;
         box-shadow: 0 18px 48px rgba(255,45,85,.13), inset 0 1px rgba(255,255,255,.62) !important;
       }
+      body[data-campus-route="/matches"] a[href*="/chat/"].campus-conversation-card {
+        position: relative;
+        isolation: isolate;
+        align-items: flex-start !important;
+        gap: 12px !important;
+        min-height: 112px;
+        padding: 14px !important;
+        border-radius: 26px !important;
+        overflow: hidden;
+        transform: translateZ(0);
+        will-change: transform;
+      }
+      body[data-campus-route="/matches"] a[href*="/chat/"].campus-conversation-card::before {
+        content: "";
+        position: absolute;
+        inset: 1px;
+        z-index: -1;
+        border-radius: inherit;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(125,211,252,.2), transparent 32%),
+          radial-gradient(circle at 88% 6%, rgba(244,114,182,.14), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.04));
+        opacity: .74;
+        pointer-events: none;
+      }
+      body[data-campus-route="/matches"] a[href*="/chat/"].campus-conversation-card[data-campus-has-unread="true"]::before {
+        opacity: 1;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(56,189,248,.28), transparent 34%),
+          radial-gradient(circle at 86% 10%, rgba(255,45,85,.22), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.06));
+      }
+      .campus-conversation-avatar-wrap {
+        position: relative;
+        flex: 0 0 58px;
+        width: 58px;
+        height: 58px;
+      }
+      .campus-conversation-avatar {
+        width: 58px;
+        height: 58px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 20px;
+        color: rgba(15,23,42,.9);
+        background: linear-gradient(145deg, rgba(240,249,255,.94), rgba(252,231,243,.9));
+        border: 1px solid rgba(255,255,255,.72);
+        box-shadow: 0 16px 30px rgba(15,23,42,.12), inset 0 1px rgba(255,255,255,.72);
+        font-size: 20px;
+        font-weight: 950;
+      }
+      .campus-conversation-avatar img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        background: rgba(255,255,255,.88);
+      }
+      .campus-conversation-status-dot {
+        position: absolute;
+        right: -2px;
+        bottom: -2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #67e8f9, #22c55e);
+        border: 3px solid rgba(255,255,255,.9);
+        box-shadow: 0 8px 16px rgba(34,197,94,.24);
+      }
+      .campus-conversation-main {
+        min-width: 0;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding-top: 1px;
+      }
+      .campus-conversation-top,
+      .campus-conversation-preview-row {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+      .campus-conversation-top {
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .campus-conversation-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: rgba(255,255,255,.94);
+        font-size: 16px;
+        line-height: 1.22;
+        font-weight: 950;
+        letter-spacing: 0;
+      }
+      .campus-conversation-time {
+        flex: 0 0 auto;
+        color: rgba(226,232,240,.72);
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 850;
+        font-variant-numeric: tabular-nums;
+      }
+      .campus-conversation-meta,
+      .campus-conversation-preview {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .campus-conversation-meta {
+        margin: 0;
+        color: rgba(226,232,240,.7);
+        font-size: 12px;
+        line-height: 1.25;
+        font-weight: 750;
+      }
+      .campus-conversation-preview {
+        color: rgba(255,255,255,.82);
+        font-size: 13px;
+        line-height: 1.35;
+        font-weight: 750;
+      }
+      body[data-campus-route="/matches"] a[href*="/chat/"][data-campus-has-unread="true"] .campus-conversation-preview {
+        color: rgba(255,255,255,.98);
+        font-weight: 950;
+      }
+      .campus-conversation-preview.is-live {
+        color: #7dd3fc;
+      }
+      .campus-conversation-tags {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-width: 0;
+        overflow: hidden;
+        padding-top: 3px;
+      }
+      .campus-conversation-tag {
+        flex: 0 0 auto;
+        max-width: 112px;
+        min-height: 22px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 8px;
+        border-radius: 999px;
+        color: rgba(255,255,255,.84);
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.28);
+        box-shadow: inset 0 1px rgba(255,255,255,.6);
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 850;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .campus-conversation-tag.is-verified {
+        color: rgba(236,253,245,.96);
+        background: rgba(16,185,129,.28);
+      }
+      .campus-conversation-tag.is-member {
+        color: rgba(255,247,237,.96);
+        background: rgba(251,146,60,.28);
+      }
+      .campus-conversation-action {
+        flex: 0 0 36px !important;
+        width: 36px !important;
+        height: 36px !important;
+        margin-top: 12px;
+        opacity: .78;
+        transform: translateZ(0);
+      }
+      body[data-campus-route="/matches"] .campus-conversation-card > .campus-thread-unread {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 4;
+        margin: 0;
+      }
       .campus-match-preview-row {
         display: flex;
         align-items: center;
@@ -821,6 +1005,37 @@
         font-weight: 800;
       }
       @media (max-width: 640px) {
+        body[data-campus-route="/matches"] a[href*="/chat/"].campus-conversation-card {
+          min-height: 106px;
+          padding: 12px !important;
+          gap: 10px !important;
+          border-radius: 24px !important;
+        }
+        .campus-conversation-avatar-wrap,
+        .campus-conversation-avatar {
+          width: 52px;
+          height: 52px;
+          flex-basis: 52px;
+        }
+        .campus-conversation-avatar {
+          border-radius: 18px;
+          font-size: 18px;
+        }
+        .campus-conversation-name {
+          font-size: 15px;
+        }
+        .campus-conversation-tags {
+          gap: 5px;
+        }
+        .campus-conversation-tag {
+          max-width: 86px;
+          min-height: 20px;
+          padding: 0 7px;
+          font-size: 10px;
+        }
+        .campus-conversation-action {
+          display: none !important;
+        }
         .campus-match-preview-row {
           margin-top: 5px;
         }
@@ -4755,28 +4970,147 @@
       if (!info) {
         return;
       }
+      link.classList.add("campus-conversation-card");
 
-      let row = info.querySelector(".campus-match-preview-row");
-      if (!row) {
-        row = document.createElement("div");
-        row.className = "campus-match-preview-row";
-        info.appendChild(row);
-      }
+      const user = match.user || {};
+      renderConversationAvatar(link, info, user);
+      enhanceConversationAction(link, info);
 
-      const previewText = buildLastMessagePreview(match);
+      const nameText = cleanText(user.nickname || user.name || user.email) || "同校新朋友";
+      const metaText = conversationMetaText(user);
+      const preview = conversationPreview(match);
       const timeText = formatThreadTime(match.lastMessageAt || match.matchedAt);
-      const signature = `${previewText}__${timeText}__${unreadCount}`;
-      if (row.dataset.signature === signature) {
+      const tags = conversationTags(user);
+      const signature = [
+        nameText,
+        metaText,
+        preview.text,
+        preview.tone,
+        timeText,
+        unreadCount,
+        tags.map((tag) => `${tag.type}:${tag.text}`).join("|"),
+      ].join("__");
+      if (info.dataset.conversationSignature === signature) {
         return;
       }
 
-      row.dataset.signature = signature;
-      row.innerHTML = `
-        <span class="campus-match-preview-text">${escapeHtml(previewText)}</span>
-        <span class="campus-match-preview-time">${escapeHtml(timeText)}</span>
+      info.dataset.conversationSignature = signature;
+      info.classList.add("campus-conversation-main");
+      info.innerHTML = `
+        <div class="campus-conversation-top">
+          <span class="campus-conversation-name">${escapeHtml(nameText)}</span>
+          <span class="campus-conversation-time">${escapeHtml(timeText)}</span>
+        </div>
+        <p class="campus-conversation-meta">${escapeHtml(metaText)}</p>
+        <div class="campus-conversation-preview-row">
+          <span class="campus-conversation-preview${preview.tone ? ` is-${preview.tone}` : ""}">${escapeHtml(preview.text)}</span>
+        </div>
+        ${conversationTagMarkup(tags)}
       `;
-      link.setAttribute("aria-label", `${match.user?.nickname || "匹配对象"}，${previewText}`);
+      link.setAttribute("aria-label", `${nameText}，${preview.text}`);
     });
+  }
+
+  function renderConversationAvatar(link, info, user) {
+    const children = Array.from(link.children);
+    const host = children.find((child) => child !== info && !child.classList.contains("campus-thread-unread"));
+    if (!host || host.dataset.campusAvatarReady === "true") {
+      return;
+    }
+
+    const avatar = cleanText(user?.avatar || user?.avatarUrl || user?.image || user?.imageUrl);
+    const label = initialsForUser(user, "同");
+    host.dataset.campusAvatarReady = "true";
+    host.className = "campus-conversation-avatar-wrap";
+    host.innerHTML = "";
+
+    const avatarNode = document.createElement("div");
+    avatarNode.className = "campus-conversation-avatar";
+    avatarNode.title = cleanText(user?.nickname || user?.name) || "同校新朋友";
+
+    if (avatar) {
+      const image = document.createElement("img");
+      image.src = avatar;
+      image.alt = avatarNode.title;
+      image.loading = "lazy";
+      image.onerror = () => {
+        image.remove();
+        avatarNode.textContent = label;
+      };
+      avatarNode.appendChild(image);
+    } else {
+      avatarNode.textContent = label;
+    }
+
+    const status = document.createElement("span");
+    status.className = "campus-conversation-status-dot";
+    status.setAttribute("aria-hidden", "true");
+    host.append(avatarNode, status);
+  }
+
+  function enhanceConversationAction(link, info) {
+    const action = Array.from(link.children).find((child) => {
+      return child !== info
+        && !child.classList.contains("campus-conversation-avatar-wrap")
+        && !child.classList.contains("campus-thread-unread");
+    });
+    action?.classList.add("campus-conversation-action");
+  }
+
+  function conversationMetaText(user = {}) {
+    const parts = [user.school, user.major, user.grade].map(cleanText).filter(Boolean);
+    return parts.slice(0, 3).join(" · ") || cleanText(user.college) || "同校新朋友";
+  }
+
+  function conversationPreview(match) {
+    const typingUsers = Array.isArray(match?.typing?.activeUsers) ? match.typing.activeUsers : [];
+    if (typingUsers.length > 0) {
+      return { text: "正在输入...", tone: "live" };
+    }
+
+    const text = buildLastMessagePreview(match);
+    return { text, tone: "" };
+  }
+
+  function conversationTags(user = {}) {
+    const tags = [];
+    const push = (text, type = "") => {
+      const value = cleanText(text);
+      if (!value || tags.some((tag) => tag.text === value)) {
+        return;
+      }
+      tags.push({ text: value, type });
+    };
+
+    if (user.isVerified || cleanText(user.verificationStatus) === "approved") {
+      push("已认证", "verified");
+    }
+    const membership = user.membership || {};
+    if (cleanText(membership.status) === "active" || cleanText(membership.type)) {
+      push(cleanText(membership.title) || "会员", "member");
+    }
+    push(user.mbti);
+    [...arrayFromMaybe(user.matchModes), ...arrayFromMaybe(user.sceneTags), ...arrayFromMaybe(user.tags)].forEach((tag) => push(tag));
+    return tags.slice(0, 4);
+  }
+
+  function conversationTagMarkup(tags = []) {
+    if (!tags.length) {
+      return "";
+    }
+
+    return `<div class="campus-conversation-tags">${tags.map((tag) => {
+      const type = cleanText(tag.type);
+      return `<span class="campus-conversation-tag${type ? ` is-${escapeHtml(type)}` : ""}">${escapeHtml(tag.text)}</span>`;
+    }).join("")}</div>`;
+  }
+
+  function arrayFromMaybe(value) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    const text = cleanText(value);
+    return text ? [text] : [];
   }
 
   function buildLastMessagePreview(match) {

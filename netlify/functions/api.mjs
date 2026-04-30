@@ -260,6 +260,19 @@ async function handleAdmin(req, store, segments) {
   const user = await requireUser(req, store);
   requireAdmin(user);
 
+  if (segments[1] === "overview" && req.method === "GET") {
+    const [users, matches, messages] = await Promise.all([
+      listUsers(store),
+      listMatches(store),
+      listAllMessages(store),
+    ]);
+
+    return json({
+      success: true,
+      data: buildAdminOverview(users, matches, messages),
+    });
+  }
+
   if (segments[1] === "privacy-requests" && req.method === "GET") {
     const users = await listUsers(store);
     const requests = users
@@ -1370,6 +1383,71 @@ function adminExportUser(user) {
     _id: normalizedUser.id,
     isAdmin: hasAdminAccess(normalizedUser),
   };
+}
+
+function buildAdminOverview(users, matches, messages) {
+  const activeUsers = users.map(normalizeUserRecord).filter(isActiveUser);
+  const pendingPrivacyRequests = activeUsers
+    .flatMap((user) => normalizePrivacyRequests(user).filter((request) => request.status === "pending"));
+  const now = new Date();
+  const paidMembers = activeUsers.filter((user) => {
+    const membership = normalizeMembershipRecord(user.membership, user.createdAt);
+    return membership.planId !== "free" && membership.status === "active";
+  });
+  const verifiedUsers = activeUsers.filter((user) => user.isVerified || user.verificationStatus === "approved");
+  const pendingVerificationUsers = activeUsers.filter((user) => user.verificationStatus === "pending");
+
+  return {
+    generatedAt: now.toISOString(),
+    counts: {
+      users: activeUsers.length,
+      newUsersToday: countSince(activeUsers, "createdAt", startOfLocalDay(now)),
+      verifiedUsers: verifiedUsers.length,
+      pendingVerification: pendingVerificationUsers.length,
+      pendingPrivacyRequests: pendingPrivacyRequests.length,
+      paidMembers: paidMembers.length,
+      matches: matches.length,
+      messages: messages.length,
+      messagesToday: countSince(messages, "createdAt", startOfLocalDay(now)),
+    },
+    recentUsers: activeUsers
+      .slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, 6)
+      .map((user) => ({
+        id: user.id,
+        nickname: user.nickname,
+        email: user.email,
+        school: user.school,
+        major: user.major,
+        grade: user.grade,
+        verificationStatus: user.verificationStatus,
+        createdAt: user.createdAt,
+      })),
+    recentMessages: messages
+      .slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, 6)
+      .map((message) => ({
+        id: message.id || message._id,
+        matchId: message.matchId,
+        senderNickname: message.senderNickname || message.sender?.nickname || "用户",
+        content: text(message.content).slice(0, 80),
+        createdAt: message.createdAt,
+      })),
+  };
+}
+
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function countSince(items, field, since) {
+  const sinceTime = since.getTime();
+  return items.filter((item) => {
+    const time = Date.parse(item?.[field] || "");
+    return Number.isFinite(time) && time >= sinceTime;
+  }).length;
 }
 
 function requireAdmin(user) {

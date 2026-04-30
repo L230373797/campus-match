@@ -141,6 +141,94 @@
         flex-wrap: wrap;
       }
 
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+
+      .metric-card {
+        padding: 18px;
+        min-height: 132px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .metric-card span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .metric-card strong {
+        margin-top: 10px;
+        color: var(--ink);
+        font-size: clamp(28px, 5vw, 42px);
+        line-height: 1;
+        font-weight: 950;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric-card p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+        font-weight: 750;
+      }
+
+      .overview-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .overview-panel {
+        padding: 18px;
+      }
+
+      .overview-panel h2 {
+        margin-bottom: 12px;
+        font-size: 18px;
+      }
+
+      .activity-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .activity-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .56);
+      }
+
+      .activity-item strong {
+        display: block;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .activity-item p {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .activity-time {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
       .pill {
         display: inline-flex;
         align-items: center;
@@ -368,6 +456,11 @@
           grid-template-columns: 1fr;
         }
 
+        .overview-grid,
+        .overview-panels {
+          grid-template-columns: 1fr;
+        }
+
         .actions,
         .review-actions {
           display: grid;
@@ -420,7 +513,8 @@
         </header>
 
         <div class="tabs glass">
-          <button id="tab-verification" class="tab active" type="button">认证队列</button>
+          <button id="tab-overview" class="tab active" type="button">数据看板</button>
+          <button id="tab-verification" class="tab" type="button">认证队列</button>
           <button id="tab-privacy" class="tab" type="button">账号资料请求</button>
         </div>
 

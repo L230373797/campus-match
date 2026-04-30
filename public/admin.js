@@ -2,9 +2,10 @@
   const state = {
     token: localStorage.getItem("token") || "",
     user: null,
+    overview: null,
     pendingUsers: [],
     privacyRequests: [],
-    activeTab: "verification",
+    activeTab: "overview",
     busyUserId: "",
   };
 
@@ -20,12 +21,14 @@
   const refreshButton = document.querySelector("#refresh");
   const logoutButton = document.querySelector("#logout");
   const adminTitle = document.querySelector("#admin-view h1");
+  const overviewTab = document.querySelector("#tab-overview");
   const verificationTab = document.querySelector("#tab-verification");
   const privacyTab = document.querySelector("#tab-privacy");
 
   loginForm.addEventListener("submit", handleLogin);
   refreshButton.addEventListener("click", () => loadCurrentQueue());
   logoutButton.addEventListener("click", logout);
+  overviewTab.addEventListener("click", () => switchTab("overview"));
   verificationTab.addEventListener("click", () => switchTab("verification"));
   privacyTab.addEventListener("click", () => switchTab("privacy"));
 
@@ -96,17 +99,44 @@
     }
 
     state.activeTab = tab;
+    overviewTab.classList.toggle("active", tab === "overview");
     verificationTab.classList.toggle("active", tab === "verification");
     privacyTab.classList.toggle("active", tab === "privacy");
     if (adminTitle) {
-      adminTitle.textContent = tab === "privacy" ? "账号资料请求" : "认证队列";
+      adminTitle.textContent = tabTitle(tab);
     }
     setNotice("");
     loadCurrentQueue();
   }
 
   function loadCurrentQueue() {
+    if (state.activeTab === "overview") {
+      return loadOverview();
+    }
     return state.activeTab === "privacy" ? loadPrivacyRequests() : loadPendingUsers();
+  }
+
+  async function loadOverview() {
+    setNotice("");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "正在刷新...";
+    queue.innerHTML = `<div class="loading glass">正在整理运营看板...</div>`;
+
+    try {
+      const payload = await requestApi("/admin/overview");
+      state.overview = payload.data || {};
+      const counts = state.overview.counts || {};
+      const pendingTotal = Number(counts.pendingVerification || 0) + Number(counts.pendingPrivacyRequests || 0);
+      pendingCount.textContent = `待处理 ${pendingTotal}`;
+      lastRefresh.textContent = `更新于 ${formatTime(state.overview.generatedAt)}`;
+      renderOverview();
+    } catch (error) {
+      queue.innerHTML = "";
+      setNotice(error.message || "数据看板读取失败");
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "刷新看板";
+    }
   }
 
   async function loadPendingUsers() {
@@ -128,6 +158,76 @@
       refreshButton.disabled = false;
       refreshButton.textContent = "刷新队列";
     }
+  }
+
+  function renderOverview() {
+    const overview = state.overview || {};
+    const counts = overview.counts || {};
+    const metrics = [
+      { label: "用户总数", value: counts.users || 0, helper: `今日新增 ${counts.newUsersToday || 0}` },
+      { label: "校园认证", value: counts.verifiedUsers || 0, helper: `待审核 ${counts.pendingVerification || 0}` },
+      { label: "合拍关系", value: counts.matches || 0, helper: `聊天消息 ${counts.messages || 0}` },
+      { label: "会员用户", value: counts.paidMembers || 0, helper: `资料请求 ${counts.pendingPrivacyRequests || 0}` },
+    ];
+
+    queue.innerHTML = `
+      <section class="overview-grid">
+        ${metrics.map((metric) => `
+          <article class="metric-card glass">
+            <span>${escapeHtml(metric.label)}</span>
+            <strong>${escapeHtml(metric.value)}</strong>
+            <p>${escapeHtml(metric.helper)}</p>
+          </article>
+        `).join("")}
+      </section>
+
+      <section class="overview-panels">
+        <article class="overview-panel glass">
+          <h2>最近加入</h2>
+          <div class="activity-list">
+            ${renderRecentUsers(overview.recentUsers || [])}
+          </div>
+        </article>
+        <article class="overview-panel glass">
+          <h2>最近聊天</h2>
+          <div class="activity-list">
+            ${renderRecentMessages(overview.recentMessages || [])}
+          </div>
+        </article>
+      </section>
+    `;
+  }
+
+  function renderRecentUsers(users) {
+    if (!users.length) {
+      return `<div class="empty">还没有用户数据。</div>`;
+    }
+
+    return users.map((user) => `
+      <div class="activity-item">
+        <div>
+          <strong>${escapeHtml(user.nickname || "未命名用户")}</strong>
+          <p>${escapeHtml([user.school, user.major, user.grade].filter(Boolean).join(" · ") || user.email || "资料待完善")}</p>
+        </div>
+        <span class="activity-time">${escapeHtml(formatTime(user.createdAt))}</span>
+      </div>
+    `).join("");
+  }
+
+  function renderRecentMessages(messages) {
+    if (!messages.length) {
+      return `<div class="empty">还没有聊天消息。</div>`;
+    }
+
+    return messages.map((message) => `
+      <div class="activity-item">
+        <div>
+          <strong>${escapeHtml(message.senderNickname || "用户")}</strong>
+          <p>${escapeHtml(message.content || "空消息")}</p>
+        </div>
+        <span class="activity-time">${escapeHtml(formatTime(message.createdAt))}</span>
+      </div>
+    `).join("");
   }
 
   async function loadPrivacyRequests() {
@@ -357,7 +457,7 @@
     loginView.classList.add("hidden");
     adminView.classList.remove("hidden");
     if (adminTitle) {
-      adminTitle.textContent = state.activeTab === "privacy" ? "账号资料请求" : "认证队列";
+      adminTitle.textContent = tabTitle(state.activeTab);
     }
     adminSubtitle.textContent = `${state.user?.nickname || state.user?.email || "运营账号"} · 运营后台`;
   }
@@ -372,6 +472,27 @@
 
   function setNotice(message) {
     notice.textContent = message || "";
+  }
+
+  function tabTitle(tab) {
+    return {
+      overview: "数据看板",
+      verification: "认证队列",
+      privacy: "账号资料请求",
+    }[tab] || "运营后台";
+  }
+
+  function formatTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) {
+      return "刚刚";
+    }
+    return date.toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   function escapeHtml(value) {

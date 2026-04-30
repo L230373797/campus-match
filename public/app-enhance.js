@@ -1602,6 +1602,94 @@
       body[data-campus-route="/report"] #root {
         display: none !important;
       }
+      .campus-profile-progress-panel {
+        margin: 16px 0;
+        padding: 20px;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.14);
+        background:
+          radial-gradient(circle at 16% 0%, rgba(143,216,255,.18), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.07));
+        box-shadow: 0 18px 46px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.14);
+        color: rgba(245,248,255,.94);
+      }
+      .campus-profile-progress-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: start;
+      }
+      .campus-profile-progress-head h3 {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+      }
+      .campus-profile-progress-head p {
+        margin: 0;
+        color: rgba(226,238,255,.68);
+        line-height: 1.62;
+      }
+      .campus-profile-progress-score {
+        width: 74px;
+        height: 74px;
+        border-radius: 24px;
+        display: grid;
+        place-items: center;
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        box-shadow: 0 14px 36px rgba(143,216,255,.18);
+        font-size: 22px;
+        font-weight: 950;
+        font-variant-numeric: tabular-nums;
+      }
+      .campus-profile-progress-bar {
+        height: 10px;
+        margin: 18px 0 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,.12);
+      }
+      .campus-profile-progress-bar span {
+        display: block;
+        height: 100%;
+        width: var(--campus-profile-progress, 0%);
+        border-radius: inherit;
+        background: linear-gradient(90deg, #8fd8ff, #fff, #ffd8e5);
+        box-shadow: 0 0 24px rgba(143,216,255,.36);
+      }
+      .campus-profile-progress-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .campus-profile-progress-item {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 18px;
+        background: rgba(255,255,255,.08);
+        color: rgba(226,238,255,.76);
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .campus-profile-progress-item::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: rgba(226,238,255,.34);
+      }
+      .campus-profile-progress-item.is-complete {
+        color: rgba(245,248,255,.94);
+        background: rgba(143,216,255,.13);
+      }
+      .campus-profile-progress-item.is-complete::before {
+        background: #8fd8ff;
+        box-shadow: 0 0 18px rgba(143,216,255,.54);
+      }
       .campus-profile-compat-panel {
         margin: 16px 0;
         padding: 20px;
@@ -2005,6 +2093,27 @@
           min-width: 86px;
           min-height: 46px;
           font-size: 14px;
+        }
+        .campus-profile-progress-panel {
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-profile-progress-head {
+          grid-template-columns: 1fr;
+        }
+        .campus-profile-progress-score {
+          width: 100%;
+          height: 50px;
+          border-radius: 18px;
+        }
+        .campus-profile-progress-list {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .campus-profile-progress-item {
+          min-height: 40px;
+          padding: 8px 10px;
+          font-size: 12px;
         }
         .campus-profile-compat-panel {
           padding: 16px;
@@ -5589,6 +5698,7 @@
   function ensureProfileEnhancements() {
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
+      document.querySelector("#campus-profile-progress")?.remove();
       document.querySelector("#campus-privacy-panel")?.remove();
       document.querySelector("#campus-profile-compat")?.remove();
       closeAvatarSourceSheet();
@@ -5601,10 +5711,92 @@
       membershipButton.addEventListener("click", openMembershipCenter);
     }
 
+    ensureProfileProgressPanel();
     refreshProfileMembershipDecorations();
     ensureProfileAvatarUploader();
     ensureProfilePrivacyPanel();
     ensureProfileCompatibilityPanel();
+  }
+
+  function ensureProfileProgressPanel() {
+    if (window.location.pathname !== "/profile" || !document.querySelector("#root")) {
+      return;
+    }
+
+    const summaryCard = document.querySelector("#root .campus-profile-summary-card");
+    if (!summaryCard || !summaryCard.parentElement) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-profile-progress");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "campus-profile-progress";
+      panel.className = "campus-profile-progress-panel apple-card";
+    }
+
+    if (panel.previousElementSibling !== summaryCard) {
+      summaryCard.insertAdjacentElement("afterend", panel);
+    }
+
+    renderProfileProgressPanel(panel);
+  }
+
+  function renderProfileProgressPanel(panel) {
+    const user = state.user || {};
+    const profileReady = Boolean(user.nickname && user.bio && user.school && user.major && user.grade);
+    const interestReady = Boolean(
+      (Array.isArray(user.tags) && user.tags.length)
+      || (Array.isArray(user.sceneTags) && user.sceneTags.length)
+      || (Array.isArray(user.matchModes) && user.matchModes.length),
+    );
+    const verificationReady = Boolean(user.isVerified || user.verificationStatus === "approved");
+    const verificationPending = user.verificationStatus === "pending";
+    const checks = [
+      { label: "头像", complete: Boolean(user.avatar) },
+      { label: "基础资料", complete: profileReady },
+      { label: "兴趣与认识方式", complete: interestReady },
+      { label: "MBTI / 生辰", complete: Boolean(user.mbti && user.birthDate) },
+      { label: verificationPending ? "校园认证审核中" : "校园认证", complete: verificationReady || verificationPending },
+    ];
+    const completed = checks.filter((item) => item.complete).length;
+    const score = Math.round((completed / checks.length) * 100);
+    const copy = score >= 100
+      ? "你的主页已经很完整了，别人更容易判断你们是不是合拍。"
+      : "补齐这些信息后，推荐会更准，别人也更容易放心开始聊天。";
+    const renderKey = JSON.stringify({
+      score,
+      avatar: Boolean(user.avatar),
+      profileReady,
+      interestReady,
+      mbti: user.mbti || "",
+      birthDate: user.birthDate || "",
+      verificationStatus: user.verificationStatus || "",
+    });
+
+    if (panel.dataset.renderKey === renderKey) {
+      return;
+    }
+
+    panel.dataset.renderKey = renderKey;
+    panel.style.setProperty("--campus-profile-progress", `${score}%`);
+    panel.innerHTML = `
+      <div class="campus-profile-progress-head">
+        <div>
+          <h3>我的主页准备度</h3>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <div class="campus-profile-progress-score">${score}%</div>
+      </div>
+      <div class="campus-profile-progress-bar" aria-hidden="true"><span></span></div>
+      <div class="campus-profile-progress-list">
+        ${checks.map((item) => `
+          <div class="campus-profile-progress-item ${item.complete ? "is-complete" : ""}">
+            ${escapeHtml(item.label)}
+          </div>
+        `).join("")}
+      </div>
+    `;
   }
 
   function ensureProfileAvatarUploader() {
@@ -5907,8 +6099,8 @@
         node.textContent = membership.badgeLabel;
       });
 
-    const firstCard = document.querySelector("#root .apple-card");
-    if (!firstCard || !firstCard.parentElement) {
+    const summaryCard = document.querySelector("#root .campus-profile-summary-card");
+    if (!summaryCard || !summaryCard.parentElement) {
       return;
     }
 
@@ -5917,7 +6109,11 @@
       banner = document.createElement("section");
       banner.id = "campus-membership-banner";
       banner.className = "campus-membership-banner";
-      firstCard.insertAdjacentElement("afterend", banner);
+    }
+
+    const anchor = document.querySelector("#campus-profile-progress") || summaryCard;
+    if (banner.previousElementSibling !== anchor) {
+      anchor.insertAdjacentElement("afterend", banner);
     }
 
     const copy = membership.isExpired
@@ -5950,8 +6146,8 @@
       return;
     }
 
-    const firstCard = document.querySelector("#root .apple-card");
-    if (!firstCard || !firstCard.parentElement) {
+    const summaryCard = document.querySelector("#root .campus-profile-summary-card");
+    if (!summaryCard || !summaryCard.parentElement) {
       return;
     }
 
@@ -5960,8 +6156,13 @@
       panel = document.createElement("section");
       panel.id = "campus-privacy-panel";
       panel.className = "campus-privacy-panel apple-card";
-      const membershipBanner = document.querySelector("#campus-membership-banner");
-      (membershipBanner || firstCard).insertAdjacentElement("afterend", panel);
+    }
+
+    const anchor = document.querySelector("#campus-membership-banner")
+      || document.querySelector("#campus-profile-progress")
+      || summaryCard;
+    if (panel.previousElementSibling !== anchor) {
+      anchor.insertAdjacentElement("afterend", panel);
     }
 
     renderPrivacyPanel(panel);

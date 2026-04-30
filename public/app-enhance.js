@@ -1185,7 +1185,7 @@
         transition-delay: calc(var(--campus-reveal-delay, 0ms) + var(--campus-line-delay, 0ms));
         will-change: transform, opacity, filter;
       }
-      .campus-scroll-reveal-text.is-visible .campus-reveal-line > span {
+      .campus-scroll-reveal-text:not(.campus-scroll-scrub-text).is-visible .campus-reveal-line > span {
         transform: translate3d(0, 0, 0);
         opacity: 1;
         filter: blur(0);
@@ -1201,12 +1201,16 @@
         overflow: visible;
         margin: -.02em 0;
       }
-      .campus-scroll-reveal-text.campus-scroll-scrub-text .campus-reveal-word {
+      .campus-scroll-reveal-text.campus-scroll-scrub-text .campus-reveal-line > .campus-reveal-word,
+      .campus-scroll-reveal-text.campus-scroll-scrub-text.is-visible .campus-reveal-line > .campus-reveal-word {
         display: inline-block;
-        opacity: var(--campus-word-opacity, .1);
-        transform: translate3d(0, var(--campus-word-y, 5px), 0);
-        filter: blur(var(--campus-word-blur, 4px));
-        transition: none;
+        opacity: var(--campus-word-opacity, .08);
+        transform: translate3d(0, var(--campus-word-y, 24px), 0);
+        filter: blur(var(--campus-word-blur, 8px));
+        transition:
+          opacity .08s linear,
+          transform .08s linear,
+          filter .08s linear;
         will-change: opacity, transform, filter;
       }
       @media (max-width: 640px) {
@@ -4954,12 +4958,12 @@
       const words = Array.from(node.querySelectorAll(".campus-reveal-word"));
       const total = Math.max(1, words.length);
       words.forEach((word, index) => {
-        const stagger = Math.min(.46, index * Math.min(.05, .68 / total));
-        const progress = clampNumber((wordProgress - stagger) / .36, 0, 1);
+        const stagger = Math.min(.54, index * Math.min(.06, .78 / total));
+        const progress = clampNumber((wordProgress - stagger) / .34, 0, 1);
         const eased = 1 - Math.pow(1 - progress, 2.35);
-        word.style.setProperty("--campus-word-opacity", String((.1 + eased * .9).toFixed(3)));
-        word.style.setProperty("--campus-word-blur", `${(4 * (1 - eased)).toFixed(2)}px`);
-        word.style.setProperty("--campus-word-y", `${(6 * (1 - eased)).toFixed(2)}px`);
+        word.style.setProperty("--campus-word-opacity", String((.08 + eased * .92).toFixed(3)));
+        word.style.setProperty("--campus-word-blur", `${(8 * (1 - eased)).toFixed(2)}px`);
+        word.style.setProperty("--campus-word-y", `${(28 * (1 - eased)).toFixed(2)}px`);
       });
     });
   }

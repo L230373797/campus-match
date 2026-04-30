@@ -149,6 +149,8 @@
     privacyCheckedAt: 0,
     privacyFetching: false,
     imageFallbackInstalled: false,
+    scrollRevealObserver: null,
+    scrollRevealReduced: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false,
     baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
@@ -1134,6 +1136,50 @@
       @media (prefers-reduced-motion: no-preference) {
         html {
           scroll-behavior: smooth;
+        }
+      }
+      .campus-scroll-reveal {
+        opacity: 0;
+        transform: translate3d(0, 28px, 0) scale(.985);
+        filter: blur(12px);
+        clip-path: inset(0 0 10% 0 round 20px);
+        transition:
+          opacity .74s cubic-bezier(.16, 1, .3, 1),
+          transform .74s cubic-bezier(.16, 1, .3, 1),
+          filter .74s cubic-bezier(.16, 1, .3, 1),
+          clip-path .74s cubic-bezier(.16, 1, .3, 1);
+        transition-delay: var(--campus-reveal-delay, 0ms);
+        will-change: opacity, transform, filter, clip-path;
+      }
+      .campus-scroll-reveal.is-visible {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: blur(0);
+        clip-path: inset(0 0 0 0 round 0);
+      }
+      .campus-scroll-reveal.campus-scroll-reveal-text {
+        transform: translate3d(0, 18px, 0);
+        clip-path: inset(0 0 48% 0);
+      }
+      .campus-scroll-reveal.campus-scroll-reveal-text.is-visible {
+        transform: translate3d(0, 0, 0);
+        clip-path: inset(0 0 0 0);
+      }
+      @media (max-width: 640px) {
+        .campus-scroll-reveal {
+          transform: translate3d(0, 20px, 0) scale(.99);
+          filter: blur(8px);
+          transition-duration: .58s;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .campus-scroll-reveal,
+        .campus-scroll-reveal.campus-scroll-reveal-text {
+          opacity: 1 !important;
+          transform: none !important;
+          filter: none !important;
+          clip-path: none !important;
+          transition: none !important;
         }
       }
       .apple-card,
@@ -4589,6 +4635,104 @@
 
   function setRouteState() {
     document.body.dataset.campusRoute = window.location.pathname;
+  }
+
+  function ensureScrollReveal() {
+    const candidates = scrollRevealCandidates();
+    if (!candidates.length) {
+      return;
+    }
+
+    if (state.scrollRevealReduced || !("IntersectionObserver" in window)) {
+      candidates.forEach((node) => node.classList.add("campus-scroll-reveal", "is-visible"));
+      return;
+    }
+
+    if (!state.scrollRevealObserver) {
+      state.scrollRevealObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting || entry.intersectionRatio > 0.08) {
+            entry.target.classList.add("is-visible");
+            state.scrollRevealObserver?.unobserve(entry.target);
+          }
+        });
+      }, {
+        root: null,
+        rootMargin: "0px 0px -8% 0px",
+        threshold: [0, .08, .18],
+      });
+    }
+
+    let index = 0;
+    candidates.forEach((node) => {
+      if (node.dataset.campusRevealReady === "true" || shouldSkipScrollReveal(node)) {
+        return;
+      }
+
+      const delay = Math.min(index % 9, 8) * 42;
+      node.dataset.campusRevealReady = "true";
+      node.classList.add("campus-scroll-reveal");
+      if (isRevealHeading(node)) {
+        node.classList.add("campus-scroll-reveal-text");
+      }
+      node.style.setProperty("--campus-reveal-delay", `${delay}ms`);
+      state.scrollRevealObserver.observe(node);
+      index += 1;
+    });
+  }
+
+  function scrollRevealCandidates() {
+    const selectors = [
+      "body[data-campus-route='/login'] .campus-login-hero",
+      "body[data-campus-route='/login'] .campus-login-card",
+      "body[data-campus-route='/login'] .campus-ios-preview-card",
+      "body[data-campus-route='/login'] .campus-login-step",
+      "body[data-campus-route='/matches'] a[href*='/chat/']",
+      "body:not([data-campus-route^='/chat/']) .apple-card",
+      "body:not([data-campus-route^='/chat/']) main section",
+      "body:not([data-campus-route^='/chat/']) main article",
+      ".campus-business-heading",
+      ".campus-business-feature",
+      ".campus-business-feed-card",
+      ".campus-business-channel",
+      ".campus-plan-card",
+      ".campus-activity-center-card",
+      ".campus-profile-hero",
+      ".campus-profile-card",
+      ".campus-compatibility-card",
+      ".campus-privacy-card",
+      "h1",
+      "h2",
+    ];
+    return Array.from(new Set(selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))));
+  }
+
+  function shouldSkipScrollReveal(node) {
+    if (!node?.isConnected || node.dataset.campusRevealSkip === "true") {
+      return true;
+    }
+    if (node.closest("#campus-unread-pill, #campus-chat-profile-drawer, #campus-avatar-sheet, #campus-membership-modal, #campus-activity-modal, .campus-quick-actions, .ios-tab-bar, .ios-tabbar, [data-campus-nav-badge='true']")) {
+      return true;
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 18) {
+      return true;
+    }
+
+    let current = node;
+    while (current && current !== document.body) {
+      const position = getComputedStyle(current).position;
+      if (position === "fixed" || position === "sticky") {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function isRevealHeading(node) {
+    return ["H1", "H2"].includes(node?.tagName) || node.classList?.contains("campus-business-heading");
   }
 
   function ensureSplineScene() {
@@ -8957,6 +9101,7 @@
     syncUnreadIndicators(state.unreadMatches, state.unreadTotal);
     ensureChatTools();
     enhanceChatTimeline();
+    ensureScrollReveal();
   }
 
   const observer = new MutationObserver(() => {

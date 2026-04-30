@@ -1165,6 +1165,28 @@
         transform: translate3d(0, 0, 0);
         clip-path: inset(0 0 0 0);
       }
+      .campus-scroll-reveal-text .campus-reveal-line {
+        display: block;
+        overflow: hidden;
+        margin: -.02em 0;
+      }
+      .campus-scroll-reveal-text .campus-reveal-line > span {
+        display: block;
+        transform: translate3d(0, 112%, 0);
+        opacity: 0;
+        filter: blur(8px);
+        transition:
+          transform .78s cubic-bezier(.16, 1, .3, 1),
+          opacity .62s ease,
+          filter .74s cubic-bezier(.16, 1, .3, 1);
+        transition-delay: calc(var(--campus-reveal-delay, 0ms) + var(--campus-line-delay, 0ms));
+        will-change: transform, opacity, filter;
+      }
+      .campus-scroll-reveal-text.is-visible .campus-reveal-line > span {
+        transform: translate3d(0, 0, 0);
+        opacity: 1;
+        filter: blur(0);
+      }
       @media (max-width: 640px) {
         .campus-scroll-reveal {
           transform: translate3d(0, 20px, 0) scale(.99);
@@ -1179,6 +1201,12 @@
           transform: none !important;
           filter: none !important;
           clip-path: none !important;
+          transition: none !important;
+        }
+        .campus-scroll-reveal-text .campus-reveal-line > span {
+          opacity: 1 !important;
+          transform: none !important;
+          filter: none !important;
           transition: none !important;
         }
       }
@@ -4674,6 +4702,7 @@
       node.classList.add("campus-scroll-reveal");
       if (isRevealHeading(node)) {
         node.classList.add("campus-scroll-reveal-text");
+        prepareScrollRevealText(node);
       }
       node.style.setProperty("--campus-reveal-delay", `${delay}ms`);
       state.scrollRevealObserver.observe(node);
@@ -4687,11 +4716,16 @@
       "body[data-campus-route='/login'] .campus-login-card",
       "body[data-campus-route='/login'] .campus-ios-preview-card",
       "body[data-campus-route='/login'] .campus-login-step",
+      "body[data-campus-route='/login'] .campus-login-hero p",
+      "body[data-campus-route='/login'] .campus-login-card h3",
+      "body[data-campus-route='/login'] .campus-login-card p",
       "body[data-campus-route='/matches'] a[href*='/chat/']",
       "body:not([data-campus-route^='/chat/']) .apple-card",
       "body:not([data-campus-route^='/chat/']) main section",
       "body:not([data-campus-route^='/chat/']) main article",
       ".campus-business-heading",
+      ".campus-business-heading h2",
+      ".campus-business-heading p",
       ".campus-business-feature",
       ".campus-business-feed-card",
       ".campus-business-channel",
@@ -4732,7 +4766,103 @@
   }
 
   function isRevealHeading(node) {
-    return ["H1", "H2"].includes(node?.tagName) || node.classList?.contains("campus-business-heading");
+    return isRevealTextTarget(node);
+  }
+
+  function isRevealTextTarget(node) {
+    if (!node) {
+      return false;
+    }
+    if (["H1", "H2", "H3"].includes(node.tagName)) {
+      return true;
+    }
+    if (node.matches?.(".campus-login-hero p, .campus-login-card p, .campus-business-heading p")) {
+      return true;
+    }
+    return node.classList?.contains("campus-business-heading") && !node.querySelector("h1, h2, h3, p");
+  }
+
+  function prepareScrollRevealText(node) {
+    if (!node || node.dataset.campusRevealTextReady === "true" || state.scrollRevealReduced) {
+      return;
+    }
+    if (node.querySelector("a, button, input, textarea, select, svg, img, video, canvas")) {
+      return;
+    }
+
+    const text = cleanText(node.textContent).replace(/\s+/g, " ");
+    if (text.length < 6) {
+      return;
+    }
+
+    const chunks = splitRevealText(text);
+    if (!chunks.length) {
+      return;
+    }
+
+    node.dataset.campusRevealTextReady = "true";
+    node.dataset.campusRevealOriginal = text;
+    node.innerHTML = chunks.map((chunk, index) => {
+      return `<span class="campus-reveal-line" style="--campus-line-delay:${index * 88}ms"><span>${escapeHtml(chunk)}</span></span>`;
+    }).join("");
+  }
+
+  function splitRevealText(text) {
+    const source = cleanText(text);
+    if (!source) {
+      return [];
+    }
+
+    const punctuationParts = source.match(/[^，。！？!?；;]+[，。！？!?；;]?/g) || [source];
+    const chunks = [];
+    punctuationParts.forEach((part) => {
+      const value = cleanText(part);
+      if (!value) {
+        return;
+      }
+      if (value.length <= 18) {
+        chunks.push(value);
+        return;
+      }
+      chunks.push(...splitLongRevealText(value));
+    });
+    return chunks.slice(0, 4);
+  }
+
+  function splitLongRevealText(text) {
+    const value = cleanText(text);
+    if (value.length <= 18) {
+      return [value];
+    }
+    if (value.includes(" ")) {
+      const words = value.split(/\s+/).filter(Boolean);
+      const lines = [];
+      let current = "";
+      words.forEach((word) => {
+        if ((current + word).length > 18 && current) {
+          lines.push(current.trim());
+          current = word;
+        } else {
+          current = `${current} ${word}`.trim();
+        }
+      });
+      if (current) {
+        lines.push(current.trim());
+      }
+      return lines;
+    }
+
+    const middle = Math.ceil(value.length / 2);
+    let splitAt = middle;
+    const preferred = ["、", "，", "和", "与", "再", "，"];
+    for (const marker of preferred) {
+      const found = value.indexOf(marker, Math.max(5, middle - 6));
+      if (found > 0 && found < value.length - 4) {
+        splitAt = found + marker.length;
+        break;
+      }
+    }
+    return [value.slice(0, splitAt), value.slice(splitAt)].map(cleanText).filter(Boolean);
   }
 
   function ensureSplineScene() {

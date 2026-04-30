@@ -872,11 +872,13 @@ async function handleMessages(req, store, segments, url) {
     const end = messages.length - (page - 1) * limit;
     const updatedMatch = markMatchRead(match, user.id);
     await saveMatch(store, updatedMatch);
+    const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
 
     return json({
       success: true,
       data: {
         messages: messages.slice(start, end),
+        match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
         pagination: { page, limit, total: messages.length },
       },
     });
@@ -904,9 +906,17 @@ async function handleMessages(req, store, segments, url) {
     const messages = await getMessages(store, matchId);
     messages.push(message);
     await store.setJSON(`messages/${matchId}`, messages);
-    await saveMatch(store, applyOutgoingMessageState(match, user.id, content, now));
+    const updatedMatch = applyOutgoingMessageState(match, user.id, content, now);
+    await saveMatch(store, updatedMatch);
+    const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
 
-    return json({ success: true, data: { message } }, 201);
+    return json({
+      success: true,
+      data: {
+        message,
+        match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+      },
+    }, 201);
   }
 
   if (req.method === "DELETE") {

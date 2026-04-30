@@ -133,6 +133,7 @@
     unreadFetching: false,
     unreadCheckedAt: 0,
     messageThreads: new Map(),
+    chatMatches: new Map(),
     activitySummary: null,
     activityCheckedAt: 0,
     activityFetching: false,
@@ -262,14 +263,40 @@
       }
       body[data-campus-route^="/chat/"] .campus-message-row {
         scroll-margin: 88px 0 100px;
+        display: flex !important;
+        align-items: flex-end !important;
+        gap: 9px;
+        width: 100%;
+        margin: 12px 0 !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="me"] {
+        justify-content: flex-end !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="them"] {
+        justify-content: flex-start !important;
       }
       body[data-campus-route^="/chat/"] .campus-message-bubble {
         position: relative;
         max-width: min(78vw, 520px);
         overflow: hidden;
+        transform: translateZ(0);
+        transition: transform .2s ease, box-shadow .2s ease;
+        will-change: transform;
       }
       body[data-campus-route^="/chat/"] .campus-message-bubble p {
         word-break: break-word;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="me"] .campus-message-bubble {
+        order: 1;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="them"] .campus-message-bubble {
+        order: 2;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="me"] .campus-message-item {
+        order: 1;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="them"] .campus-message-item {
+        order: 2;
       }
       body[data-campus-route^="/chat/"] .campus-message-bubble.is-mine {
         border: 1px solid rgba(255,255,255,.36);
@@ -292,6 +319,306 @@
       body[data-campus-route^="/chat/"] .campus-message-time {
         font-variant-numeric: tabular-nums;
         letter-spacing: 0;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-avatar {
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: rgba(8,18,32,.88);
+        font-size: 13px;
+        font-weight: 900;
+        background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(184,234,255,.72), rgba(255,211,232,.72));
+        background-size: cover;
+        background-position: center;
+        border: 1px solid rgba(255,255,255,.68);
+        box-shadow: 0 10px 26px rgba(15,23,42,.13), inset 0 1px rgba(255,255,255,.72);
+        overflow: hidden;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="me"] .campus-chat-avatar {
+        order: 2;
+      }
+      body[data-campus-route^="/chat/"] .campus-message-row[data-campus-sender="them"] .campus-chat-avatar {
+        order: 1;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-avatar.has-image {
+        color: transparent;
+      }
+      .campus-chat-header-assist,
+      .campus-chat-quick-openers {
+        width: min(100%, 760px);
+        margin: 0 auto 14px;
+        border: 1px solid rgba(255,255,255,.58);
+        background: rgba(255,255,255,.62);
+        box-shadow: 0 18px 46px rgba(15,23,42,.10), inset 0 1px rgba(255,255,255,.58);
+        backdrop-filter: blur(22px) saturate(1.18);
+        -webkit-backdrop-filter: blur(22px) saturate(1.18);
+      }
+      .campus-chat-header-assist {
+        position: sticky;
+        top: calc(10px + env(safe-area-inset-top));
+        z-index: 28;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 74px;
+        padding: 11px 12px;
+        border-radius: 28px;
+      }
+      .campus-chat-header-user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .campus-chat-header-avatar {
+        flex: 0 0 48px;
+        width: 48px;
+        height: 48px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        color: rgba(8,18,32,.9);
+        font-size: 18px;
+        font-weight: 950;
+        background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(164,232,255,.75), rgba(255,202,226,.78));
+        background-size: cover;
+        background-position: center;
+        border: 1px solid rgba(255,255,255,.74);
+        box-shadow: 0 16px 32px rgba(15,23,42,.13), inset 0 1px rgba(255,255,255,.72);
+        overflow: hidden;
+      }
+      .campus-chat-header-avatar.has-image {
+        color: transparent;
+      }
+      .campus-chat-header-copy {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+      }
+      .campus-chat-header-copy strong {
+        color: rgba(15,23,42,.94);
+        font-size: 16px;
+        line-height: 1.1;
+        font-weight: 950;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .campus-chat-header-copy span {
+        color: rgba(71,85,105,.76);
+        font-size: 12px;
+        line-height: 1.28;
+        font-weight: 750;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .campus-chat-header-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+      .campus-chat-status-pill,
+      .campus-chat-profile-button,
+      .campus-chat-quick-openers button,
+      .campus-chat-drawer-close,
+      .campus-chat-drawer-secondary {
+        min-height: 36px;
+        border: 0;
+        border-radius: 999px;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+      .campus-chat-status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        color: rgba(22,78,99,.92);
+        background: rgba(207,250,254,.66);
+        box-shadow: inset 0 0 0 1px rgba(103,232,249,.34);
+        font-size: 12px;
+      }
+      .campus-chat-profile-button {
+        padding: 0 14px;
+        color: rgba(255,255,255,.96);
+        background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+        box-shadow: 0 12px 28px rgba(14,165,233,.28);
+        cursor: pointer;
+      }
+      .campus-chat-quick-openers {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 100%;
+        order: -1;
+        padding: 10px;
+        border-radius: 24px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .campus-chat-quick-openers::-webkit-scrollbar {
+        display: none;
+      }
+      .campus-chat-quick-openers button {
+        flex: 0 0 auto;
+        padding: 0 13px;
+        color: rgba(15,23,42,.84);
+        background: rgba(255,255,255,.72);
+        box-shadow: inset 0 0 0 1px rgba(148,163,184,.18), 0 10px 24px rgba(15,23,42,.07);
+        cursor: pointer;
+      }
+      .campus-chat-profile-drawer {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: none;
+      }
+      body[data-campus-chat-drawer="open"] .campus-chat-profile-drawer {
+        display: block;
+      }
+      .campus-chat-drawer-scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(8,13,24,.36);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+      .campus-chat-drawer-panel {
+        position: absolute;
+        top: max(16px, env(safe-area-inset-top));
+        right: max(16px, env(safe-area-inset-right));
+        bottom: max(16px, env(safe-area-inset-bottom));
+        width: min(390px, calc(100vw - 32px));
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 32px;
+        border: 1px solid rgba(255,255,255,.62);
+        background: rgba(255,255,255,.78);
+        box-shadow: 0 28px 90px rgba(15,23,42,.22), inset 0 1px rgba(255,255,255,.72);
+        backdrop-filter: blur(28px) saturate(1.22);
+        -webkit-backdrop-filter: blur(28px) saturate(1.22);
+        transform: translate3d(18px, 0, 0);
+        opacity: 0;
+        transition: transform .24s ease, opacity .24s ease;
+        overflow: auto;
+      }
+      body[data-campus-chat-drawer="open"] .campus-chat-drawer-panel {
+        transform: translate3d(0, 0, 0);
+        opacity: 1;
+      }
+      .campus-chat-drawer-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .campus-chat-drawer-close {
+        width: 38px;
+        padding: 0;
+        background: rgba(15,23,42,.08);
+        color: rgba(15,23,42,.72);
+        cursor: pointer;
+      }
+      .campus-chat-drawer-hero {
+        display: grid;
+        justify-items: center;
+        gap: 10px;
+        padding: 10px 0 2px;
+        text-align: center;
+      }
+      .campus-chat-drawer-avatar {
+        width: 82px;
+        height: 82px;
+        border-radius: 28px;
+        display: grid;
+        place-items: center;
+        color: rgba(8,18,32,.9);
+        font-size: 30px;
+        font-weight: 950;
+        background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(164,232,255,.78), rgba(255,202,226,.8));
+        background-size: cover;
+        background-position: center;
+        border: 1px solid rgba(255,255,255,.76);
+        box-shadow: 0 18px 42px rgba(15,23,42,.14), inset 0 1px rgba(255,255,255,.76);
+        overflow: hidden;
+      }
+      .campus-chat-drawer-avatar.has-image {
+        color: transparent;
+      }
+      .campus-chat-drawer-hero h3 {
+        margin: 0;
+        color: rgba(15,23,42,.94);
+        font-size: 24px;
+        line-height: 1.08;
+        font-weight: 950;
+      }
+      .campus-chat-drawer-hero p,
+      .campus-chat-drawer-section p {
+        margin: 0;
+        color: rgba(71,85,105,.78);
+        font-size: 14px;
+        line-height: 1.55;
+        font-weight: 700;
+      }
+      .campus-chat-drawer-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .campus-chat-drawer-metric,
+      .campus-chat-drawer-section {
+        border-radius: 22px;
+        padding: 13px;
+        background: rgba(255,255,255,.64);
+        box-shadow: inset 0 0 0 1px rgba(148,163,184,.14), 0 12px 30px rgba(15,23,42,.06);
+      }
+      .campus-chat-drawer-metric span,
+      .campus-chat-drawer-section span {
+        display: block;
+        color: rgba(100,116,139,.74);
+        font-size: 12px;
+        font-weight: 850;
+        margin-bottom: 4px;
+      }
+      .campus-chat-drawer-metric strong {
+        display: block;
+        color: rgba(15,23,42,.92);
+        font-size: 15px;
+        line-height: 1.25;
+        font-weight: 950;
+        word-break: break-word;
+      }
+      .campus-chat-drawer-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .campus-chat-drawer-tags em {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        color: rgba(22,78,99,.9);
+        background: rgba(207,250,254,.64);
+        font-style: normal;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .campus-chat-drawer-secondary {
+        width: 100%;
+        min-height: 46px;
+        color: rgba(15,23,42,.88);
+        background: rgba(255,255,255,.78);
+        box-shadow: inset 0 0 0 1px rgba(148,163,184,.18), 0 12px 28px rgba(15,23,42,.06);
+        cursor: pointer;
       }
       .campus-chat-date-chip {
         display: flex;
@@ -323,6 +650,49 @@
         }
         body[data-campus-route^="/chat/"] .campus-message-bubble {
           max-width: 80vw;
+        }
+        body[data-campus-route^="/chat/"] .campus-chat-avatar {
+          flex-basis: 30px;
+          width: 30px;
+          height: 30px;
+          font-size: 12px;
+        }
+        .campus-chat-header-assist {
+          top: calc(8px + env(safe-area-inset-top));
+          width: calc(100% - 18px);
+          min-height: 66px;
+          padding: 9px;
+          border-radius: 24px;
+        }
+        .campus-chat-header-avatar {
+          flex-basis: 42px;
+          width: 42px;
+          height: 42px;
+          border-radius: 16px;
+        }
+        .campus-chat-status-pill {
+          display: none;
+        }
+        .campus-chat-profile-button {
+          min-width: 54px;
+          padding: 0 12px;
+        }
+        .campus-chat-quick-openers {
+          width: calc(100% - 18px);
+          margin-bottom: 10px;
+        }
+        .campus-chat-drawer-panel {
+          top: auto;
+          left: 10px;
+          right: 10px;
+          bottom: max(10px, env(safe-area-inset-bottom));
+          width: auto;
+          max-height: min(82svh, 680px);
+          border-radius: 30px;
+          transform: translate3d(0, 24px, 0);
+        }
+        .campus-chat-drawer-grid {
+          grid-template-columns: 1fr;
         }
       }
       .campus-code-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 10px; }
@@ -4009,6 +4379,7 @@
 
     response.clone().json().then((payload) => {
       if (apiPath.replace(/\?.*$/, "") === "/api/matches" && Array.isArray(payload.data?.matches)) {
+        rememberChatMatches(payload.data.matches);
         syncUnreadIndicators(payload.data.matches, payload.data.unreadTotal);
         return;
       }
@@ -4016,6 +4387,10 @@
       const matchId = matchIdFromMessageApiPath(apiPath);
       if (!matchId) {
         return;
+      }
+
+      if (payload.data?.match) {
+        rememberChatMatch(matchId, payload.data.match);
       }
 
       if (method === "GET" && Array.isArray(payload.data?.messages)) {
@@ -4026,6 +4401,7 @@
       }
 
       setTimeout(() => {
+        ensureChatTools();
         enhanceChatTimeline();
       }, 90);
     }).catch(() => {
@@ -4036,6 +4412,38 @@
   function matchIdFromMessageApiPath(apiPath) {
     const match = String(apiPath || "").match(/\/api\/messages\/([^/?#]+)/);
     return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function rememberChatMatches(matches = []) {
+    if (!Array.isArray(matches)) {
+      return;
+    }
+
+    matches.forEach((match) => {
+      rememberChatMatch(match?.id || match?._id, match);
+    });
+  }
+
+  function rememberChatMatch(matchId, match) {
+    const id = cleanText(matchId || match?.id || match?._id);
+    if (!id || !match) {
+      return;
+    }
+
+    state.chatMatches.set(id, match);
+  }
+
+  function currentChatMatchId() {
+    if (!window.location.pathname.startsWith("/chat/")) {
+      return "";
+    }
+
+    return decodeURIComponent(window.location.pathname.replace(/^\/chat\//, "").split(/[/?#]/)[0] || "");
+  }
+
+  function currentChatMatch() {
+    const matchId = currentChatMatchId();
+    return matchId ? state.chatMatches.get(matchId) || null : null;
   }
 
   function cleanText(value) {
@@ -4274,11 +4682,12 @@
       return;
     }
 
-    const matchId = decodeURIComponent(window.location.pathname.replace(/^\/chat\//, "").split(/[/?#]/)[0] || "");
+    const matchId = currentChatMatchId();
     const messages = state.messageThreads.get(matchId) || [];
     if (!messages.length) {
       return;
     }
+    const match = state.chatMatches.get(matchId) || null;
 
     const contentNodes = Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] p'))
       .filter((node) => !node.children.length && messages.some((message) => cleanText(message.content) === cleanText(node.textContent)));
@@ -4309,6 +4718,7 @@
       bubble.classList.add("campus-message-bubble");
       bubble.classList.toggle("is-mine", mine);
       bubble.classList.toggle("is-theirs", !mine);
+      ensureMessageAvatar(row, bubble, mine, message, match);
 
       const timeNode = Array.from(bubble.querySelectorAll("span")).find((node) => !node.children.length);
       const messageAt = message.createdAt || message.time;
@@ -4344,6 +4754,358 @@
     chip.dataset.dateKey = key;
     chip.innerHTML = `<span>${escapeHtml(label)}</span>`;
     row.insertAdjacentElement("beforebegin", chip);
+  }
+
+  function ensureMessageAvatar(row, bubble, mine, message, match) {
+    const messageItem = directChildWithin(row, bubble) || bubble;
+    messageItem.classList.add("campus-message-item");
+    let avatar = Array.from(row.children).find((child) => child.classList?.contains("campus-chat-avatar"));
+    if (!avatar) {
+      avatar = document.createElement("span");
+      avatar.className = "campus-chat-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      row.insertBefore(avatar, messageItem);
+    }
+
+    const user = mine ? state.user : (match?.user || message?.sender || null);
+    renderAvatarNode(avatar, user, mine ? "我" : "同");
+  }
+
+  function directChildWithin(parent, node) {
+    let current = node;
+    while (current?.parentElement && current.parentElement !== parent) {
+      current = current.parentElement;
+    }
+    return current?.parentElement === parent ? current : null;
+  }
+
+  function renderAvatarNode(node, user, fallback = "同") {
+    if (!node) {
+      return;
+    }
+
+    const avatar = cleanText(user?.avatar || user?.avatarUrl || user?.image || user?.imageUrl);
+    const label = initialsForUser(user, fallback);
+    node.textContent = avatar ? "" : label;
+    node.classList.toggle("has-image", Boolean(avatar));
+    node.style.backgroundImage = avatar ? `url("${cssUrl(avatar)}")` : "";
+    node.title = cleanText(user?.nickname || user?.name) || fallback;
+  }
+
+  function initialsForUser(user, fallback = "同") {
+    const name = cleanText(user?.nickname || user?.name || user?.email || fallback);
+    return name ? name.slice(0, 1).toUpperCase() : fallback;
+  }
+
+  function cssUrl(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "%22").replace(/\)/g, "%29");
+  }
+
+  function ensureChatTools() {
+    if (!window.location.pathname.startsWith("/chat/")) {
+      document.querySelector("#campus-chat-header-assist")?.remove();
+      document.querySelector("#campus-chat-quick-openers")?.remove();
+      closeChatProfileDrawer();
+      return;
+    }
+
+    const matchId = currentChatMatchId();
+    if (!matchId) {
+      return;
+    }
+
+    const match = currentChatMatch();
+    ensureChatHeader(matchId, match);
+    ensureChatQuickOpeners(matchId, match);
+    ensureChatProfileDrawer(matchId, match);
+  }
+
+  function ensureChatHeader(matchId, match) {
+    const root = document.querySelector("#root");
+    const container = document.querySelector("#root main") || root?.firstElementChild || root;
+    if (!container) {
+      return;
+    }
+
+    let header = document.querySelector("#campus-chat-header-assist");
+    if (!header) {
+      header = document.createElement("section");
+      header.id = "campus-chat-header-assist";
+      header.className = "campus-chat-header-assist";
+      header.setAttribute("aria-label", "聊天对象");
+    }
+    if (header.parentElement !== container) {
+      container.insertBefore(header, container.firstChild);
+    }
+
+    const user = match?.user || null;
+    const signature = [
+      matchId,
+      cleanText(user?.nickname),
+      cleanText(user?.avatar),
+      chatMetaLine(user),
+      match?.identityRevealed ? "revealed" : "private",
+    ].join("|");
+    if (header.dataset.signature === signature) {
+      return;
+    }
+    header.dataset.signature = signature;
+
+    const avatarStyle = avatarInlineStyle(user);
+    const avatarClass = cleanText(user?.avatar) ? " has-image" : "";
+    header.innerHTML = `
+      <div class="campus-chat-header-user">
+        <span class="campus-chat-header-avatar${avatarClass}" style="${avatarStyle}">${escapeHtml(initialsForUser(user, "同"))}</span>
+        <div class="campus-chat-header-copy">
+          <strong>${escapeHtml(cleanText(user?.nickname) || "聊天对象")}</strong>
+          <span>${escapeHtml(chatMetaLine(user) || "先从一句轻松的问候开始")}</span>
+        </div>
+      </div>
+      <div class="campus-chat-header-actions">
+        <span class="campus-chat-status-pill">${escapeHtml(match?.identityRevealed ? "已互相展示资料" : "先匿名聊着")}</span>
+        <button class="campus-chat-profile-button" type="button" data-chat-profile-open>资料</button>
+      </div>
+    `;
+    header.querySelector("[data-chat-profile-open]")?.addEventListener("click", openChatProfileDrawer);
+  }
+
+  function ensureChatQuickOpeners(matchId, match) {
+    const root = document.querySelector("#root");
+    const container = document.querySelector("#root main") || root?.firstElementChild || root;
+    if (!container) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-chat-quick-openers");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "campus-chat-quick-openers";
+      panel.className = "campus-chat-quick-openers";
+      panel.setAttribute("aria-label", "快捷开场白");
+    }
+
+    const composer = findChatComposerContainer();
+    if (composer && panel.nextElementSibling !== composer) {
+      composer.parentElement?.insertBefore(panel, composer);
+    } else if (!composer && panel.parentElement !== container) {
+      container.appendChild(panel);
+    }
+
+    const openers = buildQuickOpeners(match?.user);
+    const signature = `${matchId}|${openers.join("|")}`;
+    if (panel.dataset.signature !== signature) {
+      panel.dataset.signature = signature;
+      panel.innerHTML = openers.map((text) => (
+        `<button type="button" data-chat-opener="${escapeAttr(text)}">${escapeHtml(text)}</button>`
+      )).join("");
+    }
+
+    panel.querySelectorAll("[data-chat-opener]").forEach((button) => {
+      if (button.dataset.bound === "true") {
+        return;
+      }
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        fillChatComposer(button.dataset.chatOpener || button.textContent || "");
+      });
+    });
+  }
+
+  function buildQuickOpeners(user) {
+    const school = cleanText(user?.school);
+    const nickname = cleanText(user?.nickname);
+    const topic = cleanText((user?.tags || user?.sceneTags || [])[0]);
+    return [
+      school ? `你最近在${school}附近吗？` : "你今天在学校附近吗？",
+      nickname ? `看到你的资料感觉挺合拍的，${nickname}最近在忙什么？` : "看到你的资料感觉挺合拍的，最近在忙什么？",
+      topic ? `你也喜欢${topic}吗？` : "最近有什么想一起做的事吗？",
+      "要不要先互相说一个最近喜欢的地方？",
+    ];
+  }
+
+  function findChatComposerContainer() {
+    const field = findChatComposerField();
+    if (!field) {
+      return null;
+    }
+
+    let node = field.parentElement;
+    while (node && node !== document.body) {
+      const className = String(node.className || "");
+      const hasComposerShape = /flex/.test(className)
+        && /items-end/.test(className)
+        && Array.from(node.querySelectorAll("button")).some(isVisibleElement);
+      if (hasComposerShape) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+
+    return field.closest("form") || field.parentElement;
+  }
+
+  function findChatComposerField() {
+    const fields = Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] textarea, body[data-campus-route^="/chat/"] input[type="text"], body[data-campus-route^="/chat/"] input:not([type])'))
+      .filter((field) => isVisibleElement(field));
+    return fields.find((field) => {
+      const placeholder = cleanText(field.getAttribute("placeholder"));
+      const formText = cleanText(field.closest("form")?.textContent);
+      return /消息|输入想说|发送|聊天/.test(`${placeholder} ${formText}`);
+    }) || fields[fields.length - 1] || null;
+  }
+
+  function fillChatComposer(text) {
+    const field = findChatComposerField();
+    if (!field) {
+      return;
+    }
+
+    setFormValue(field, text);
+    field.focus({ preventScroll: true });
+  }
+
+  function setFormValue(field, value) {
+    const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value");
+    if (descriptor?.set) {
+      descriptor.set.call(field, value);
+    } else {
+      field.value = value;
+    }
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function isVisibleElement(element) {
+    return Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+  }
+
+  function ensureChatProfileDrawer(matchId, match) {
+    let drawer = document.querySelector("#campus-chat-profile-drawer");
+    if (!drawer) {
+      drawer = document.createElement("aside");
+      drawer.id = "campus-chat-profile-drawer";
+      drawer.className = "campus-chat-profile-drawer";
+      drawer.setAttribute("aria-hidden", "true");
+      drawer.innerHTML = `
+        <div class="campus-chat-drawer-scrim" data-chat-profile-close></div>
+        <div class="campus-chat-drawer-panel" role="dialog" aria-modal="true" aria-label="对方资料">
+          <div class="campus-chat-drawer-content"></div>
+        </div>
+      `;
+      drawer.addEventListener("click", (event) => {
+        if (event.target.closest("[data-chat-profile-close]")) {
+          closeChatProfileDrawer();
+        }
+      });
+      document.body.appendChild(drawer);
+    }
+
+    drawer.dataset.matchId = matchId;
+    renderChatProfileDrawer(drawer, match);
+  }
+
+  function renderChatProfileDrawer(drawer, match) {
+    const content = drawer?.querySelector(".campus-chat-drawer-content");
+    if (!content) {
+      return;
+    }
+
+    const user = match?.user || {};
+    const tags = uniqueProfileTags(user).slice(0, 8);
+    const avatarStyle = avatarInlineStyle(user);
+    const avatarClass = cleanText(user?.avatar) ? " has-image" : "";
+    const signature = JSON.stringify({
+      id: match?.id || match?._id || "",
+      nickname: user?.nickname || "",
+      avatar: user?.avatar || "",
+      school: user?.school || "",
+      major: user?.major || "",
+      grade: user?.grade || "",
+      mbti: user?.mbti || "",
+      birthDate: user?.birthDate || "",
+      bio: user?.bio || user?.description || "",
+      tags,
+      revealed: Boolean(match?.identityRevealed),
+    });
+    if (content.dataset.signature === signature) {
+      return;
+    }
+    content.dataset.signature = signature;
+
+    content.innerHTML = `
+      <div class="campus-chat-drawer-top">
+        <span class="campus-chat-status-pill">${escapeHtml(match?.identityRevealed ? "已互相展示资料" : "先匿名聊着")}</span>
+        <button class="campus-chat-drawer-close" type="button" aria-label="关闭" data-chat-profile-close>×</button>
+      </div>
+      <div class="campus-chat-drawer-hero">
+        <span class="campus-chat-drawer-avatar${avatarClass}" style="${avatarStyle}">${escapeHtml(initialsForUser(user, "同"))}</span>
+        <h3>${escapeHtml(cleanText(user?.nickname) || "聊天对象")}</h3>
+        <p>${escapeHtml(chatMetaLine(user) || "资料还不多，可以从聊天里慢慢了解。")}</p>
+      </div>
+      <div class="campus-chat-drawer-grid">
+        <div class="campus-chat-drawer-metric"><span>学校</span><strong>${escapeHtml(cleanText(user?.school) || "暂未填写")}</strong></div>
+        <div class="campus-chat-drawer-metric"><span>专业年级</span><strong>${escapeHtml([user?.major, user?.grade].map(cleanText).filter(Boolean).join(" · ") || "暂未填写")}</strong></div>
+        <div class="campus-chat-drawer-metric"><span>MBTI</span><strong>${escapeHtml(cleanText(user?.mbti) || "暂未填写")}</strong></div>
+        <div class="campus-chat-drawer-metric"><span>生辰</span><strong>${escapeHtml(formatChatBirthDate(user?.birthDate || user?.birthday))}</strong></div>
+      </div>
+      <div class="campus-chat-drawer-section">
+        <span>想认识怎样的人</span>
+        <p>${escapeHtml(cleanText(user?.bio || user?.description) || "还没有写简介，先从一句问候开始也很好。")}</p>
+      </div>
+      <div class="campus-chat-drawer-section">
+        <span>兴趣标签</span>
+        <div class="campus-chat-drawer-tags">
+          ${tags.length ? tags.map((tag) => `<em>${escapeHtml(tag)}</em>`).join("") : "<em>慢慢了解</em>"}
+        </div>
+      </div>
+      <button class="campus-chat-drawer-secondary" type="button" data-chat-profile-close>继续聊天</button>
+    `;
+  }
+
+  function openChatProfileDrawer() {
+    ensureChatProfileDrawer(currentChatMatchId(), currentChatMatch());
+    document.body.dataset.campusChatDrawer = "open";
+    const drawer = document.querySelector("#campus-chat-profile-drawer");
+    drawer?.setAttribute("aria-hidden", "false");
+    updateScrollLock();
+  }
+
+  function closeChatProfileDrawer() {
+    if (document.body.dataset.campusChatDrawer === "open") {
+      document.body.dataset.campusChatDrawer = "closed";
+    }
+    document.querySelector("#campus-chat-profile-drawer")?.setAttribute("aria-hidden", "true");
+    updateScrollLock();
+  }
+
+  function chatMetaLine(user) {
+    return [user?.school, user?.major, user?.grade].map(cleanText).filter(Boolean).join(" · ");
+  }
+
+  function avatarInlineStyle(user) {
+    const avatar = cleanText(user?.avatar || user?.avatarUrl || user?.image || user?.imageUrl);
+    return avatar ? `background-image:url("${cssUrl(avatar)}")` : "";
+  }
+
+  function uniqueProfileTags(user) {
+    return [...new Set([
+      ...(Array.isArray(user?.tags) ? user.tags : []),
+      ...(Array.isArray(user?.sceneTags) ? user.sceneTags : []),
+      ...(Array.isArray(user?.matchModes) ? user.matchModes : []),
+    ].map(cleanText).filter(Boolean))];
+  }
+
+  function formatChatBirthDate(value) {
+    const text = cleanText(value);
+    if (!text) {
+      return "暂未填写";
+    }
+
+    const date = toValidDate(text);
+    if (!date) {
+      return text;
+    }
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
   }
 
   function updateFloatingUnreadPill(total) {
@@ -4573,7 +5335,8 @@
     const shouldLock = document.body.dataset.campusLoginOverlay === "open"
       || document.body.dataset.campusMembershipModal === "open"
       || document.body.dataset.campusActivityModal === "open"
-      || document.body.dataset.campusAvatarSheet === "open";
+      || document.body.dataset.campusAvatarSheet === "open"
+      || document.body.dataset.campusChatDrawer === "open";
     document.documentElement.style.overflow = shouldLock ? "hidden" : "";
     document.body.style.overflow = shouldLock ? "hidden" : "";
   }
@@ -4595,6 +5358,11 @@
 
     if (document.body.dataset.campusAvatarSheet === "open") {
       closeAvatarSourceSheet();
+      return;
+    }
+
+    if (document.body.dataset.campusChatDrawer === "open") {
+      closeChatProfileDrawer();
       return;
     }
 
@@ -7106,6 +7874,7 @@
     rewriteAudienceCopy();
     ensureUnreadPolling();
     syncUnreadIndicators(state.unreadMatches, state.unreadTotal);
+    ensureChatTools();
     enhanceChatTimeline();
   }
 

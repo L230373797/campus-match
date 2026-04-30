@@ -339,6 +339,91 @@
       body[data-campus-route^="/chat/"] .campus-message-read-state.is-unread {
         color: rgba(255,255,255,.58);
       }
+      body[data-campus-route^="/chat/"] .campus-message-bubble.is-media {
+        padding: 6px !important;
+        background: rgba(255,255,255,.18) !important;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-image-message {
+        display: block;
+        width: min(58vw, 260px);
+        max-height: 320px;
+        object-fit: cover;
+        border-radius: 20px;
+        box-shadow: 0 12px 34px rgba(15,23,42,.16);
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-message {
+        width: min(64vw, 310px);
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 22px;
+        color: rgba(15,23,42,.92);
+        background: rgba(255,255,255,.84);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.54), 0 16px 34px rgba(15,23,42,.10);
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-avatar {
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        font-weight: 950;
+        color: rgba(8,18,32,.92);
+        background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(164,232,255,.78), rgba(255,202,226,.72));
+        background-size: cover;
+        background-position: center;
+        overflow: hidden;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-avatar.has-image {
+        color: transparent;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-copy {
+        min-width: 0;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-copy strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.18;
+        font-weight: 950;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-copy span,
+      body[data-campus-route^="/chat/"] .campus-chat-card-message p {
+        color: rgba(71,85,105,.82) !important;
+        font-size: 12px;
+        line-height: 1.45;
+        font-weight: 750;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-message p {
+        margin: 0;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      body[data-campus-route^="/chat/"] .campus-chat-card-tags em {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-style: normal;
+        color: rgba(22,78,99,.92);
+        background: rgba(207,250,254,.68);
+        font-size: 11px;
+        font-weight: 900;
+      }
       body[data-campus-route^="/chat/"] .campus-chat-avatar {
         flex: 0 0 34px;
         width: 34px;
@@ -535,6 +620,36 @@
       @keyframes campusTypingPulse {
         0%, 100% { transform: translateY(0); opacity: .35; }
         50% { transform: translateY(-3px); opacity: .95; }
+      }
+      .campus-chat-tool-row {
+        width: min(100%, 760px);
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .campus-chat-tool-row::-webkit-scrollbar {
+        display: none;
+      }
+      .campus-chat-tool-row button {
+        flex: 0 0 auto;
+        min-height: 34px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 12px;
+        color: rgba(15,23,42,.86);
+        background: rgba(255,255,255,.72);
+        box-shadow: inset 0 0 0 1px rgba(148,163,184,.16), 0 10px 24px rgba(15,23,42,.07);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0;
+        cursor: pointer;
+      }
+      .campus-chat-tool-row button[data-chat-uploading="true"] {
+        opacity: .68;
+        pointer-events: none;
       }
       .campus-chat-profile-drawer {
         position: fixed;
@@ -748,6 +863,16 @@
         .campus-chat-typing-indicator {
           width: calc(100% - 18px);
           margin-bottom: 6px;
+        }
+        .campus-chat-tool-row {
+          width: calc(100% - 18px);
+        }
+        body[data-campus-route^="/chat/"] .campus-chat-image-message {
+          width: min(66vw, 240px);
+          max-height: 280px;
+        }
+        body[data-campus-route^="/chat/"] .campus-chat-card-message {
+          width: min(72vw, 290px);
         }
         .campus-chat-drawer-panel {
           top: auto;
@@ -4806,9 +4931,10 @@
       bubble.classList.toggle("is-mine", mine);
       bubble.classList.toggle("is-theirs", !mine);
       ensureMessageAvatar(row, bubble, mine, message, match);
+      renderRichChatMessage(contentNode, bubble, message);
       updateMessageReadReceipt(bubble, message, match, mine, messageClientId(message) === lastOwnMessageId);
 
-      const timeNode = Array.from(bubble.querySelectorAll("span")).find((node) => !node.children.length);
+      const timeNode = Array.from(bubble.children).find((node) => node.tagName === "SPAN" && !node.classList.contains("campus-message-read-state"));
       const messageAt = message.createdAt || message.time;
       const timeText = formatMessageTime(messageAt);
       if (timeNode && timeText) {
@@ -4844,6 +4970,85 @@
     row.insertAdjacentElement("beforebegin", chip);
   }
 
+  function ensureSyntheticRichMessages(matchId, messages, match) {
+    const richMessages = messages.filter((message) => ["image", "profile_card"].includes(cleanText(message?.type)));
+    if (!richMessages.length) {
+      return;
+    }
+
+    const container = findChatMessageContainer();
+    if (!container) {
+      return;
+    }
+
+    richMessages.forEach((message) => {
+      const messageId = messageClientId(message);
+      if (!messageId || document.querySelector(`[data-campus-message-id="${safeSelectorValue(messageId)}"]`)) {
+        return;
+      }
+      if (Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] p')).some((node) => cleanText(node.textContent) === cleanText(message.content))) {
+        return;
+      }
+
+      const mine = isCurrentUserSender(message);
+      const row = document.createElement("div");
+      row.className = "campus-message-row campus-synthetic-message";
+      row.dataset.campusSender = mine ? "me" : "them";
+      row.dataset.campusMessageId = messageId;
+
+      const bubble = document.createElement("div");
+      bubble.className = `campus-message-bubble ${mine ? "is-mine" : "is-theirs"}`;
+      const content = document.createElement("p");
+      content.textContent = cleanText(message.content);
+      const time = document.createElement("span");
+      time.className = "campus-message-time";
+      time.textContent = formatMessageTime(message.createdAt || message.time);
+      bubble.append(content, time);
+      row.appendChild(bubble);
+
+      const key = localDateKey(message.createdAt || message.time);
+      if (key && !container.querySelector(`.campus-chat-date-chip[data-date-key="${safeSelectorValue(key)}"]`)) {
+        const chip = document.createElement("div");
+        chip.className = "campus-chat-date-chip";
+        chip.dataset.dateKey = key;
+        chip.innerHTML = `<span>${escapeHtml(dateChipLabel(message.createdAt || message.time))}</span>`;
+        container.appendChild(chip);
+      }
+
+      container.appendChild(row);
+      ensureMessageAvatar(row, bubble, mine, message, match);
+      renderRichChatMessage(content, bubble, message);
+    });
+  }
+
+  function findChatMessageContainer() {
+    const row = Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] .campus-message-row')).pop();
+    if (row?.parentElement) {
+      return row.parentElement;
+    }
+
+    const matchId = currentChatMatchId();
+    const messages = state.messageThreads.get(matchId) || [];
+    const contentNode = Array.from(document.querySelectorAll('body[data-campus-route^="/chat/"] p'))
+      .find((node) => !node.children.length && messages.some((message) => cleanText(message.content) === cleanText(node.textContent)));
+    const bubble = contentNode?.parentElement;
+    const existingRow = bubble?.closest('div[class*="justify-end"], div[class*="justify-start"]');
+    if (existingRow?.parentElement) {
+      return existingRow.parentElement;
+    }
+
+    const composer = findChatComposerContainer();
+    return composer?.parentElement?.previousElementSibling || null;
+  }
+
+  function safeSelectorValue(value) {
+    const raw = cleanText(value);
+    if (window.CSS?.escape) {
+      return CSS.escape(raw);
+    }
+    return raw.replace(/["\\]/g, "\\$&");
+  }
+
   function ensureMessageAvatar(row, bubble, mine, message, match) {
     const messageItem = directChildWithin(row, bubble) || bubble;
     messageItem.classList.add("campus-message-item");
@@ -4875,6 +5080,68 @@
     const read = isMessageReadByOther(message, match);
     receipt.textContent = read ? "已读" : "未读";
     receipt.classList.toggle("is-unread", !read);
+  }
+
+  function renderRichChatMessage(contentNode, bubble, message) {
+    const type = cleanText(message?.type || "text");
+    bubble.classList.toggle("is-media", type === "image" || type === "profile_card");
+    if (type === "image") {
+      if (contentNode.dataset.richType === "image" && contentNode.dataset.richContent === cleanText(message.content)) {
+        return;
+      }
+      contentNode.dataset.richType = "image";
+      contentNode.dataset.richContent = cleanText(message.content);
+      contentNode.innerHTML = `<img class="campus-chat-image-message" src="${escapeAttr(message.content)}" alt="聊天图片" loading="lazy">`;
+      return;
+    }
+
+    if (type === "profile_card") {
+      const card = parseMessageCard(message.content);
+      let cardNode = bubble.querySelector(".campus-chat-card-message");
+      if (cardNode?.dataset.richContent === cleanText(message.content)) {
+        return;
+      }
+      if (!cardNode) {
+        cardNode = document.createElement("div");
+        cardNode.className = "campus-chat-card-message";
+        contentNode.replaceWith(cardNode);
+      }
+      cardNode.dataset.richContent = cleanText(message.content);
+      cardNode.innerHTML = renderProfileCardMessage(card);
+      return;
+    }
+
+    if (contentNode.dataset.richType) {
+      contentNode.dataset.richType = "";
+      contentNode.dataset.richContent = "";
+      contentNode.textContent = cleanText(message.content);
+    }
+  }
+
+  function parseMessageCard(content) {
+    try {
+      return JSON.parse(content);
+    } catch {
+      return {};
+    }
+  }
+
+  function renderProfileCardMessage(card) {
+    const avatar = cleanText(card.avatar);
+    const avatarClass = avatar ? " has-image" : "";
+    const avatarStyle = avatar ? `background-image:url("${cssUrl(avatar)}")` : "";
+    const tags = Array.isArray(card.tags) ? card.tags.map(cleanText).filter(Boolean).slice(0, 4) : [];
+    return `
+      <div class="campus-chat-card-top">
+        <span class="campus-chat-card-avatar${avatarClass}" style="${avatarStyle}">${escapeHtml(cleanText(card.initial) || initialsForUser({ nickname: card.title || card.nickname }, "同"))}</span>
+        <span class="campus-chat-card-copy">
+          <strong>${escapeHtml(cleanText(card.title || card.nickname) || "资料卡片")}</strong>
+          <span>${escapeHtml([card.school, card.major, card.grade].map(cleanText).filter(Boolean).join(" · ") || "校园资料")}</span>
+        </span>
+      </div>
+      <p>${escapeHtml(cleanText(card.bio) || "先从这张资料卡开始认识一下。")}</p>
+      <div class="campus-chat-card-tags">${tags.length ? tags.map((tag) => `<em>${escapeHtml(tag)}</em>`).join("") : "<em>慢慢了解</em>"}</div>
+    `;
   }
 
   function isMessageReadByOther(message, match) {
@@ -4935,6 +5202,7 @@
     const match = currentChatMatch();
     ensureChatHeader(matchId, match);
     ensureChatQuickOpeners(matchId, match);
+    ensureChatToolRow(matchId, match);
     ensureChatTypingReporter(matchId);
     ensureChatPresence(matchId);
     renderChatTypingIndicator(matchId);
@@ -5030,6 +5298,196 @@
         fillChatComposer(button.dataset.chatOpener || button.textContent || "");
       });
     });
+  }
+
+  function ensureChatToolRow(matchId, match) {
+    const composer = findChatComposerContainer();
+    if (!composer?.parentElement) {
+      return;
+    }
+
+    let row = document.querySelector("#campus-chat-tool-row");
+    if (!row) {
+      row = document.createElement("div");
+      row.id = "campus-chat-tool-row";
+      row.className = "campus-chat-tool-row";
+      row.innerHTML = `
+        <button type="button" data-chat-tool="image">图片</button>
+        <button type="button" data-chat-tool="emoji" data-chat-emoji="😊">😊</button>
+        <button type="button" data-chat-tool="emoji" data-chat-emoji="哈哈">哈哈</button>
+        <button type="button" data-chat-tool="emoji" data-chat-emoji="收到">收到</button>
+        <button type="button" data-chat-tool="profile">我的资料卡</button>
+      `;
+      row.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-chat-tool]");
+        if (!button) {
+          return;
+        }
+        handleChatToolClick(button, matchId, match);
+      });
+    }
+
+    if (row.parentElement !== composer.parentElement || row.nextElementSibling !== composer) {
+      composer.parentElement.insertBefore(row, composer);
+    }
+
+    row.dataset.matchId = matchId;
+  }
+
+  function handleChatToolClick(button, matchId, match) {
+    const tool = button.dataset.chatTool;
+    if (tool === "emoji") {
+      appendChatComposerText(button.dataset.chatEmoji || button.textContent || "");
+      return;
+    }
+
+    if (tool === "profile") {
+      sendProfileCardMessage(matchId);
+      return;
+    }
+
+    if (tool === "image") {
+      chooseAndSendChatImage(matchId, button);
+    }
+  }
+
+  function appendChatComposerText(text) {
+    const field = findChatComposerField();
+    if (!field) {
+      return;
+    }
+
+    const prefix = field.value && !/\s$/.test(field.value) ? " " : "";
+    setFormValue(field, `${field.value || ""}${prefix}${text}`);
+    field.focus({ preventScroll: true });
+  }
+
+  function chooseAndSendChatImage(matchId, button) {
+    let input = document.querySelector("#campus-chat-image-input");
+    if (!input) {
+      input = document.createElement("input");
+      input.id = "campus-chat-image-input";
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.hidden = true;
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        input.value = "";
+        if (!file) {
+          return;
+        }
+        uploadAndSendChatImage(matchId, file, button);
+      });
+      document.body.appendChild(input);
+    }
+    input.click();
+  }
+
+  async function uploadAndSendChatImage(matchId, file, button) {
+    if (!file.type || !/^image\/(jpeg|png|webp)$/.test(file.type)) {
+      showChatToolStatus("只支持 JPG、PNG 或 WebP 图片");
+      return;
+    }
+    if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
+      showChatToolStatus("图片不能超过 3MB");
+      return;
+    }
+
+    button.dataset.chatUploading = "true";
+    button.textContent = "发送中";
+    try {
+      const data = await fileToDataUrl(file);
+      const upload = await requestApi("/uploads/chat-image", {
+        method: "POST",
+        body: JSON.stringify({ contentType: file.type, data }),
+      });
+      await sendRichChatMessage(matchId, "image", upload.data?.imageUrl || "");
+      showChatToolStatus("图片已发送");
+    } catch (error) {
+      showChatToolStatus(error.message || "图片没有发出去");
+    } finally {
+      button.dataset.chatUploading = "false";
+      button.textContent = "图片";
+    }
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("图片读取失败"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function sendProfileCardMessage(matchId) {
+    const user = state.user || {};
+    const card = {
+      title: cleanText(user.nickname) || "我的资料",
+      school: cleanText(user.school),
+      major: cleanText(user.major),
+      grade: cleanText(user.grade),
+      bio: cleanText(user.bio).slice(0, 80),
+      avatar: cleanText(user.avatar),
+      tags: uniqueProfileTags(user).slice(0, 4),
+      initial: initialsForUser(user, "我"),
+    };
+    try {
+      await sendRichChatMessage(matchId, "profile_card", JSON.stringify(card));
+      showChatToolStatus("资料卡已发送");
+    } catch (error) {
+      showChatToolStatus(error.message || "资料卡没有发出去");
+    }
+  }
+
+  async function sendRichChatMessage(matchId, type, content) {
+    const payload = await requestApi(`/messages/${encodeURIComponent(matchId)}`, {
+      method: "POST",
+      body: JSON.stringify({ type, content }),
+    });
+    if (payload.data?.match) {
+      rememberChatMatch(matchId, payload.data.match);
+    }
+    if (payload.data?.typing) {
+      rememberChatTyping(matchId, payload.data.typing);
+    }
+    if (payload.data?.message) {
+      const current = state.messageThreads.get(matchId) || [];
+      state.messageThreads.set(matchId, [...current, payload.data.message]);
+    }
+    await refreshChatMessages(matchId);
+    if (payload.data?.message) {
+      ensureSyntheticRichMessages(matchId, [payload.data.message], currentChatMatch());
+    }
+    enhanceChatTimeline();
+    renderChatTypingIndicator(matchId);
+  }
+
+  async function refreshChatMessages(matchId) {
+    const payload = await requestApi(`/messages/${encodeURIComponent(matchId)}?page=1&limit=20`);
+    if (payload.data?.match) {
+      rememberChatMatch(matchId, payload.data.match);
+    }
+    if (payload.data?.typing) {
+      rememberChatTyping(matchId, payload.data.typing);
+    }
+    if (Array.isArray(payload.data?.messages)) {
+      state.messageThreads.set(matchId, payload.data.messages);
+    }
+  }
+
+  function showChatToolStatus(text) {
+    const row = document.querySelector("#campus-chat-tool-row");
+    if (!row) {
+      return;
+    }
+    row.dataset.status = text;
+    row.setAttribute("aria-label", text);
+    window.clearTimeout(row._campusStatusTimer);
+    row._campusStatusTimer = window.setTimeout(() => {
+      row.removeAttribute("aria-label");
+      delete row.dataset.status;
+    }, 1800);
   }
 
   function ensureChatTypingReporter(matchId) {

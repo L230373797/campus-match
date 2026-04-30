@@ -661,7 +661,7 @@ async function handleUsers(req, store, segments, url) {
 async function handleUploads(req, store, segments) {
   if (req.method === "GET" && segments.length >= 2) {
     const key = segments.slice(1).join("/");
-    if (!["campus-cards/", "avatars/"].some((prefix) => key.startsWith(prefix))) {
+    if (!["campus-cards/", "avatars/", "chat-images/"].some((prefix) => key.startsWith(prefix))) {
       throw httpError("文件不存在", 404);
     }
 
@@ -726,6 +726,22 @@ async function handleUploads(req, store, segments) {
       success: true,
       message: "头像已更新",
       data: { imageUrl: avatar, user: publicUser(updatedUser) },
+    }, 201);
+  }
+
+  if (segments[1] === "chat-image" && req.method === "POST") {
+    const user = await requireUser(req, store);
+    const body = await readBody(req);
+    const { buffer, extension } = parseImageUpload(body);
+    const fileId = makeId("chatimg");
+    const key = `uploads/chat-images/${user.id}/${fileId}.${extension}`;
+    await store.set(key, buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+
+    const imageUrl = `/api/uploads/chat-images/${user.id}/${fileId}.${extension}`;
+    return json({
+      success: true,
+      message: "图片已上传",
+      data: { imageUrl },
     }, 201);
   }
 
@@ -893,9 +909,11 @@ async function handleMessages(req, store, segments, url) {
   if (req.method === "POST") {
     const body = await readBody(req);
     const content = text(body.content);
+    const type = normalizeMessageType(body.type);
     if (!content) {
       throw httpError("消息内容不能为空", 400);
     }
+    validateMessageContent(type, content);
 
     const now = new Date().toISOString();
     const messageId = makeId("msg");
@@ -906,13 +924,13 @@ async function handleMessages(req, store, segments, url) {
       senderId: user.id,
       sender: publicUser(user),
       content,
-      type: text(body.type) || "text",
+      type,
       createdAt: now,
     };
     const messages = await getMessages(store, matchId);
     messages.push(message);
     await store.setJSON(`messages/${matchId}`, messages);
-    const updatedMatch = applyOutgoingMessageState(match, user.id, content, now);
+    const updatedMatch = applyOutgoingMessageState(match, user.id, messagePreviewForType(type, content), now);
     await saveMatch(store, updatedMatch);
     const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
 
@@ -970,6 +988,38 @@ async function handleMessageTyping(req, store, match, user) {
   }
 
   return json({ success: false, message: "接口不存在" }, 404);
+}
+
+function normalizeMessageType(value) {
+  const type = text(value || "text");
+  return ["text", "image", "profile_card"].includes(type) ? type : "text";
+}
+
+function validateMessageContent(type, content) {
+  if (type === "image" && !content.startsWith("/api/uploads/chat-images/")) {
+    throw httpError("请先上传图片", 400);
+  }
+
+  if (type === "profile_card") {
+    try {
+      const card = JSON.parse(content);
+      if (!text(card.title || card.nickname)) {
+        throw new Error("invalid card");
+      }
+    } catch {
+      throw httpError("资料卡片内容无效", 400);
+    }
+  }
+}
+
+function messagePreviewForType(type, content) {
+  if (type === "image") {
+    return "发来一张图片";
+  }
+  if (type === "profile_card") {
+    return "发来一张资料卡";
+  }
+  return content;
 }
 
 async function upsertMatch(store, user, target) {

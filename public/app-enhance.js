@@ -133,6 +133,9 @@
     unreadFetching: false,
     unreadCheckedAt: 0,
     messageThreads: new Map(),
+    activitySummary: null,
+    activityCheckedAt: 0,
+    activityFetching: false,
     privacyRequests: [],
     privacyCheckedAt: 0,
     privacyFetching: false,
@@ -917,6 +920,137 @@
         margin-top: 18px;
         color: rgba(226,238,255,.64);
         font-size: 13px;
+      }
+      .campus-activity-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 82;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(4,10,18,.72);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+      body[data-campus-activity-modal="open"] .campus-activity-modal { display: flex; }
+      .campus-activity-dialog {
+        width: min(760px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.14);
+        background: linear-gradient(180deg, rgba(9,18,32,.96), rgba(7,14,25,.94));
+        box-shadow: 0 34px 110px rgba(0,0,0,.38);
+        color: rgba(255,255,255,.94);
+      }
+      .campus-activity-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 22px 10px;
+      }
+      .campus-activity-head h2 {
+        margin: 0 0 7px;
+        font-size: clamp(1.55rem, 5vw, 2.45rem);
+        line-height: 1;
+      }
+      .campus-activity-head p {
+        margin: 0;
+        color: rgba(226,238,255,.68);
+        line-height: 1.55;
+      }
+      .campus-activity-close {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 999px;
+        color: rgba(255,255,255,.92);
+        background: rgba(255,255,255,.08);
+        cursor: pointer;
+      }
+      .campus-activity-body {
+        padding: 0 22px 22px;
+      }
+      .campus-activity-list {
+        display: grid;
+        gap: 12px;
+      }
+      .campus-activity-card {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 13px;
+        border-radius: 22px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.1);
+      }
+      .campus-activity-avatar {
+        width: 58px;
+        height: 58px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 19px;
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        font-weight: 950;
+      }
+      .campus-activity-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .campus-activity-main {
+        min-width: 0;
+      }
+      .campus-activity-main strong,
+      .campus-activity-main span,
+      .campus-activity-main small {
+        display: block;
+      }
+      .campus-activity-main strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 1rem;
+      }
+      .campus-activity-main span {
+        margin-top: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: rgba(226,238,255,.68);
+        font-size: 13px;
+      }
+      .campus-activity-main small {
+        margin-top: 7px;
+        color: rgba(226,238,255,.5);
+        font-size: 12px;
+      }
+      .campus-activity-action {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: #07111f;
+        background: linear-gradient(180deg,#fff,#d7e5ff 62%,#ffd8e5);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+      .campus-activity-empty {
+        padding: 34px 18px;
+        border-radius: 24px;
+        color: rgba(226,238,255,.68);
+        background: rgba(255,255,255,.08);
+        text-align: center;
+        line-height: 1.65;
       }
       .campus-membership-banner {
         padding: 18px 20px;
@@ -2114,6 +2248,27 @@
           min-height: 40px;
           padding: 8px 10px;
           font-size: 12px;
+        }
+        .campus-activity-modal {
+          align-items: end;
+          padding: 0;
+        }
+        .campus-activity-dialog {
+          width: 100%;
+          max-height: min(86vh, 760px);
+          border-radius: 28px 28px 0 0;
+        }
+        .campus-activity-head,
+        .campus-activity-body {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .campus-activity-card {
+          grid-template-columns: 50px minmax(0, 1fr);
+        }
+        .campus-activity-action {
+          grid-column: 2;
+          justify-self: start;
         }
         .campus-profile-compat-panel {
           padding: 16px;
@@ -3486,6 +3641,8 @@
     state.token = "";
     state.user = null;
     state.membership = normalizeMembership(null);
+    state.activitySummary = null;
+    state.activityCheckedAt = 0;
     document.body.dataset.campusAuthenticated = "false";
     document.body.dataset.campusAdmin = "false";
     document.body.dataset.campusMembership = "free";
@@ -4049,6 +4206,8 @@
       state.token = "";
       state.user = null;
       state.membership = normalizeMembership(null);
+      state.activitySummary = null;
+      state.activityCheckedAt = 0;
       document.body.dataset.campusAuthenticated = "false";
       document.body.dataset.campusAdmin = "false";
       document.body.dataset.campusMembership = "free";
@@ -4196,6 +4355,7 @@
   function updateScrollLock() {
     const shouldLock = document.body.dataset.campusLoginOverlay === "open"
       || document.body.dataset.campusMembershipModal === "open"
+      || document.body.dataset.campusActivityModal === "open"
       || document.body.dataset.campusAvatarSheet === "open";
     document.documentElement.style.overflow = shouldLock ? "hidden" : "";
     document.body.style.overflow = shouldLock ? "hidden" : "";
@@ -4208,6 +4368,11 @@
 
     if (document.body.dataset.campusMembershipModal === "open") {
       closeMembershipCenter();
+      return;
+    }
+
+    if (document.body.dataset.campusActivityModal === "open") {
+      closeActivityModal();
       return;
     }
 
@@ -5714,6 +5879,7 @@
     ensureProfileProgressPanel();
     refreshProfileMembershipDecorations();
     ensureProfileAvatarUploader();
+    ensureProfileActivityActions();
     ensureProfilePrivacyPanel();
     ensureProfileCompatibilityPanel();
   }
@@ -6077,6 +6243,210 @@
   function findMembershipButton() {
     return Array.from(document.querySelectorAll("button"))
       .find((button) => (button.textContent || "").includes("会员中心"));
+  }
+
+  function findProfileActionButton(label) {
+    return Array.from(document.querySelectorAll("button"))
+      .find((button) => (button.textContent || "").includes(label));
+  }
+
+  function ensureProfileActivityActions() {
+    if (window.location.pathname !== "/profile" || !document.querySelector("#root")) {
+      return;
+    }
+
+    const likedButton = findProfileActionButton("喜欢过的人");
+    const footprintButton = findProfileActionButton("我的足迹");
+    bindProfileActivityButton(likedButton, "liked");
+    bindProfileActivityButton(footprintButton, "footprints");
+    refreshActivitySummary().then(updateProfileActivityCounts).catch(() => {});
+  }
+
+  function bindProfileActivityButton(button, type) {
+    if (!button || button.dataset.campusActivityBound === "true") {
+      return;
+    }
+
+    button.dataset.campusActivityBound = "true";
+    button.type = "button";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openActivityModal(type);
+    });
+  }
+
+  async function refreshActivitySummary(force = false) {
+    if (!currentToken()) {
+      state.activitySummary = null;
+      state.activityCheckedAt = 0;
+      return null;
+    }
+    if (state.activityFetching) {
+      return state.activitySummary;
+    }
+    if (!force && state.activitySummary && Date.now() - state.activityCheckedAt < 15000) {
+      return state.activitySummary;
+    }
+
+    state.activityFetching = true;
+    try {
+      const payload = await requestApi("/users/activity");
+      state.activitySummary = payload.data || { liked: [], footprints: [], counts: {} };
+      state.activityCheckedAt = Date.now();
+      updateProfileActivityCounts();
+      return state.activitySummary;
+    } finally {
+      state.activityFetching = false;
+    }
+  }
+
+  function updateProfileActivityCounts() {
+    if (window.location.pathname !== "/profile") {
+      return;
+    }
+
+    const counts = state.activitySummary?.counts || {};
+    updateProfileButtonCount(findProfileActionButton("喜欢过的人"), counts.liked, "人");
+    updateProfileButtonCount(findProfileActionButton("我的足迹"), counts.footprints, "条");
+  }
+
+  function updateProfileButtonCount(button, count, unit) {
+    if (!button || !Number.isFinite(Number(count))) {
+      return;
+    }
+
+    const label = `${Math.max(0, Number(count))}${unit}`;
+    const leaf = Array.from(button.querySelectorAll("div, span, p"))
+      .filter((node) => !node.children.length)
+      .find((node) => /\d+\s*(人|条)/.test(node.textContent.trim()));
+    if (leaf) {
+      leaf.textContent = label;
+    }
+  }
+
+  function ensureActivityModalShell() {
+    let modal = document.querySelector("#campus-activity-modal");
+    if (modal) {
+      return modal;
+    }
+
+    modal = document.createElement("div");
+    modal.id = "campus-activity-modal";
+    modal.className = "campus-activity-modal";
+    modal.innerHTML = `
+      <div class="campus-activity-dialog" role="dialog" aria-modal="true" aria-label="我的记录">
+        <div class="campus-activity-head">
+          <div>
+            <h2 id="campus-activity-title">我的记录</h2>
+            <p id="campus-activity-subtitle">这里会显示你最近的校园互动。</p>
+          </div>
+          <button type="button" class="campus-activity-close" data-close-activity>×</button>
+        </div>
+        <div class="campus-activity-body" id="campus-activity-body"></div>
+      </div>
+    `;
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal || event.target.closest("[data-close-activity]")) {
+        closeActivityModal();
+      }
+    });
+    document.body.appendChild(modal);
+    return modal;
+  }
+
+  async function openActivityModal(type) {
+    const modal = ensureActivityModalShell();
+    document.body.dataset.campusActivityModal = "open";
+    updateScrollLock();
+    renderActivityModal(type, { loading: true });
+
+    try {
+      const summary = await refreshActivitySummary(true);
+      renderActivityModal(type, summary || {});
+    } catch (error) {
+      renderActivityModal(type, { error: error.message, liked: [], footprints: [], counts: {} });
+    }
+  }
+
+  function closeActivityModal() {
+    delete document.body.dataset.campusActivityModal;
+    updateScrollLock();
+  }
+
+  function renderActivityModal(type, summary = {}) {
+    const modal = ensureActivityModalShell();
+    const title = modal.querySelector("#campus-activity-title");
+    const subtitle = modal.querySelector("#campus-activity-subtitle");
+    const body = modal.querySelector("#campus-activity-body");
+    const isLiked = type === "liked";
+    title.textContent = isLiked ? "喜欢过的人" : "我的足迹";
+    subtitle.textContent = isLiked
+      ? "这些是你已经合拍或表达过喜欢的人。"
+      : "这里记录你略过的人，想回看时不用凭记忆找。";
+
+    if (summary.loading) {
+      body.innerHTML = `<div class="campus-activity-empty">正在读取记录...</div>`;
+      return;
+    }
+
+    if (summary.error) {
+      body.innerHTML = `<div class="campus-activity-empty">${escapeHtml(summary.error)}</div>`;
+      return;
+    }
+
+    const items = isLiked ? (summary.liked || []) : (summary.footprints || []);
+    if (!items.length) {
+      body.innerHTML = `<div class="campus-activity-empty">${isLiked ? "还没有喜欢过的人。去发现页多看看，也许下一张卡片就会合拍。" : "还没有足迹记录。你略过的人会出现在这里。"}</div>`;
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="campus-activity-list">
+        ${items.map((item) => renderActivityItem(item, isLiked)).join("")}
+      </div>
+    `;
+  }
+
+  function renderActivityItem(item, isLiked) {
+    const profile = item.profile || {};
+    const id = profile.id || profile._id || "";
+    const title = profile.nickname || "同校同学";
+    const meta = [profile.school, profile.major, profile.grade].filter(Boolean).join(" · ") || "资料还没完善";
+    const time = item.actionAt ? formatDateTime(item.actionAt) : "最近";
+    const avatar = profile.avatar
+      ? `<img src="${escapeAttr(profile.avatar)}" alt="${escapeAttr(title)}" loading="lazy" />`
+      : escapeHtml(String(title).slice(0, 1) || "同");
+    const action = isLiked && item.matchId
+      ? `<a class="campus-activity-action" href="/chat/${escapeAttr(item.matchId)}">去聊天</a>`
+      : id
+        ? `<a class="campus-activity-action" href="/search.html">再看看</a>`
+        : `<span class="campus-activity-action">已记录</span>`;
+
+    return `
+      <article class="campus-activity-card">
+        <div class="campus-activity-avatar">${avatar}</div>
+        <div class="campus-activity-main">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(meta)}</span>
+          <small>${escapeHtml(isLiked ? `合拍于 ${time}` : `${item.note || "浏览过"} · ${time}`)}</small>
+        </div>
+        ${action}
+      </article>
+    `;
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "最近";
+    }
+    return date.toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   function refreshProfileMembershipDecorations() {

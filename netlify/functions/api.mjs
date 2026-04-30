@@ -432,6 +432,11 @@ async function handleUsers(req, store, segments, url) {
     });
   }
 
+  if (segments[1] === "activity" && req.method === "GET") {
+    const activity = await buildUserActivity(store, user);
+    return json({ success: true, data: activity });
+  }
+
   if (segments[1] === "privacy-requests" && segments[2] === "cancel" && req.method === "POST") {
     const body = await readBody(req);
     const requestId = text(body.requestId);
@@ -702,6 +707,8 @@ async function handleMatches(req, store, segments) {
     }
 
     const { match, isNewMatch } = await upsertMatch(store, user, target);
+    const latestUser = await getUser(store, user.id);
+    await saveUser(store, rememberActivity(latestUser || user, "like", target, new Date().toISOString()));
     return json({
       success: true,
       data: {
@@ -713,9 +720,16 @@ async function handleMatches(req, store, segments) {
   }
 
   if (segments[1] === "skip" && segments[2] && req.method === "POST") {
+    const target = await findPublicProfile(store, segments[2]);
     const skippedIds = new Set(user.skippedIds || []);
     skippedIds.add(segments[2]);
-    await saveUser(store, { ...user, skippedIds: [...skippedIds], updatedAt: new Date().toISOString() });
+    const updatedUser = rememberActivity(
+      { ...user, skippedIds: [...skippedIds] },
+      "skip",
+      target || { id: segments[2], _id: segments[2], nickname: "已略过的同学" },
+      new Date().toISOString(),
+    );
+    await saveUser(store, updatedUser);
     return json({ success: true, message: "已跳过" });
   }
 
@@ -901,6 +915,143 @@ async function listMatchesForUser(store, userId) {
   return matches.sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")));
 }
 
+async function buildUserActivity(store, user) {
+  const [matches, activityLog] = await Promise.all([
+    listMatchesForUser(store, user.id),
+    Promise.resolve(normalizeActivityLog(user.activityLog)),
+  ]);
+  const skipLogByUserId = new Map(
+    activityLog
+      .filter((item) => item.type === "skip")
+      .map((item) => [item.userId, item]),
+  );
+  const likedLogByUserId = new Map(
+    activityLog
+      .filter((item) => item.type === "like")
+      .map((item) => [item.userId, item]),
+  );
+
+  const liked = matches.map((match) => {
+    const profile = match.user || {};
+    const profileId = profile.id || profile._id;
+    const log = likedLogByUserId.get(profileId);
+    return {
+      id: match.id,
+      type: "like",
+      matchId: match.id,
+      actionAt: log?.createdAt || match.matchedAt || match.lastMessageAt,
+      profile,
+      lastMessageAt: match.lastMessageAt,
+      lastMessagePreview: match.lastMessagePreview,
+      unreadCount: match.unreadCount || 0,
+    };
+  });
+
+  const footprintIds = uniqueTextValues([
+    ...activityLog.filter((item) => item.type === "skip").map((item) => item.userId),
+    ...(user.skippedIds || []),
+  ]);
+  const footprints = [];
+  for (const userId of footprintIds) {
+    const log = skipLogByUserId.get(userId);
+    const profile = log?.profileSnapshot || await findPublicProfile(store, userId);
+    footprints.push({
+      id: log?.id || `skip-${userId}`,
+      type: "skip",
+      actionAt: log?.createdAt || null,
+      profile: profile || { id: userId, _id: userId, nickname: "已略过的同学" },
+      note: "已略过",
+    });
+  }
+
+  return {
+    liked: liked.sort(sortActivityByTime),
+    footprints: footprints.sort(sortActivityByTime),
+    counts: {
+      liked: liked.length,
+      footprints: footprints.length,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function rememberActivity(user, type, profile, now = new Date().toISOString()) {
+  const targetId = profile?.id || profile?._id;
+  if (!targetId) {
+    return { ...user, updatedAt: now };
+  }
+
+  const entry = {
+    id: makeId("act"),
+    type,
+    userId: targetId,
+    createdAt: now,
+    profileSnapshot: publicActivityProfile(profile),
+  };
+  const activityLog = normalizeActivityLog(user.activityLog)
+    .filter((item) => !(item.type === type && item.userId === targetId));
+
+  return {
+    ...user,
+    activityLog: [entry, ...activityLog].slice(0, 120),
+    updatedAt: now,
+  };
+}
+
+function normalizeActivityLog(activityLog) {
+  if (!Array.isArray(activityLog)) {
+    return [];
+  }
+
+  return activityLog
+    .map((item) => {
+      const type = text(item?.type);
+      const userId = text(item?.userId || item?.targetId);
+      if (!["like", "skip"].includes(type) || !userId) {
+        return null;
+      }
+      return {
+        id: text(item.id) || makeId("act"),
+        type,
+        userId,
+        createdAt: text(item.createdAt) || null,
+        profileSnapshot: item.profileSnapshot ? publicActivityProfile(item.profileSnapshot) : null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function publicActivityProfile(profile) {
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    id: profile.id || profile._id,
+    _id: profile.id || profile._id,
+    nickname: text(profile.nickname) || "同校同学",
+    school: text(profile.school),
+    major: text(profile.major),
+    grade: text(profile.grade),
+    bio: text(profile.bio),
+    avatar: text(profile.avatar),
+    isVerified: Boolean(profile.isVerified),
+    verificationStatus: text(profile.verificationStatus),
+    verificationBadge: text(profile.verificationBadge),
+    tags: arrayOfText(profile.tags).slice(0, 6),
+    sceneTags: arrayOfText(profile.sceneTags).slice(0, 6),
+    matchModes: arrayOfText(profile.matchModes).slice(0, 6),
+  };
+}
+
+function sortActivityByTime(a, b) {
+  return String(b.actionAt || "").localeCompare(String(a.actionAt || ""));
+}
+
+function uniqueTextValues(values) {
+  return [...new Set(values.map(text).filter(Boolean))];
+}
+
 async function findOtherProfile(store, match, userId) {
   const otherId = match.participants.find((participant) => participant !== userId);
   return findPublicProfile(store, otherId, match.userSnapshots?.[otherId]);
@@ -934,6 +1085,7 @@ async function saveUser(store, user) {
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
     accountStatus: text(user.accountStatus) || "active",
@@ -1372,7 +1524,7 @@ function isActiveUser(user) {
 
 function publicUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, privacyRequests, privacyRequestStatus, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
 
   return {
     ...safeUser,
@@ -1384,7 +1536,7 @@ function publicUser(user) {
 
 function adminExportUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, ...safeUser } = normalizedUser;
+  const { passwordHash, passwordSalt, skippedIds, activityLog, ...safeUser } = normalizedUser;
   return {
     ...safeUser,
     id: normalizedUser.id,
@@ -1731,6 +1883,7 @@ function normalizeUserRecord(user) {
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
+    activityLog: normalizeActivityLog(user.activityLog),
     privacyRequests: normalizePrivacyRequests(user),
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
     accountStatus: text(user.accountStatus) || "active",

@@ -1878,6 +1878,94 @@
         background: #8fd8ff;
         box-shadow: 0 0 18px rgba(143,216,255,.54);
       }
+      .campus-activity-center {
+        margin: 16px 0;
+        padding: 20px;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,.14);
+        background:
+          radial-gradient(circle at 82% 4%, rgba(255,216,229,.16), transparent 36%),
+          linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.07));
+        box-shadow: 0 18px 46px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.14);
+        color: rgba(245,248,255,.94);
+      }
+      .campus-activity-center-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .campus-activity-center-head h3 {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+      }
+      .campus-activity-center-head p {
+        margin: 0;
+        color: rgba(226,238,255,.68);
+        line-height: 1.62;
+      }
+      .campus-activity-center-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .campus-activity-center-card {
+        min-height: 112px;
+        padding: 14px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 22px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: space-between;
+        color: rgba(245,248,255,.92);
+        background: rgba(255,255,255,.08);
+        text-align: left;
+        text-decoration: none;
+      }
+      .campus-activity-center-card strong {
+        font-size: clamp(1.45rem, 5vw, 2.15rem);
+        line-height: 1;
+        font-weight: 950;
+        font-variant-numeric: tabular-nums;
+      }
+      .campus-activity-center-card span {
+        margin-top: 10px;
+        font-size: 13px;
+        font-weight: 900;
+      }
+      .campus-activity-center-card small {
+        margin-top: 5px;
+        color: rgba(226,238,255,.56);
+        line-height: 1.45;
+      }
+      .campus-activity-center-insights {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .campus-activity-center-insights span {
+        min-height: 36px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 11px;
+        border-radius: 16px;
+        color: rgba(226,238,255,.76);
+        background: rgba(255,255,255,.07);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .campus-activity-center-insights span::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: #8fd8ff;
+        box-shadow: 0 0 18px rgba(143,216,255,.54);
+      }
       .campus-profile-compat-panel {
         margin: 16px 0;
         padding: 20px;
@@ -2302,6 +2390,19 @@
           min-height: 40px;
           padding: 8px 10px;
           font-size: 12px;
+        }
+        .campus-activity-center {
+          padding: 16px;
+          border-radius: 24px;
+        }
+        .campus-activity-center-head {
+          display: block;
+        }
+        .campus-activity-center-grid {
+          grid-template-columns: 1fr;
+        }
+        .campus-activity-center-card {
+          min-height: 86px;
         }
         .campus-activity-modal {
           align-items: end;
@@ -5980,6 +6081,7 @@
     if (window.location.pathname !== "/profile") {
       document.querySelector("#campus-membership-banner")?.remove();
       document.querySelector("#campus-profile-progress")?.remove();
+      document.querySelector("#campus-profile-activity-center")?.remove();
       document.querySelector("#campus-privacy-panel")?.remove();
       document.querySelector("#campus-profile-compat")?.remove();
       closeAvatarSourceSheet();
@@ -5996,6 +6098,7 @@
     refreshProfileMembershipDecorations();
     ensureProfileAvatarUploader();
     ensureProfileActivityActions();
+    ensureProfileActivityCenter();
     ensureProfilePrivacyPanel();
     ensureProfileCompatibilityPanel();
   }
@@ -6365,6 +6468,7 @@
 
   function findProfileActionButton(label) {
     return Array.from(document.querySelectorAll("button"))
+      .filter((button) => !button.closest("#campus-profile-activity-center"))
       .find((button) => (button.textContent || "").includes(label));
   }
 
@@ -6413,6 +6517,7 @@
       state.activitySummary = payload.data || { liked: [], footprints: [], counts: {} };
       state.activityCheckedAt = Date.now();
       updateProfileActivityCounts();
+      renderProfileActivityCenter(document.querySelector("#campus-profile-activity-center"));
       return state.activitySummary;
     } finally {
       state.activityFetching = false;
@@ -6427,6 +6532,7 @@
     const counts = state.activitySummary?.counts || {};
     updateProfileButtonCount(findProfileActionButton("喜欢过的人"), counts.liked, "人");
     updateProfileButtonCount(findProfileActionButton("我的足迹"), counts.footprints, "条");
+    renderProfileActivityCenter(document.querySelector("#campus-profile-activity-center"));
   }
 
   function updateProfileButtonCount(button, count, unit) {
@@ -6441,6 +6547,105 @@
     if (leaf) {
       leaf.textContent = label;
     }
+  }
+
+  function ensureProfileActivityCenter() {
+    if (window.location.pathname !== "/profile" || !document.querySelector("#root")) {
+      document.querySelector("#campus-profile-activity-center")?.remove();
+      return;
+    }
+
+    const anchor = document.querySelector("#campus-profile-progress")
+      || document.querySelector("#root .campus-profile-summary-card");
+    if (!anchor) {
+      return;
+    }
+
+    let panel = document.querySelector("#campus-profile-activity-center");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "campus-profile-activity-center";
+      panel.className = "campus-activity-center";
+      panel.addEventListener("click", (event) => {
+        const activityButton = event.target.closest("[data-open-activity]");
+        if (activityButton) {
+          event.preventDefault();
+          openActivityModal(activityButton.dataset.openActivity);
+        }
+      });
+    }
+
+    if (panel.previousElementSibling !== anchor) {
+      anchor.insertAdjacentElement("afterend", panel);
+    }
+
+    renderProfileActivityCenter(panel);
+    refreshActivitySummary().then(() => renderProfileActivityCenter(panel)).catch(() => {});
+  }
+
+  function renderProfileActivityCenter(panel) {
+    if (!panel || window.location.pathname !== "/profile") {
+      return;
+    }
+
+    const summary = state.activitySummary;
+    const counts = summary?.counts || {};
+    const likedCount = Number(counts.liked || 0);
+    const footprintCount = Number(counts.footprints || 0);
+    const matchCount = Number(counts.matches || state.user?.stats?.matches || 0);
+    const unreadCount = Number(counts.unread || 0);
+    const latestLiked = summary?.liked?.[0]?.profile?.nickname || "去发现页表达喜欢";
+    const latestFootprint = summary?.footprints?.[0]?.profile?.nickname || "略过的人会留下足迹";
+    const insights = Array.isArray(summary?.insights) && summary.insights.length
+      ? summary.insights
+      : buildLocalActivityInsights();
+    const renderKey = JSON.stringify({ likedCount, footprintCount, matchCount, unreadCount, latestLiked, latestFootprint, insights });
+    if (panel.dataset.renderKey === renderKey) {
+      return;
+    }
+
+    panel.dataset.renderKey = renderKey;
+    panel.innerHTML = `
+      <div class="campus-activity-center-head">
+        <div>
+          <h3>我的互动中心</h3>
+          <p>这里会把你喜欢过的人、浏览足迹和合拍聊天汇总起来，推荐也会跟着这些行为变聪明。</p>
+        </div>
+      </div>
+      <div class="campus-activity-center-grid">
+        <button class="campus-activity-center-card" type="button" data-open-activity="liked">
+          <strong>${likedCount}</strong>
+          <span>喜欢过的人</span>
+          <small>${escapeHtml(latestLiked)}</small>
+        </button>
+        <button class="campus-activity-center-card" type="button" data-open-activity="footprints">
+          <strong>${footprintCount}</strong>
+          <span>我的足迹</span>
+          <small>${escapeHtml(latestFootprint)}</small>
+        </button>
+        <a class="campus-activity-center-card" href="/matches">
+          <strong>${matchCount}</strong>
+          <span>合拍聊天</span>
+          <small>${unreadCount ? `${unreadCount} 条未读消息` : "去看看聊得来的人"}</small>
+        </a>
+      </div>
+      <div class="campus-activity-center-insights">
+        ${insights.slice(0, 3).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+      </div>
+    `;
+  }
+
+  function buildLocalActivityInsights() {
+    const user = state.user || {};
+    const insights = [];
+    if (user.school) {
+      insights.push(`推荐会优先看 ${user.school} 的同校同学。`);
+    }
+    if (user.mbti || user.birthDate) {
+      insights.push("填写的 MBTI 和生日会参与推荐排序。");
+    }
+    insights.push("多喜欢或略过几张卡片后，推荐会更贴近你的偏好。");
+    return insights;
   }
 
   function ensureActivityModalShell() {
@@ -6535,6 +6740,7 @@
       state.activitySummary = payload.data || { liked: [], footprints: [], counts: {} };
       state.activityCheckedAt = Date.now();
       updateProfileActivityCounts();
+      renderProfileActivityCenter(document.querySelector("#campus-profile-activity-center"));
       renderActivityModal(state.activityModalType, state.activitySummary);
     } finally {
       if (document.body.contains(button)) {

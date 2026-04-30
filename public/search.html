@@ -455,6 +455,24 @@
         color: rgba(238, 246, 255, .86);
         line-height: 1.7;
       }
+      .match-reasons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .match-reasons span {
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(255, 255, 255, .14);
+        border-radius: 999px;
+        padding: 0 10px;
+        color: rgba(232, 242, 255, .86);
+        background: rgba(255, 255, 255, .08);
+        font-size: .8rem;
+        font-weight: 700;
+      }
       .match-actions {
         display: grid;
         grid-template-columns: .82fr .9fr 1.12fr;
@@ -739,6 +757,7 @@
 
       function cardHtml(user, index, locked) {
         const tags = [...(user.sceneTags || []), ...(user.matchModes || [])].slice(0, 5);
+        const reasons = (user.recommendation?.reasons || []).slice(0, 3);
         const [cardA, cardB] = colorPair(activeIndex + index);
         const userId = escapeHtml(user.id || user._id || "");
         return `
@@ -757,6 +776,7 @@
               <span class="badge">${user.isVerified ? "已认证" : "还未认证"}</span>
             </div>
             <p class="match-bio">${escapeHtml(user.bio || "对方还没写简介，可以先看看兴趣标签。")}</p>
+            ${reasons.length ? `<div class="match-reasons">${reasons.map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>` : ""}
             <div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
             <div class="match-actions">
               <button class="back" type="button" data-back ${deckHistory.length ? "" : "disabled"}>回退</button>

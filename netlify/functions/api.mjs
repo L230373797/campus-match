@@ -610,15 +610,18 @@ async function handleUsers(req, store, segments, url) {
       Math.min(10, recommendationWindow),
     );
     const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
-    const skipped = new Set(user.skippedIds || []);
+    const context = await buildRecommendationContext(store, user);
     const allUsers = (await listUsers(store))
       .filter(isActiveUser)
       .map(publicUser)
-      .filter((item) => item.id !== user.id && !skipped.has(item.id));
-    const recommendations = allUsers.length
-      ? allUsers
+      .filter((item) => isRecommendationCandidate(item, context));
+    const recommendations = rankRecommendedUsers(
+      allUsers.length
+        ? allUsers
       : filterSeedProfiles({ viewer: user, query: "", school: "", major: "", grade: "" })
-          .filter((item) => !skipped.has(item.id));
+          .filter((item) => isRecommendationCandidate(item, context)),
+      context,
+    );
     const start = (page - 1) * limit;
 
     return json({
@@ -626,6 +629,7 @@ async function handleUsers(req, store, segments, url) {
       data: {
         users: recommendations.slice(start, start + limit),
         pagination: { page, limit, total: recommendations.length },
+        ranking: buildRecommendationSummary(context),
       },
     });
   }
@@ -1002,9 +1006,36 @@ async function buildUserActivity(store, user) {
     counts: {
       liked: liked.length,
       footprints: footprints.length,
+      matches: matches.length,
+      unread: matches.reduce((total, match) => total + (match.unreadCount || 0), 0),
     },
+    insights: buildActivityInsights(user, { liked, footprints, matches }),
     generatedAt: new Date().toISOString(),
   };
+}
+
+function buildActivityInsights(user, { liked, footprints, matches }) {
+  const insights = [];
+  if (user.school) {
+    insights.push(`推荐会优先看 ${user.school} 的同校同学。`);
+  }
+  if (user.mbti) {
+    insights.push(`已参考你的 MBTI，让开场话题更自然。`);
+  }
+  if (user.birthDate) {
+    insights.push("已参考生日节奏，用来生成更轻松的破冰角度。");
+  }
+  if (liked.length) {
+    insights.push(`你已经标记 ${liked.length} 位感兴趣的人，后续推荐会更贴近这些偏好。`);
+  } else if (footprints.length) {
+    insights.push(`你略过了 ${footprints.length} 位同学，系统会减少类似重复推荐。`);
+  } else if (matches.length) {
+    insights.push(`你有 ${matches.length} 位合拍对象，可以从聊天记录继续推进。`);
+  } else {
+    insights.push("多看几张推荐后，这里会慢慢形成你的偏好。");
+  }
+
+  return insights.slice(0, 3);
 }
 
 function rememberActivity(user, type, profile, now = new Date().toISOString()) {
@@ -1123,6 +1154,258 @@ function sortActivityByTime(a, b) {
 
 function uniqueTextValues(values) {
   return [...new Set(values.map(text).filter(Boolean))];
+}
+
+async function buildRecommendationContext(store, viewer) {
+  const activityLog = normalizeActivityLog(viewer.activityLog);
+  const matches = await listMatchesForUser(store, viewer.id);
+  const likedProfiles = [
+    ...matches.map((match) => match.user).filter(Boolean),
+    ...activityLog
+      .filter((item) => item.type === "like" && item.profileSnapshot)
+      .map((item) => item.profileSnapshot),
+  ];
+  const likedIds = uniqueTextValues([
+    ...matches.map((match) => match.user?.id || match.user?._id),
+    ...activityLog.filter((item) => item.type === "like").map((item) => item.userId),
+  ]);
+  const skippedIds = uniqueTextValues([
+    ...(viewer.skippedIds || []),
+    ...activityLog.filter((item) => item.type === "skip").map((item) => item.userId),
+  ]);
+  const dismissedLikedIds = uniqueTextValues(viewer.dismissedLikedIds || []);
+  const viewerSignals = collectRecommendationSignals(viewer);
+  const affinitySignals = uniqueTextValues([
+    ...viewerSignals,
+    ...likedProfiles.flatMap(collectRecommendationSignals),
+  ]);
+  const excludedIds = new Set([
+    viewer.id,
+    ...likedIds,
+    ...skippedIds,
+    ...dismissedLikedIds,
+  ].filter(Boolean));
+
+  return {
+    viewer,
+    activityLog,
+    matches,
+    likedIds,
+    skippedIds,
+    dismissedLikedIds,
+    likedProfiles,
+    likedSchools: new Set(uniqueTextValues(likedProfiles.map((profile) => profile.school))),
+    likedMajors: new Set(uniqueTextValues(likedProfiles.map((profile) => profile.major))),
+    viewerSignals,
+    affinitySignals,
+    excludedIds,
+  };
+}
+
+function isRecommendationCandidate(user, context) {
+  const id = user?.id || user?._id;
+  return Boolean(id && id !== context.viewer.id && !context.excludedIds.has(id));
+}
+
+function rankRecommendedUsers(users, context) {
+  return users
+    .map((user) => {
+      const recommendation = scoreRecommendedUser(user, context);
+      return {
+        ...user,
+        recommendation,
+      };
+    })
+    .sort((a, b) => {
+      const scoreDelta = (b.recommendation?.score || 0) - (a.recommendation?.score || 0);
+      if (scoreDelta) {
+        return scoreDelta;
+      }
+
+      const verifiedDelta = Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified));
+      if (verifiedDelta) {
+        return verifiedDelta;
+      }
+
+      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    });
+}
+
+function scoreRecommendedUser(user, context) {
+  const viewer = context.viewer || {};
+  const reasons = [];
+  let score = 40;
+
+  if (viewer.school && user.school === viewer.school) {
+    score += 24;
+    reasons.push("同校优先");
+  } else if (user.school && context.likedSchools.has(user.school)) {
+    score += 8;
+    reasons.push("接近你感兴趣的学校");
+  }
+
+  if (viewer.major && user.major && user.major === viewer.major) {
+    score += 8;
+    reasons.push("专业相近");
+  } else if (user.major && context.likedMajors.has(user.major)) {
+    score += 5;
+  }
+
+  if (viewer.grade && user.grade === viewer.grade) {
+    score += 5;
+    reasons.push("年级接近");
+  }
+
+  const directOverlap = countOverlap(context.viewerSignals, collectRecommendationSignals(user));
+  if (directOverlap) {
+    score += Math.min(18, directOverlap * 6);
+    reasons.push("兴趣标签重合");
+  }
+
+  const affinityOverlap = countOverlap(context.affinitySignals, collectRecommendationSignals(user));
+  if (affinityOverlap > directOverlap) {
+    score += Math.min(12, (affinityOverlap - directOverlap) * 4);
+    reasons.push("接近你喜欢过的类型");
+  }
+
+  const mbtiScore = mbtiAffinityScore(viewer.mbti, user.mbti);
+  if (mbtiScore > 0) {
+    score += mbtiScore;
+    reasons.push(mbtiScore >= 10 ? "MBTI 很合拍" : "性格节奏接近");
+  }
+
+  const birthScore = birthAffinityScore(viewer.birthDate, user.birthDate);
+  if (birthScore > 0) {
+    score += birthScore;
+    reasons.push(birthScore >= 8 ? "生辰话题更好聊" : "生日节奏接近");
+  }
+
+  if (user.isVerified || user.verificationStatus === "approved") {
+    score += 9;
+    reasons.push("已完成校园认证");
+  }
+
+  const completeness = profileCompletenessScore(user);
+  score += Math.round(completeness * 8);
+  if (completeness >= 0.75) {
+    reasons.push("资料比较完整");
+  }
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(score))),
+    reasons: uniqueTextValues(reasons).slice(0, 3),
+  };
+}
+
+function buildRecommendationSummary(context) {
+  const viewer = context.viewer || {};
+  const signals = [];
+  if (viewer.school) {
+    signals.push("同校优先");
+  }
+  if (viewer.mbti) {
+    signals.push("参考 MBTI");
+  }
+  if (viewer.birthDate) {
+    signals.push("参考生日节奏");
+  }
+  if (context.affinitySignals.length) {
+    signals.push("参考兴趣偏好");
+  }
+
+  return {
+    signals: signals.slice(0, 4),
+    ignored: {
+      liked: context.likedIds.length,
+      skipped: context.skippedIds.length,
+    },
+  };
+}
+
+function collectRecommendationSignals(profile) {
+  if (!profile) {
+    return [];
+  }
+
+  return uniqueTextValues([
+    profile.major,
+    profile.college,
+    profile.campusZone,
+    profile.dormArea,
+    profile.relationshipGoal,
+    ...(profile.tags || []),
+    ...(profile.sceneTags || []),
+    ...(profile.matchModes || []),
+  ]).map((item) => item.toLowerCase());
+}
+
+function countOverlap(a, b) {
+  const left = new Set(a || []);
+  return uniqueTextValues(b || []).filter((item) => left.has(item)).length;
+}
+
+function mbtiAffinityScore(viewerMbti, candidateMbti) {
+  const viewer = normalizeMbti(viewerMbti);
+  const candidate = normalizeMbti(candidateMbti);
+  if (!viewer || !candidate) {
+    return 0;
+  }
+  if (viewer === candidate) {
+    return 14;
+  }
+
+  let matched = 0;
+  for (let index = 0; index < viewer.length; index += 1) {
+    if (viewer[index] === candidate[index]) {
+      matched += 1;
+    }
+  }
+  return matched >= 3 ? 10 : matched === 2 ? 6 : matched === 1 ? 2 : 0;
+}
+
+function birthAffinityScore(viewerBirthDate, candidateBirthDate) {
+  const viewerMonth = birthMonth(viewerBirthDate);
+  const candidateMonth = birthMonth(candidateBirthDate);
+  if (!viewerMonth || !candidateMonth) {
+    return 0;
+  }
+  if (viewerMonth === candidateMonth) {
+    return 9;
+  }
+
+  const diff = Math.abs(viewerMonth - candidateMonth);
+  const circularDiff = Math.min(diff, 12 - diff);
+  if (circularDiff === 1) {
+    return 6;
+  }
+
+  return birthSeason(viewerMonth) === birthSeason(candidateMonth) ? 3 : 0;
+}
+
+function birthMonth(value) {
+  const date = normalizeBirthDate(value);
+  if (!date) {
+    return 0;
+  }
+  return Number(date.slice(5, 7));
+}
+
+function birthSeason(month) {
+  return Math.floor((month - 1) / 3);
+}
+
+function profileCompletenessScore(user) {
+  const checks = [
+    Boolean(user.nickname),
+    Boolean(user.bio),
+    Boolean(user.school),
+    Boolean(user.major),
+    Boolean(user.grade),
+    Boolean(user.avatar),
+    Boolean((user.tags || []).length || (user.sceneTags || []).length || (user.matchModes || []).length),
+    Boolean(user.mbti && user.birthDate),
+  ];
+  return checks.filter(Boolean).length / checks.length;
 }
 
 async function findOtherProfile(store, match, userId) {
@@ -2099,21 +2382,22 @@ async function searchUsers(store, viewer, url) {
   const limit = clampNumber(url.searchParams.get("limit"), 1, 50, 12);
   const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
   const offset = (page - 1) * limit;
-  const skipped = new Set(viewer.skippedIds || []);
+  const context = await buildRecommendationContext(store, viewer);
 
   const databaseUsers = await searchUsersInDatabase({ viewer, query, school, major, grade, limit, offset });
   const rows = databaseUsers?.length ? databaseUsers : await searchUsersInBlobs(store, { viewer, query, school, major, grade });
   const merged = rows
-    .filter((item) => isActiveUser(item) && item.id !== viewer.id && !skipped.has(item.id));
+    .filter((item) => isActiveUser(item) && isRecommendationCandidate(item, context));
   const uniqueUsers = uniqueById(merged);
   const fallbackSeedUsers = uniqueUsers.length ? [] : filterSeedProfiles({ viewer, query, school, major, grade })
-    .filter((item) => !skipped.has(item.id));
-  const users = uniqueById([...uniqueUsers, ...fallbackSeedUsers]);
+    .filter((item) => isRecommendationCandidate(item, context));
+  const users = rankRecommendedUsers(uniqueById([...uniqueUsers, ...fallbackSeedUsers]), context);
 
   return {
     users: users.slice(0, limit),
     pagination: { page, limit, total: users.length },
     query: { q: query, school, major, grade },
+    ranking: buildRecommendationSummary(context),
     source: databaseUsers?.length ? "database" : fallbackSeedUsers.length ? "seed" : store.kind === "mysql" ? "mysql" : "blobs",
   };
 }

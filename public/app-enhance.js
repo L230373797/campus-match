@@ -151,6 +151,9 @@
     imageFallbackInstalled: false,
     scrollRevealObserver: null,
     scrollRevealReduced: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false,
+    scrollRevealTextTargets: new Set(),
+    scrollRevealScrubBound: false,
+    scrollRevealScrubRaf: 0,
     baseTitle: document.title.replace(/^\(\d+\)\s*/, ""),
   };
 
@@ -1186,6 +1189,25 @@
         transform: translate3d(0, 0, 0);
         opacity: 1;
         filter: blur(0);
+      }
+      .campus-scroll-reveal-text.campus-scroll-scrub-text {
+        opacity: 1;
+        filter: none;
+        clip-path: none;
+        transform-origin: 0% 50%;
+      }
+      .campus-scroll-reveal-text.campus-scroll-scrub-text .campus-reveal-line {
+        display: block;
+        overflow: visible;
+        margin: -.02em 0;
+      }
+      .campus-scroll-reveal-text.campus-scroll-scrub-text .campus-reveal-word {
+        display: inline-block;
+        opacity: var(--campus-word-opacity, .1);
+        transform: translate3d(0, var(--campus-word-y, 5px), 0);
+        filter: blur(var(--campus-word-blur, 4px));
+        transition: none;
+        will-change: opacity, transform, filter;
       }
       @media (max-width: 640px) {
         .campus-scroll-reveal {
@@ -4802,9 +4824,32 @@
 
     node.dataset.campusRevealTextReady = "true";
     node.dataset.campusRevealOriginal = text;
+    node.classList.add("campus-scroll-scrub-text");
+
+    let wordIndex = 0;
     node.innerHTML = chunks.map((chunk, index) => {
-      return `<span class="campus-reveal-line" style="--campus-line-delay:${index * 88}ms"><span>${escapeHtml(chunk)}</span></span>`;
+      const words = revealWordUnits(chunk).map((unit) => {
+        if (/^\s+$/.test(unit)) {
+          return escapeHtml(unit);
+        }
+        const html = `<span class="word campus-reveal-word" data-campus-word-index="${wordIndex}">${escapeHtml(unit)}</span>`;
+        wordIndex += 1;
+        return html;
+      }).join("");
+      return `<span class="campus-reveal-line" style="--campus-line-delay:${index * 88}ms">${words}</span>`;
     }).join("");
+    state.scrollRevealTextTargets.add(node);
+    ensureScrollRevealScrub();
+    scheduleScrollRevealScrub();
+  }
+
+  function revealWordUnits(text) {
+    const value = String(text || "");
+    if (/\s/.test(value)) {
+      return value.split(/(\s+)/);
+    }
+
+    return value.match(/[\u4e00-\u9fff]{1,4}[、，。！？!?；;]?|[A-Za-z0-9]+[,.!?;:]?|[^\s]/g) || [value];
   }
 
   function splitRevealText(text) {
@@ -4863,6 +4908,68 @@
       }
     }
     return [value.slice(0, splitAt), value.slice(splitAt)].map(cleanText).filter(Boolean);
+  }
+
+  function ensureScrollRevealScrub() {
+    if (state.scrollRevealScrubBound) {
+      return;
+    }
+
+    state.scrollRevealScrubBound = true;
+    window.addEventListener("scroll", scheduleScrollRevealScrub, { passive: true });
+    window.addEventListener("resize", scheduleScrollRevealScrub, { passive: true });
+    window.addEventListener("orientationchange", scheduleScrollRevealScrub, { passive: true });
+  }
+
+  function scheduleScrollRevealScrub() {
+    if (state.scrollRevealReduced || state.scrollRevealScrubRaf) {
+      return;
+    }
+
+    state.scrollRevealScrubRaf = requestAnimationFrame(() => {
+      state.scrollRevealScrubRaf = 0;
+      updateScrollRevealScrub();
+    });
+  }
+
+  function updateScrollRevealScrub() {
+    if (state.scrollRevealReduced || !state.scrollRevealTextTargets.size) {
+      return;
+    }
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+    state.scrollRevealTextTargets.forEach((node) => {
+      if (!node?.isConnected) {
+        state.scrollRevealTextTargets.delete(node);
+        return;
+      }
+
+      const rect = node.getBoundingClientRect();
+      const rotationProgress = clampNumber((viewportHeight - rect.top) / Math.max(rect.height, 1), 0, 1);
+      const rotate = 3 * (1 - rotationProgress);
+      node.style.transformOrigin = "0% 50%";
+      node.style.transform = `rotate(${rotate.toFixed(3)}deg)`;
+
+      const wordProgress = clampNumber((viewportHeight * .86 - rect.top) / Math.max(viewportHeight * .44 + rect.height, 1), 0, 1);
+      const words = Array.from(node.querySelectorAll(".campus-reveal-word"));
+      const total = Math.max(1, words.length);
+      words.forEach((word, index) => {
+        const stagger = Math.min(.46, index * Math.min(.05, .68 / total));
+        const progress = clampNumber((wordProgress - stagger) / .36, 0, 1);
+        const eased = 1 - Math.pow(1 - progress, 2.35);
+        word.style.setProperty("--campus-word-opacity", String((.1 + eased * .9).toFixed(3)));
+        word.style.setProperty("--campus-word-blur", `${(4 * (1 - eased)).toFixed(2)}px`);
+        word.style.setProperty("--campus-word-y", `${(6 * (1 - eased)).toFixed(2)}px`);
+      });
+    });
+  }
+
+  function clampNumber(value, min = 0, max = 1) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return min;
+    }
+    return Math.min(max, Math.max(min, number));
   }
 
   function ensureSplineScene() {

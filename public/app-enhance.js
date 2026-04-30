@@ -4714,6 +4714,11 @@
       if (!isRevealTextTarget(node) || node.dataset.campusRevealReady === "true" || shouldSkipScrollReveal(node)) {
         return;
       }
+      if (shouldKeepHeroHeadingStatic(node)) {
+        node.dataset.campusRevealReady = "static";
+        node.classList.remove("campus-scroll-reveal", "campus-scroll-reveal-text", "campus-scroll-scrub-text", "is-visible");
+        return;
+      }
 
       const delay = Math.min(index % 9, 8) * 42;
       node.dataset.campusRevealReady = "true";
@@ -4783,6 +4788,17 @@
       current = current.parentElement;
     }
     return false;
+  }
+
+  function shouldKeepHeroHeadingStatic(node) {
+    if (!["H1", "H2"].includes(node?.tagName)) {
+      return false;
+    }
+
+    const rect = node.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+    const fontSize = parseFloat(getComputedStyle(node).fontSize) || 0;
+    return fontSize >= 32 && rect.top >= 0 && rect.top < viewportHeight * .58;
   }
 
   function isRevealHeading(node) {

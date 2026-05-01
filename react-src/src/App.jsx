@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AnimatedList from './AnimatedList'
 import ScrollReveal from './ScrollReveal'
+
+const FloatingLines = lazy(() => import('./FloatingLines'))
 
 const discoveryTags = ['同校', 'MBTI', '生辰', '搭子', '树洞话题']
 
@@ -174,6 +176,9 @@ const profileFallback = {
 
 const interestOptions = ['自习搭子', '电影', '散步', '音乐', '咖啡', '运动', '摄影', '游戏']
 const sceneOptions = ['图书馆', '操场', '周末', '树洞', '食堂', '社团', '晚自习']
+const backgroundWaves = ['top', 'middle', 'bottom']
+const backgroundLineCount = [4, 6, 5]
+const backgroundLineDistance = [9, 7, 10]
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('token')
@@ -274,6 +279,22 @@ function Icon({ name }) {
 function Background() {
   return (
     <div className="scene" aria-hidden="true">
+      <Suspense fallback={null}>
+        <FloatingLines
+          enabledWaves={backgroundWaves}
+          lineCount={backgroundLineCount}
+          lineDistance={backgroundLineDistance}
+          bendRadius={6}
+          bendStrength={-0.7}
+          interactive
+          parallax
+          parallaxStrength={0.08}
+          animationSpeed={0.55}
+          gradientStart="#5bdcff"
+          gradientMid="#e945f5"
+          gradientEnd="#ffd8e7"
+        />
+      </Suspense>
       <div className="scene-ray scene-ray-a" />
       <div className="scene-ray scene-ray-b" />
       <div className="scene-glow scene-glow-a" />

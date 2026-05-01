@@ -1,0 +1,28 @@
+.floating-lines-container {
+  position: absolute;
+  inset: -8%;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.74;
+  pointer-events: none;
+  contain: layout paint size;
+}
+
+.floating-lines-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 860px) {
+  .floating-lines-container {
+    inset: -12%;
+    opacity: 0.52;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-lines-container {
+    display: none;
+  }
+}

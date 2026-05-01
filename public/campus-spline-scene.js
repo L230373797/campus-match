@@ -22,6 +22,7 @@ let video;
 let switcher;
 let glassLayer;
 let glassLens;
+let glassBar;
 let gl;
 let program;
 let vertexBuffer;
@@ -39,9 +40,10 @@ let matchFocus = 0;
 let matchFocusTarget = 0;
 let routeName = window.location.pathname;
 let backgroundMode = readBackgroundMode();
-let targetPointer = { x: 0.5, y: 0.5 };
-let smoothPointer = { x: 0.5, y: 0.5 };
-let glassSmoothPointer = { x: 0.5, y: 0.5 };
+const initialPointer = defaultGlassPointer();
+let targetPointer = { ...initialPointer };
+let smoothPointer = { ...initialPointer };
+let glassSmoothPointer = { ...initialPointer };
 let orientationListening = false;
 let orientationPromptBound = false;
 let orientationBaseline = null;
@@ -230,6 +232,12 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function defaultGlassPointer() {
+  return (window.innerWidth || 1024) <= 640
+    ? { x: 0.9, y: 0.36 }
+    : { x: 0.72, y: 0.58 };
+}
+
 function readBackgroundMode() {
   try {
     const saved = window.localStorage?.getItem(backgroundModeKey);
@@ -401,7 +409,7 @@ function ensureStageStyles() {
     #campus-fluid-glass {
       position: fixed;
       inset: 0;
-      z-index: 1;
+      z-index: 7;
       overflow: hidden;
       pointer-events: none;
       opacity: 0;
@@ -409,10 +417,10 @@ function ensureStageStyles() {
       transition: opacity .42s ease;
       --campus-glass-x: 50%;
       --campus-glass-y: 50%;
-      --campus-glass-size: clamp(168px, 23vw, 330px);
+      --campus-glass-size: clamp(240px, 28vw, 430px);
     }
     body[data-campus-spline="active"] #campus-fluid-glass {
-      opacity: .88;
+      opacity: .96;
     }
     #campus-fluid-glass::before {
       content: "";
@@ -430,17 +438,15 @@ function ensureStageStyles() {
       mix-blend-mode: screen;
       opacity: .72;
     }
+    .campus-fluid-bar,
     .campus-fluid-lens {
       position: absolute;
       left: 0;
       top: 0;
-      width: var(--campus-glass-size);
-      aspect-ratio: 1;
-      border-radius: 999px;
       overflow: hidden;
       isolation: isolate;
       will-change: transform;
-      border: 1px solid rgba(255,255,255,.38);
+      border: 1px solid rgba(255,255,255,.48);
       background:
         radial-gradient(circle at 31% 20%, rgba(255,255,255,.74), rgba(255,255,255,.20) 17%, transparent 33%),
         radial-gradient(circle at 70% 76%, rgba(118,224,255,.26), transparent 30%),
@@ -453,6 +459,36 @@ function ensureStageStyles() {
         inset 0 -22px 46px rgba(74,120,190,.18);
       backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
       -webkit-backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
+    }
+    .campus-fluid-lens {
+      width: var(--campus-glass-size);
+      aspect-ratio: 1;
+      border-radius: 999px;
+      transform-style: preserve-3d;
+    }
+    .campus-fluid-bar {
+      width: clamp(190px, 22vw, 340px);
+      height: clamp(58px, 6vw, 92px);
+      border-radius: 999px;
+      opacity: .92;
+      background:
+        linear-gradient(120deg, rgba(255,255,255,.64), rgba(255,255,255,.12) 28%, rgba(118,224,255,.18) 56%, rgba(255,154,217,.22)),
+        rgba(255,255,255,.08);
+      box-shadow:
+        0 24px 70px rgba(0,0,0,.24),
+        0 0 42px rgba(132,216,255,.2),
+        inset 0 1px rgba(255,255,255,.82),
+        inset 0 -18px 38px rgba(255,151,216,.16);
+    }
+    .campus-fluid-bar::before {
+      content: "";
+      position: absolute;
+      inset: 10px 18px auto;
+      height: 16px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,.72), rgba(255,255,255,0));
+      filter: blur(.5px);
+      opacity: .72;
     }
     .campus-fluid-lens::before,
     .campus-fluid-lens::after {
@@ -483,6 +519,18 @@ function ensureStageStyles() {
     @keyframes campusFluidSheen {
       0% { transform: translate3d(-8%, -6%, 0) rotate(-12deg) scale(1.02); }
       100% { transform: translate3d(8%, 7%, 0) rotate(14deg) scale(1.08); }
+    }
+    @media (max-width: 640px) {
+      #campus-fluid-glass {
+        --campus-glass-size: clamp(150px, 42vw, 210px);
+      }
+      body[data-campus-spline="active"] #campus-fluid-glass {
+        opacity: .88;
+      }
+      .campus-fluid-bar {
+        width: clamp(132px, 42vw, 188px);
+        height: 52px;
+      }
     }
     body[data-campus-spline="active"] {
       background: #050711 !important;
@@ -622,13 +670,18 @@ function createFluidGlass() {
   glassLens = document.createElement("div");
   glassLens.className = "campus-fluid-lens";
   glassLayer.appendChild(glassLens);
+
+  glassBar = document.createElement("div");
+  glassBar.className = "campus-fluid-bar";
+  glassLayer.appendChild(glassBar);
+
   document.body.appendChild(glassLayer);
   updateFluidGlass(performance.now(), true);
   return glassLayer;
 }
 
 function updateFluidGlass(now = performance.now(), force = false) {
-  if (!glassLayer || !glassLens) {
+  if (!glassLayer || !glassLens || !glassBar) {
     return;
   }
 
@@ -644,14 +697,18 @@ function updateFluidGlass(now = performance.now(), force = false) {
   const drift = prefersReducedMotion.matches ? 0 : Math.sin(elapsed * 0.74) * 2.5;
   const rotate = (glassSmoothPointer.x - 0.5) * 13 + Math.sin(elapsed * 0.42) * 2;
   const scale = routeName === "/login" ? 1.06 : routeName === "/search.html" ? 0.9 : 0.98;
+  const barX = clamp(glassSmoothPointer.x + 0.18, 0.18, 0.88) * width;
+  const barY = clamp(1 - glassSmoothPointer.y + 0.22, 0.2, 0.84) * height;
+  const barRotate = (glassSmoothPointer.x - 0.5) * -8 + Math.cos(elapsed * 0.36) * 1.5;
 
   glassLayer.style.setProperty("--campus-glass-x", `${(glassSmoothPointer.x * 100).toFixed(2)}%`);
   glassLayer.style.setProperty("--campus-glass-y", `${((1 - glassSmoothPointer.y) * 100).toFixed(2)}%`);
   glassLens.style.transform = `translate3d(${x.toFixed(2)}px, ${(y + drift).toFixed(2)}px, 0) translate(-50%, -50%) rotate(${rotate.toFixed(2)}deg) scale(${scale})`;
+  glassBar.style.transform = `translate3d(${barX.toFixed(2)}px, ${(barY - drift).toFixed(2)}px, 0) translate(-50%, -50%) rotate(${barRotate.toFixed(2)}deg)`;
 }
 
 function animateFluidGlass(now = performance.now()) {
-  if (!active || document.hidden || !glassLayer || !glassLens) {
+  if (!active || document.hidden || !glassLayer || !glassLens || !glassBar) {
     glassRafId = 0;
     return;
   }
@@ -1197,10 +1254,11 @@ function applyOrientation(beta, gamma, simulated) {
 }
 
 function resetOrientationControl() {
+  const nextPointer = defaultGlassPointer();
   orientationBaseline = null;
-  targetPointer = { x: 0.5, y: 0.5 };
-  smoothPointer = { x: 0.5, y: 0.5 };
-  glassSmoothPointer = { x: 0.5, y: 0.5 };
+  targetPointer = { ...nextPointer };
+  smoothPointer = { ...nextPointer };
+  glassSmoothPointer = { ...nextPointer };
   updateVideoMotion();
   updateFluidGlass(performance.now(), true);
 }
@@ -1253,7 +1311,7 @@ window.CampusSplineScene = {
       videoPaused: video ? video.paused : true,
       videoCurrentTime: video ? Number(video.currentTime.toFixed(2)) : 0,
       hasRenderer: Boolean(gl && program),
-      hasFluidGlass: Boolean(glassLayer && glassLens),
+      hasFluidGlass: Boolean(glassLayer && glassLens && glassBar),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,
       lowDetail,
       pixelRatio,

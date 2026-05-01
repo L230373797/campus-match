@@ -4984,7 +4984,7 @@
     if (!document.querySelector('script[data-campus-spline-scene="true"]')) {
       const script = document.createElement("script");
       script.type = "module";
-      script.src = "/campus-spline-scene.js?v=fluid-magnifier-1";
+      script.src = "/campus-spline-scene.js?v=fluid-glass-2";
       script.dataset.campusSplineScene = "true";
       document.head.appendChild(script);
     }

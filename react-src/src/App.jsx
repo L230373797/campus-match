@@ -210,6 +210,7 @@ const sceneOptions = ['图书馆', '操场', '周末', '树洞', '食堂', '社�
 const backgroundWaves = ['top', 'middle', 'bottom']
 const backgroundLineCount = [3, 5, 3]
 const backgroundLineDistance = [12, 9, 13]
+const matchAccents = ['cyan', 'pink', 'violet']
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('token')
@@ -252,6 +253,34 @@ function splitList(value) {
 
 function formatList(value) {
   return splitList(value).join('、')
+}
+
+function normalizeMatchProfile(user = {}, index = 0) {
+  const id = user.id || user._id || `recommendation-${index}`
+  const reasonTags = splitList(user.recommendation?.reasons)
+  const profileTags = [...splitList(user.tags), ...splitList(user.sceneTags)]
+  const tags = [...profileTags, ...reasonTags].filter(Boolean).slice(0, 3)
+  const rawScore = Number(user.recommendation?.score ?? user.score ?? 72)
+  const score = Math.max(40, Math.min(99, Math.round(Number.isFinite(rawScore) ? rawScore : 72)))
+  const meta = [
+    user.isVerified || user.verificationStatus === 'approved' ? '同校认证' : user.school,
+    user.major,
+    user.mbti,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return {
+    id,
+    userId: id,
+    name: user.nickname || user.name || '校园同学',
+    score,
+    meta: meta || '校园资料 · 等你认识',
+    note: user.bio || reasonTags.join('、') || '资料还在慢慢完善，先从一个轻松话题开始。',
+    tags: tags.length ? tags : ['同校', '轻聊天', '合拍'],
+    accent: matchAccents[index % matchAccents.length],
+    source: user,
+  }
 }
 
 function userToProfileForm(user = {}) {
@@ -439,11 +468,87 @@ function ShortcutGrid() {
 
 function MatchPreview() {
   const [activeIndex, setActiveIndex] = useState(0)
-  const activeProfile = matchProfiles[activeIndex]
-  const nextProfile = matchProfiles[(activeIndex + 1) % matchProfiles.length]
+  const [profiles, setProfiles] = useState(matchProfiles)
+  const [matchNotice, setMatchNotice] = useState(() =>
+    localStorage.getItem('token') ? '正在整理你的推荐。' : '登录后会按你的资料生成真实推荐。',
+  )
+  const [matchLoading, setMatchLoading] = useState(false)
+  const [actionBusy, setActionBusy] = useState('')
+  const visibleProfiles = profiles.length ? profiles : matchProfiles
+  const activeProfile = visibleProfiles[activeIndex % visibleProfiles.length]
+  const nextProfile = visibleProfiles[(activeIndex + 1) % visibleProfiles.length]
 
   const showNextProfile = () => {
-    setActiveIndex((current) => (current + 1) % matchProfiles.length)
+    setActiveIndex((current) => (current + 1) % visibleProfiles.length)
+  }
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadRecommendations() {
+      if (!localStorage.getItem('token')) {
+        return
+      }
+
+      setMatchLoading(true)
+      try {
+        const payload = await apiRequest('/users/recommendations?limit=6')
+        const users = payload.data?.users || []
+        const nextProfiles = users.map(normalizeMatchProfile)
+
+        if (!mounted) return
+
+        if (nextProfiles.length) {
+          setProfiles(nextProfiles)
+          setActiveIndex(0)
+          const signals = payload.data?.ranking?.signals || []
+          setMatchNotice(signals.length ? `已参考：${signals.join('、')}` : '已按你的资料整理推荐。')
+          return
+        }
+
+        setMatchNotice('暂时没有新的真实推荐，先看看预览卡片。')
+      } catch (error) {
+        if (mounted) {
+          setMatchNotice(error.message || '推荐接口暂时不可用，先看看预览卡片。')
+        }
+      } finally {
+        if (mounted) {
+          setMatchLoading(false)
+        }
+      }
+    }
+
+    loadRecommendations()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const handleMatchAction = async (type) => {
+    const currentProfile = activeProfile
+    const targetId = currentProfile.userId || currentProfile.id
+
+    showNextProfile()
+
+    if (!localStorage.getItem('token') || !currentProfile.source) {
+      setMatchNotice(type === 'like' ? '预览里先记下喜欢，登录后会真正匹配。' : '已切到下一张推荐卡。')
+      return
+    }
+
+    setActionBusy(type)
+    try {
+      const endpoint =
+        type === 'like'
+          ? `/matches/like/${encodeURIComponent(targetId)}`
+          : `/matches/skip/${encodeURIComponent(targetId)}`
+      const payload = await apiRequest(endpoint, { method: 'POST' })
+      setMatchNotice(payload.data?.message || payload.message || (type === 'like' ? '已喜欢' : '已略过'))
+    } catch (error) {
+      setMatchNotice(error.message || '操作没有成功，再试一次。')
+    } finally {
+      setActionBusy('')
+    }
   }
 
   return (
@@ -490,11 +595,24 @@ function MatchPreview() {
                 <span key={tag}>{tag}</span>
               ))}
             </div>
+            {(matchNotice || matchLoading) && (
+              <p className="match-status">{matchLoading ? '正在整理推荐...' : matchNotice}</p>
+            )}
             <div className="match-actions">
-              <button className="ghost-match-action" type="button" onClick={showNextProfile}>
+              <button
+                className="ghost-match-action"
+                type="button"
+                disabled={Boolean(actionBusy)}
+                onClick={() => handleMatchAction('skip')}
+              >
                 略过
               </button>
-              <button className="primary-match-action" type="button" onClick={showNextProfile}>
+              <button
+                className="primary-match-action"
+                type="button"
+                disabled={Boolean(actionBusy)}
+                onClick={() => handleMatchAction('like')}
+              >
                 喜欢
               </button>
             </div>

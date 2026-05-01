@@ -539,6 +539,22 @@
   font-weight: 850;
 }
 
+.match-status {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: rgba(222, 239, 255, 0.72);
+  background: rgba(104, 220, 255, 0.09);
+  border: 1px solid rgba(120, 224, 255, 0.14);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .match-actions {
   margin-top: 4px;
 }
@@ -568,6 +584,11 @@
 
 .match-actions button:hover {
   transform: translate3d(0, -2px, 0);
+}
+
+.match-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .profile-card {

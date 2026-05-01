@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import ScrollReveal from './ScrollReveal'
 
@@ -64,10 +64,39 @@ const fallbackSchools = [
   { name: '四川大学', city: '成都', province: '四川' },
 ]
 
+const profileFallback = {
+  nickname: '校园新朋友',
+  school: '你的学校',
+  grade: '大二',
+  major: '还没填写专业',
+  college: '',
+  bio: '写一点你最近喜欢做的事，系统会更容易帮你找到聊得来的人。',
+  mbti: 'INFP',
+  birthDate: '',
+  relationshipGoal: '先从轻松聊天开始',
+  tags: ['自习搭子', '电影', '散步', '低压力聊天'],
+  sceneTags: ['图书馆', '周末', '树洞'],
+  allowAnonymousMatch: true,
+  allowOfflineEvents: true,
+  verificationStatus: 'none',
+  verificationBadge: '未认证',
+  avatar: '',
+  stats: {
+    matches: 12,
+    likes: 6,
+    views: 38,
+  },
+}
+
+const interestOptions = ['自习搭子', '电影', '散步', '音乐', '咖啡', '运动', '摄影', '游戏']
+const sceneOptions = ['图书馆', '操场', '周末', '树洞', '食堂', '社团', '晚自习']
+
 async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem('token')
   const response = await fetch(`/api${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
     ...options,
@@ -77,6 +106,59 @@ async function apiRequest(path, options = {}) {
     throw new Error(payload.message || '请求失败，请稍后再试')
   }
   return payload
+}
+
+function navigateTo(target) {
+  const url = new URL(target, window.location.origin)
+  const next = `${url.pathname}${url.search}${url.hash}`
+  window.history.pushState({}, '', next)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  window.requestAnimationFrame(() => {
+    if (url.hash) {
+      document.querySelector(url.hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+}
+
+function splitList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean)
+  return String(value || '')
+    .split(/[、,，\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function formatList(value) {
+  return splitList(value).join('、')
+}
+
+function userToProfileForm(user = {}) {
+  return {
+    nickname: user.nickname || '',
+    school: user.school || '',
+    grade: user.grade || '',
+    major: user.major || '',
+    college: user.college || '',
+    bio: user.bio || '',
+    mbti: user.mbti || '',
+    birthDate: user.birthDate || '',
+    relationshipGoal: user.relationshipGoal || '',
+    tags: formatList(user.tags),
+    sceneTags: formatList(user.sceneTags),
+    allowAnonymousMatch: user.allowAnonymousMatch ?? true,
+    allowOfflineEvents: user.allowOfflineEvents ?? true,
+  }
+}
+
+function uploadPayloadFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve({ contentType: file.type, data: reader.result })
+    reader.onerror = () => reject(new Error('图片读取失败，请换一张试试。'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function Icon({ name }) {
@@ -93,6 +175,9 @@ function Icon({ name }) {
     ai: <path d="M12 4c4.2 0 7.5 2.8 7.5 6.4S16.2 17 12 17c-.7 0-1.4-.1-2-.2L5 20l1.5-4.4A6.1 6.1 0 0 1 4.5 10.4C4.5 6.8 7.8 4 12 4Z" />,
     online: <path d="M7 12.2a5 5 0 0 1 10 0M4 12.2a8 8 0 0 1 16 0M12 16h.01" />,
     user: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" />,
+    camera: <path d="M6.8 8 8.5 5.5h7L17.2 8H20v11H4V8h2.8Zm5.2 8a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6Z" />,
+    edit: <path d="M4 20h4l10.5-10.5a2.2 2.2 0 0 0-3.1-3.1L5 16.8V20Z" />,
+    logout: <path d="M10 6H5v12h5m4-9 3 3-3 3m-7-3h10" />,
   }
 
   return (
@@ -127,11 +212,42 @@ function Header() {
         </span>
       </div>
       <nav className="desktop-nav" aria-label="主要入口">
-        <a href="#discover">发现</a>
-        <a href="#match">匹配</a>
-        <a href="#profile">资料</a>
+        <a
+          href="/#discover"
+          onClick={(event) => {
+            event.preventDefault()
+            navigateTo('/#discover')
+          }}
+        >
+          发现
+        </a>
+        <a
+          href="/#match"
+          onClick={(event) => {
+            event.preventDefault()
+            navigateTo('/#match')
+          }}
+        >
+          匹配
+        </a>
+        <a
+          href="/profile"
+          onClick={(event) => {
+            event.preventDefault()
+            navigateTo('/profile')
+          }}
+        >
+          我的
+        </a>
       </nav>
-      <a className="top-action" href="/login">
+      <a
+        className="top-action"
+        href="/#discover"
+        onClick={(event) => {
+          event.preventDefault()
+          navigateTo('/#discover')
+        }}
+      >
         进入发现
         <span aria-hidden="true">→</span>
       </a>
@@ -249,14 +365,14 @@ function Feed() {
   )
 }
 
-function BottomNav() {
+function BottomNav({ active = 'home' }) {
   const [hidden, setHidden] = useState(false)
   const items = [
-    ['home', '首页'],
-    ['chat', '消息'],
-    ['ai', '问问'],
-    ['online', '在线'],
-    ['user', '我的'],
+    { key: 'home', icon: 'home', label: '首页', href: '/' },
+    { key: 'chat', icon: 'chat', label: '消息', href: '/#discover' },
+    { key: 'ai', icon: 'ai', label: '问问', href: '/#match' },
+    { key: 'online', icon: 'online', label: '在线', href: '/#discover' },
+    { key: 'user', icon: 'user', label: '我的', href: '/profile' },
   ]
 
   useEffect(() => {
@@ -282,10 +398,18 @@ function BottomNav() {
 
   return (
     <nav className={`bottom-nav ${hidden ? 'hidden' : ''}`} aria-label="底部导航">
-      {items.map(([icon, label], index) => (
-        <a className={index === 2 ? 'center' : ''} href="/" key={label}>
-          <Icon name={icon} />
-          <span>{label}</span>
+      {items.map((item) => (
+        <a
+          className={`${item.key === 'ai' ? 'center' : ''} ${item.key === active ? 'active' : ''}`}
+          href={item.href}
+          key={item.label}
+          onClick={(event) => {
+            event.preventDefault()
+            navigateTo(item.href)
+          }}
+        >
+          <Icon name={item.icon} />
+          <span>{item.label}</span>
         </a>
       ))}
     </nav>
@@ -605,6 +729,398 @@ function AuthPage() {
   )
 }
 
+function ProfilePage() {
+  const cameraInputRef = useRef(null)
+  const albumInputRef = useRef(null)
+  const hasStoredToken = Boolean(localStorage.getItem('token'))
+  const [user, setUser] = useState(profileFallback)
+  const [form, setForm] = useState(() => userToProfileForm(profileFallback))
+  const [avatarPreview, setAvatarPreview] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(hasStoredToken)
+  const [loading, setLoading] = useState(hasStoredToken)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  const [notice, setNotice] = useState(hasStoredToken ? '' : '当前是本地预览。登录后，资料和头像会保存到你的账号里。')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    const token = localStorage.getItem('token')
+
+    if (!token) {
+      return () => {
+        mounted = false
+      }
+    }
+
+    async function loadProfile() {
+      try {
+        const payload = await apiRequest('/users/profile')
+        if (!mounted) return
+        const loadedUser = payload.data?.user || profileFallback
+        setUser(loadedUser)
+        setForm(userToProfileForm(loadedUser))
+        setIsLoggedIn(true)
+      } catch (err) {
+        if (!mounted) return
+        setError(err.message)
+        setNotice('先用本地预览看页面，重新登录后会读取你的真实资料。')
+        setIsLoggedIn(false)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    loadProfile()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const profileReadiness = useMemo(() => {
+    const checks = [
+      { label: '头像', done: Boolean(avatarPreview || user.avatar) },
+      { label: '学校', done: Boolean(form.school && form.school !== '你的学校') },
+      { label: '专业', done: Boolean(form.major && form.major !== '还没填写专业') },
+      { label: '自我介绍', done: form.bio.trim().length >= 8 },
+      { label: '兴趣标签', done: splitList(form.tags).length >= 3 },
+      { label: '场景偏好', done: splitList(form.sceneTags).length >= 2 },
+      { label: '校园认证', done: ['verified', 'approved'].includes(user.verificationStatus) },
+    ]
+    const doneCount = checks.filter((item) => item.done).length
+    return {
+      checks,
+      percent: Math.round((doneCount / checks.length) * 100),
+    }
+  }, [avatarPreview, form, user.avatar, user.verificationStatus])
+
+  const updateForm = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }))
+    setError('')
+    setNotice('')
+  }
+
+  const toggleListItem = (key, value) => {
+    const current = splitList(form[key])
+    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    updateForm(key, next.join('、'))
+  }
+
+  const saveProfile = async () => {
+    const body = {
+      ...form,
+      tags: splitList(form.tags),
+      sceneTags: splitList(form.sceneTags),
+      mbti: form.mbti.toUpperCase().trim(),
+      allowAnonymousMatch: Boolean(form.allowAnonymousMatch),
+      allowOfflineEvents: Boolean(form.allowOfflineEvents),
+    }
+
+    try {
+      setSaving(true)
+      setError('')
+      if (!isLoggedIn) {
+        const localUser = { ...user, ...body }
+        setUser(localUser)
+        setForm(userToProfileForm(localUser))
+        setNotice('本地预览已更新。登录后可以把这些资料保存到账号里。')
+        setEditing(false)
+        return
+      }
+
+      const payload = await apiRequest('/users/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      })
+      const updatedUser = payload.data?.user || { ...user, ...body }
+      setUser(updatedUser)
+      setForm(userToProfileForm(updatedUser))
+      setNotice('资料已保存。')
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAvatarFile = async (file) => {
+    if (!file) return
+    setAvatarMenuOpen(false)
+    setError('')
+    setNotice('')
+
+    if (file.size > 3 * 1024 * 1024) {
+      setError('头像图片不能超过 3MB。')
+      return
+    }
+
+    const localPreview = URL.createObjectURL(file)
+    setAvatarPreview(localPreview)
+
+    if (!isLoggedIn) {
+      setNotice('头像已在本地预览里换好。登录后可以保存到账号。')
+      return
+    }
+
+    try {
+      setSaving(true)
+      const uploadBody = await uploadPayloadFromFile(file)
+      const payload = await apiRequest('/uploads/avatar', {
+        method: 'POST',
+        body: JSON.stringify(uploadBody),
+      })
+      const updatedUser = payload.data?.user
+      if (updatedUser) {
+        setUser(updatedUser)
+        setForm(userToProfileForm(updatedUser))
+        setAvatarPreview(payload.data?.imageUrl || updatedUser.avatar || localPreview)
+      }
+      setNotice('头像已更新。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const logout = () => {
+    localStorage.removeItem('token')
+    setIsLoggedIn(false)
+    navigateTo('/login')
+  }
+
+  const stats = user.stats || {}
+  const avatarSrc = avatarPreview || user.avatar
+  const verificationText = {
+    verified: '校园已认证',
+    approved: '校园已认证',
+    pending: '认证审核中',
+    rejected: '认证未通过',
+    none: '还未认证',
+  }[user.verificationStatus || 'none']
+
+  return (
+    <main className="app-shell profile-shell">
+      <Background />
+      <Header />
+
+      <section className="profile-hero">
+        <div className="profile-summary">
+          <div className="profile-avatar-wrap">
+            <button className="profile-avatar" type="button" onClick={() => setAvatarMenuOpen(true)} aria-label="更换头像">
+              {avatarSrc ? <img src={avatarSrc} alt="头像" /> : <span>{(form.nickname || '校').slice(0, 1)}</span>}
+            </button>
+            <button className="profile-camera" type="button" onClick={() => setAvatarMenuOpen(true)} aria-label="拍照或选择头像">
+              <Icon name="camera" />
+            </button>
+            {avatarMenuOpen && (
+              <div className="avatar-sheet" onMouseDown={(event) => event.stopPropagation()}>
+                <button type="button" onClick={() => cameraInputRef.current?.click()}>拍照</button>
+                <button type="button" onClick={() => albumInputRef.current?.click()}>从相册选择</button>
+              </div>
+            )}
+            <input
+              ref={cameraInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={(event) => handleAvatarFile(event.target.files?.[0])}
+            />
+            <input
+              ref={albumInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleAvatarFile(event.target.files?.[0])}
+            />
+          </div>
+
+          <div className="profile-title">
+            <span className="section-label">我的主页</span>
+            <ScrollReveal as="h1" {...revealTitleProps}>
+              {form.nickname || '校园新朋友'}
+            </ScrollReveal>
+            <p>{[form.school, form.grade, form.major].filter(Boolean).join(' · ') || '完善学校、年级和专业后，推荐会更准。'}</p>
+            <div className="profile-badges">
+              <span>{verificationText}</span>
+              {form.mbti && <span>{form.mbti.toUpperCase()}</span>}
+              {form.relationshipGoal && <span>{form.relationshipGoal}</span>}
+            </div>
+          </div>
+
+          <div className="profile-stats" aria-label="账号数据">
+            <span><strong>{stats.matches ?? 0}</strong>合拍</span>
+            <span><strong>{stats.likes ?? 0}</strong>喜欢</span>
+            <span><strong>{stats.views ?? 0}</strong>浏览</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="profile-layout">
+        <aside className="profile-panel profile-progress">
+          <div>
+            <span className="section-label">资料完整度</span>
+            <strong>{profileReadiness.percent}%</strong>
+            <p>资料越具体，系统越容易帮你找到自然开聊的人。</p>
+          </div>
+          <div className="progress-track" aria-hidden="true">
+            <i style={{ width: `${profileReadiness.percent}%` }} />
+          </div>
+          <div className="profile-checks">
+            {profileReadiness.checks.map((item) => (
+              <span className={item.done ? 'done' : ''} key={item.label}>
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </aside>
+
+        <section className="profile-panel profile-form-panel" aria-label="个人资料">
+          <div className="profile-panel-head">
+            <div>
+              <span className="section-label">个人资料</span>
+              <ScrollReveal as="h2" {...revealSectionTitleProps}>
+                把自己写得更像自己一点
+              </ScrollReveal>
+            </div>
+            <button
+              className="ghost-action"
+              type="button"
+              onClick={() => (editing ? saveProfile() : setEditing(true))}
+              disabled={saving || loading}
+            >
+              <Icon name={editing ? 'spark' : 'edit'} />
+              {saving ? '保存中' : editing ? '保存' : '编辑'}
+            </button>
+          </div>
+
+          {(notice || error) && <div className={`auth-message ${error ? 'error' : ''}`}>{error || notice}</div>}
+
+          <div className="profile-form-grid">
+            <label>
+              <span>昵称</span>
+              <input disabled={!editing} value={form.nickname} onChange={(event) => updateForm('nickname', event.target.value)} />
+            </label>
+            <label>
+              <span>学校</span>
+              <input disabled={!editing} value={form.school} onChange={(event) => updateForm('school', event.target.value)} />
+            </label>
+            <label>
+              <span>年级</span>
+              <select disabled={!editing} value={form.grade} onChange={(event) => updateForm('grade', event.target.value)}>
+                <option value="">选择年级</option>
+                <option>大一</option>
+                <option>大二</option>
+                <option>大三</option>
+                <option>大四</option>
+                <option>研一</option>
+                <option>研二</option>
+                <option>研三</option>
+              </select>
+            </label>
+            <label>
+              <span>专业</span>
+              <input disabled={!editing} value={form.major} onChange={(event) => updateForm('major', event.target.value)} />
+            </label>
+            <label>
+              <span>学院</span>
+              <input disabled={!editing} value={form.college} onChange={(event) => updateForm('college', event.target.value)} placeholder="选填" />
+            </label>
+            <label>
+              <span>MBTI</span>
+              <input disabled={!editing} value={form.mbti} onChange={(event) => updateForm('mbti', event.target.value.toUpperCase())} placeholder="例如 INFP" />
+            </label>
+            <label>
+              <span>生日</span>
+              <input disabled={!editing} type="date" value={form.birthDate} onChange={(event) => updateForm('birthDate', event.target.value)} />
+            </label>
+            <label>
+              <span>期待关系</span>
+              <input disabled={!editing} value={form.relationshipGoal} onChange={(event) => updateForm('relationshipGoal', event.target.value)} />
+            </label>
+          </div>
+
+          <label className="profile-wide-field">
+            <span>自我介绍</span>
+            <textarea disabled={!editing} value={form.bio} onChange={(event) => updateForm('bio', event.target.value)} rows="4" />
+          </label>
+
+          <div className="profile-tags-editor">
+            <span>兴趣标签</span>
+            <div>
+              {interestOptions.map((tag) => (
+                <button
+                  className={splitList(form.tags).includes(tag) ? 'active' : ''}
+                  disabled={!editing}
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleListItem('tags', tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="profile-tags-editor">
+            <span>常出现的场景</span>
+            <div>
+              {sceneOptions.map((tag) => (
+                <button
+                  className={splitList(form.sceneTags).includes(tag) ? 'active' : ''}
+                  disabled={!editing}
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleListItem('sceneTags', tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <aside className="profile-panel profile-privacy">
+          <span className="section-label">隐私与状态</span>
+          <label className="profile-toggle">
+            <span>
+              <strong>允许匿名匹配</strong>
+              <small>先保护身份，聊得来再公开更多信息。</small>
+            </span>
+            <input
+              checked={form.allowAnonymousMatch}
+              disabled={!editing}
+              type="checkbox"
+              onChange={(event) => updateForm('allowAnonymousMatch', event.target.checked)}
+            />
+          </label>
+          <label className="profile-toggle">
+            <span>
+              <strong>接收线下活动</strong>
+              <small>同校活动、社团局和轻社交邀请。</small>
+            </span>
+            <input
+              checked={form.allowOfflineEvents}
+              disabled={!editing}
+              type="checkbox"
+              onChange={(event) => updateForm('allowOfflineEvents', event.target.checked)}
+            />
+          </label>
+          <button className="danger-action" type="button" onClick={logout}>
+            <Icon name="logout" />
+            退出登录
+          </button>
+        </aside>
+      </section>
+
+      <BottomNav active="user" />
+    </main>
+  )
+}
+
 function HomePage() {
   return (
     <main className="app-shell">
@@ -637,7 +1153,7 @@ function HomePage() {
       </section>
       <ShortcutGrid />
       <Feed />
-      <BottomNav />
+      <BottomNav active="home" />
     </main>
   )
 }
@@ -653,6 +1169,10 @@ function App() {
 
   if (path === '/login') {
     return <AuthPage />
+  }
+
+  if (path === '/profile') {
+    return <ProfilePage />
   }
 
   return <HomePage />

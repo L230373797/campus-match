@@ -54,6 +54,69 @@ const feedCards = [
   },
 ]
 
+const messageThreads = [
+  {
+    id: 'library',
+    name: '图书馆搭子',
+    school: '同校 · 学习',
+    time: '刚刚',
+    unread: 2,
+    online: true,
+    tone: 'blue',
+    lastMessage: '今晚八点到闭馆可以吗？我在三楼靠窗那排。',
+    messages: [
+      { from: 'other', text: '我也想找个人一起自习，比较容易坐住。' },
+      { from: 'me', text: '可以，我一般晚上会去图书馆。' },
+      { from: 'other', text: '今晚八点到闭馆可以吗？我在三楼靠窗那排。' },
+    ],
+  },
+  {
+    id: 'walk',
+    name: '周末散步局',
+    school: '同城校区 · 低压力',
+    time: '12:48',
+    unread: 0,
+    online: true,
+    tone: 'pink',
+    lastMessage: '天气好一点的话，从操场走到湖边就刚好。',
+    messages: [
+      { from: 'other', text: '我比较喜欢边走边聊，不用一直找话题。' },
+      { from: 'me', text: '这个节奏挺舒服的。' },
+      { from: 'other', text: '天气好一点的话，从操场走到湖边就刚好。' },
+    ],
+  },
+  {
+    id: 'mbti',
+    name: 'INFP 同频',
+    school: 'MBTI · 慢热聊天',
+    time: '昨天',
+    unread: 1,
+    online: false,
+    tone: 'violet',
+    lastMessage: '我也不是很会秒回，但会认真回。',
+    messages: [
+      { from: 'other', text: '看到你也写了慢热，就点进来了。' },
+      { from: 'me', text: '慢热但不冷淡，大概是这个状态。' },
+      { from: 'other', text: '我也不是很会秒回，但会认真回。' },
+    ],
+  },
+  {
+    id: 'treehole',
+    name: '树洞回应',
+    school: '匿名 · 心理',
+    time: '周二',
+    unread: 0,
+    online: false,
+    tone: 'peach',
+    lastMessage: '那种突然不知道往哪里走的感觉，我懂一点。',
+    messages: [
+      { from: 'other', text: '你的那条树洞我看到了。' },
+      { from: 'other', text: '那种突然不知道往哪里走的感觉，我懂一点。' },
+      { from: 'me', text: '谢谢你认真回。' },
+    ],
+  },
+]
+
 const revealTitleProps = {
   baseOpacity: 0.24,
   blurStrength: 2,
@@ -396,7 +459,7 @@ function BottomNav({ active = 'home' }) {
   const [hidden, setHidden] = useState(false)
   const items = [
     { key: 'home', icon: 'home', label: '首页', href: '/' },
-    { key: 'chat', icon: 'chat', label: '消息', href: '/#discover' },
+    { key: 'chat', icon: 'chat', label: '消息', href: '/messages' },
     { key: 'ai', icon: 'ai', label: '问问', href: '/#match' },
     { key: 'online', icon: 'online', label: '在线', href: '/#discover' },
     { key: 'user', icon: 'user', label: '我的', href: '/profile' },
@@ -1148,6 +1211,95 @@ function ProfilePage() {
   )
 }
 
+function MessagesPage() {
+  const [selectedId, setSelectedId] = useState(messageThreads[0]?.id)
+  const selectedThread = messageThreads.find((thread) => thread.id === selectedId) || messageThreads[0]
+
+  return (
+    <main className="app-shell messages-shell">
+      <Background />
+      <Header />
+
+      <section className="messages-hero">
+        <div>
+          <span className="section-label">消息</span>
+          <ScrollReveal as="h1" {...revealTitleProps}>
+            把聊得来的连接留住
+          </ScrollReveal>
+          <ScrollReveal as="p" {...revealBodyProps}>
+            新匹配、树洞回应、活动邀约都在这里。先轻轻说一句，再慢慢认识。
+          </ScrollReveal>
+        </div>
+        <div className="messages-hero-stats">
+          <span><strong>3</strong>新消息</span>
+          <span><strong>2</strong>在线</span>
+          <span><strong>6</strong>会话</span>
+        </div>
+      </section>
+
+      <section className="messages-layout" aria-label="消息中心">
+        <aside className="messages-panel thread-panel">
+          <div className="message-filter" aria-label="消息筛选">
+            {['全部', '未读', '同校', '树洞'].map((item, index) => (
+              <button className={index === 0 ? 'active' : ''} type="button" key={item}>
+                {item}
+              </button>
+            ))}
+          </div>
+          <AnimatedList
+            className="message-thread-list"
+            items={messageThreads}
+            getItemKey={(thread) => thread.id}
+            initialSelectedIndex={0}
+            onItemSelect={(thread) => setSelectedId(thread.id)}
+            renderItem={(thread, _index, selected) => (
+              <article className={`message-thread ${selected || thread.id === selectedId ? 'active' : ''}`}>
+                <div className={`message-avatar ${thread.tone}`}>{thread.name.slice(0, 1)}</div>
+                <div>
+                  <div className="message-thread-head">
+                    <strong>{thread.name}</strong>
+                    <small>{thread.time}</small>
+                  </div>
+                  <p>{thread.lastMessage}</p>
+                  <span>{thread.school}</span>
+                </div>
+                {thread.unread > 0 && <i aria-label={`${thread.unread} 条未读`}>{thread.unread}</i>}
+                <em className={thread.online ? 'online' : ''} aria-label={thread.online ? '在线' : '离线'} />
+              </article>
+            )}
+          />
+        </aside>
+
+        <section className="messages-panel chat-panel" aria-label="聊天预览">
+          <div className="chat-head">
+            <div className={`message-avatar ${selectedThread.tone}`}>{selectedThread.name.slice(0, 1)}</div>
+            <div>
+              <strong>{selectedThread.name}</strong>
+              <span>{selectedThread.school}</span>
+            </div>
+            <button className="ghost-action" type="button">查看资料</button>
+          </div>
+
+          <div className="chat-bubbles">
+            {selectedThread.messages.map((message, index) => (
+              <p className={message.from === 'me' ? 'me' : ''} key={`${selectedThread.id}-${index}`}>
+                {message.text}
+              </p>
+            ))}
+          </div>
+
+          <div className="message-composer" aria-label="发送消息">
+            <input placeholder="写一句轻松的开场..." />
+            <button type="button">发送</button>
+          </div>
+        </section>
+      </section>
+
+      <BottomNav active="chat" />
+    </main>
+  )
+}
+
 function HomePage() {
   return (
     <main className="app-shell">
@@ -1212,6 +1364,10 @@ function App() {
 
   if (path === '/profile') {
     return <ProfilePage />
+  }
+
+  if (path === '/messages') {
+    return <MessagesPage />
   }
 
   return <HomePage />

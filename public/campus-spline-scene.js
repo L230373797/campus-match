@@ -23,6 +23,12 @@ let switcher;
 let glassLayer;
 let glassLens;
 let glassBar;
+let glassMagnifierHost;
+let glassMagnifierRoot;
+let glassMagnifierSource;
+let glassMagnifierObserver;
+let glassMagnifierSyncTimer = 0;
+let glassTextFocus;
 let gl;
 let program;
 let vertexBuffer;
@@ -420,7 +426,10 @@ function ensureStageStyles() {
       --campus-glass-size: clamp(240px, 28vw, 430px);
     }
     body[data-campus-spline="active"] #campus-fluid-glass {
-      opacity: .96;
+      opacity: .68;
+    }
+    body[data-campus-spline="active"] #campus-fluid-glass.is-over-text {
+      opacity: .98;
     }
     #campus-fluid-glass::before {
       content: "";
@@ -432,11 +441,10 @@ function ensureStageStyles() {
       border-radius: 999px;
       transform: translate(-50%, -50%);
       background:
-        radial-gradient(circle at 42% 38%, rgba(255,255,255,.18), transparent 0 18%, rgba(135,218,255,.10) 28%, transparent 55%),
-        conic-gradient(from 110deg, rgba(118,224,255,.18), rgba(255,154,217,.16), rgba(194,166,255,.14), rgba(118,224,255,.18));
-      filter: blur(22px) saturate(1.24);
+        radial-gradient(circle at 42% 38%, rgba(255,255,255,.14), transparent 0 20%, rgba(135,218,255,.08) 32%, transparent 58%);
+      filter: blur(18px) saturate(1.18);
       mix-blend-mode: screen;
-      opacity: .72;
+      opacity: .42;
     }
     .campus-fluid-bar,
     .campus-fluid-lens {
@@ -447,18 +455,14 @@ function ensureStageStyles() {
       isolation: isolate;
       will-change: transform;
       border: 1px solid rgba(255,255,255,.48);
-      background:
-        radial-gradient(circle at 31% 20%, rgba(255,255,255,.74), rgba(255,255,255,.20) 17%, transparent 33%),
-        radial-gradient(circle at 70% 76%, rgba(118,224,255,.26), transparent 30%),
-        conic-gradient(from 230deg at 50% 50%, rgba(120,226,255,.22), rgba(255,156,219,.18), rgba(196,170,255,.22), rgba(120,226,255,.22)),
-        rgba(255,255,255,.06);
+      background: rgba(255,255,255,.035);
       box-shadow:
-        0 30px 90px rgba(0,0,0,.28),
-        0 0 46px rgba(115,213,255,.17),
-        inset 0 1px 1px rgba(255,255,255,.86),
-        inset 0 -22px 46px rgba(74,120,190,.18);
-      backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
-      -webkit-backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
+        0 24px 82px rgba(0,0,0,.18),
+        0 0 32px rgba(160,226,255,.10),
+        inset 0 1px 1px rgba(255,255,255,.72),
+        inset 0 -18px 36px rgba(255,255,255,.08);
+      backdrop-filter: blur(2px) saturate(1.18) contrast(1.02);
+      -webkit-backdrop-filter: blur(2px) saturate(1.18) contrast(1.02);
     }
     .campus-fluid-lens {
       width: var(--campus-glass-size);
@@ -466,7 +470,49 @@ function ensureStageStyles() {
       border-radius: 999px;
       transform-style: preserve-3d;
     }
+    .campus-fluid-magnifier-host {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      border-radius: inherit;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: .42;
+      filter: saturate(1.22) contrast(1.08) brightness(1.1);
+      transition: opacity .18s ease, filter .18s ease;
+    }
+    #campus-fluid-glass.is-over-text .campus-fluid-magnifier-host {
+      opacity: .98;
+      filter: saturate(1.38) contrast(1.14) brightness(1.16);
+    }
+    .campus-fluid-text-focus {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 2;
+      max-width: 78%;
+      transform: translate(-50%, -50%) scale(.94);
+      color: rgba(245,250,255,.94);
+      text-align: center;
+      font: 900 clamp(20px, 3.5vw, 38px)/1.08 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      text-shadow: 0 2px 14px rgba(28,58,110,.34), 0 0 18px rgba(255,255,255,.24);
+      opacity: 0;
+      filter: blur(2px);
+      transition: opacity .16s ease, filter .16s ease, transform .16s ease;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      mix-blend-mode: screen;
+    }
+    #campus-fluid-glass.is-over-text .campus-fluid-text-focus {
+      opacity: .9;
+      filter: blur(0);
+      transform: translate(-50%, -50%) scale(1.08);
+    }
     .campus-fluid-bar {
+      display: none;
       width: clamp(190px, 22vw, 340px);
       height: clamp(58px, 6vw, 92px);
       border-radius: 999px;
@@ -500,10 +546,10 @@ function ensureStageStyles() {
     .campus-fluid-lens::before {
       border-radius: inherit;
       background:
-        linear-gradient(135deg, rgba(255,255,255,.5), transparent 28%, rgba(255,255,255,.11) 52%, transparent 70%),
-        radial-gradient(ellipse at 34% 18%, rgba(255,255,255,.72), transparent 0 18%, rgba(255,255,255,.18) 26%, transparent 46%);
+        linear-gradient(135deg, rgba(255,255,255,.46), transparent 25%, rgba(255,255,255,.08) 54%, transparent 72%),
+        radial-gradient(ellipse at 34% 18%, rgba(255,255,255,.62), transparent 0 16%, rgba(255,255,255,.12) 28%, transparent 48%);
       mix-blend-mode: screen;
-      opacity: .8;
+      opacity: .62;
       animation: campusFluidSheen 7s ease-in-out infinite alternate;
     }
     .campus-fluid-lens::after {
@@ -511,10 +557,10 @@ function ensureStageStyles() {
       border-radius: 999px;
       border: 1px solid rgba(255,255,255,.22);
       box-shadow:
-        inset 18px 0 34px rgba(117,225,255,.18),
-        inset -18px 0 34px rgba(255,151,216,.16),
-        inset 0 -18px 38px rgba(120,111,255,.14);
-      opacity: .86;
+        inset 18px 0 34px rgba(117,225,255,.10),
+        inset -18px 0 34px rgba(255,151,216,.08),
+        inset 0 -18px 38px rgba(255,255,255,.08);
+      opacity: .72;
     }
     @keyframes campusFluidSheen {
       0% { transform: translate3d(-8%, -6%, 0) rotate(-12deg) scale(1.02); }
@@ -669,15 +715,145 @@ function createFluidGlass() {
 
   glassLens = document.createElement("div");
   glassLens.className = "campus-fluid-lens";
+
+  glassMagnifierHost = document.createElement("div");
+  glassMagnifierHost.className = "campus-fluid-magnifier-host";
+  glassLens.appendChild(glassMagnifierHost);
+  glassMagnifierRoot = glassMagnifierHost.attachShadow({ mode: "open" });
+  initializeMagnifierShadow();
+
   glassLayer.appendChild(glassLens);
+
+  glassTextFocus = document.createElement("div");
+  glassTextFocus.className = "campus-fluid-text-focus";
+  glassLens.appendChild(glassTextFocus);
 
   glassBar = document.createElement("div");
   glassBar.className = "campus-fluid-bar";
   glassLayer.appendChild(glassBar);
 
   document.body.appendChild(glassLayer);
+  syncMagnifierContent();
+  observeMagnifierSource();
   updateFluidGlass(performance.now(), true);
   return glassLayer;
+}
+
+function initializeMagnifierShadow() {
+  if (!glassMagnifierRoot) {
+    return;
+  }
+
+  glassMagnifierRoot.innerHTML = "";
+
+  Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).forEach((node) => {
+    const copy = node.cloneNode(true);
+    if (copy.tagName === "STYLE" && copy.textContent) {
+      copy.textContent = copy.textContent
+        .replace(/\bbody(?=[:\s.#\[]>)/g, ".campus-magnifier-body")
+        .replace(/#root/g, ".campus-magnifier-root");
+    }
+    glassMagnifierRoot.appendChild(copy);
+  });
+
+  const shadowStyle = document.createElement("style");
+  shadowStyle.textContent = `
+    :host {
+      all: initial;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      border-radius: inherit;
+      pointer-events: none;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .campus-magnifier-viewport {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      min-height: 100vh;
+      transform-origin: 0 0;
+      pointer-events: none;
+      will-change: transform;
+    }
+    .campus-magnifier-body {
+      width: 100vw;
+      min-height: 100vh;
+      margin: 0;
+      background: transparent;
+      color: inherit;
+      overflow: visible;
+    }
+    .campus-magnifier-root {
+      width: 100vw;
+      min-height: 100vh;
+      transform: none !important;
+    }
+    .campus-magnifier-root * {
+      pointer-events: none !important;
+    }
+    .campus-magnifier-root [style*="position: fixed"],
+    .campus-magnifier-root .ios-tabbar-wrap,
+    .campus-magnifier-root .campus-bg-switcher,
+    .campus-magnifier-root .campus-quick-actions {
+      visibility: hidden !important;
+    }
+  `;
+  glassMagnifierRoot.appendChild(shadowStyle);
+
+  glassMagnifierSource = document.createElement("div");
+  glassMagnifierSource.className = "campus-magnifier-viewport";
+  glassMagnifierRoot.appendChild(glassMagnifierSource);
+}
+
+function scheduleMagnifierSync() {
+  if (glassMagnifierSyncTimer) {
+    return;
+  }
+
+  glassMagnifierSyncTimer = window.setTimeout(() => {
+    glassMagnifierSyncTimer = 0;
+    syncMagnifierContent();
+  }, 220);
+}
+
+function syncMagnifierContent() {
+  const root = document.querySelector("#root");
+  if (!root || !glassMagnifierSource) {
+    return;
+  }
+
+  const clone = root.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.classList.add("campus-magnifier-root");
+  clone.setAttribute("aria-hidden", "true");
+  clone.querySelectorAll("script, #campus-fluid-glass, #campus-spline-stage").forEach((node) => node.remove());
+
+  const bodyShell = document.createElement("div");
+  bodyShell.className = "campus-magnifier-body";
+  bodyShell.dataset.campusSpline = document.body.dataset.campusSpline || "active";
+  bodyShell.dataset.campusRoute = document.body.dataset.campusRoute || window.location.pathname;
+  bodyShell.appendChild(clone);
+
+  glassMagnifierSource.replaceChildren(bodyShell);
+  updateMagnifierTransform();
+}
+
+function observeMagnifierSource() {
+  const root = document.querySelector("#root");
+  if (!root || glassMagnifierObserver) {
+    return;
+  }
+
+  glassMagnifierObserver = new MutationObserver(scheduleMagnifierSync);
+  glassMagnifierObserver.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["class", "style", "data-campus-reveal-ready", "data-campus-reveal-text-ready"],
+  });
 }
 
 function updateFluidGlass(now = performance.now(), force = false) {
@@ -695,16 +871,64 @@ function updateFluidGlass(now = performance.now(), force = false) {
   const y = (1 - glassSmoothPointer.y) * height;
   const elapsed = (now - startTime) / 1000;
   const drift = prefersReducedMotion.matches ? 0 : Math.sin(elapsed * 0.74) * 2.5;
-  const rotate = (glassSmoothPointer.x - 0.5) * 13 + Math.sin(elapsed * 0.42) * 2;
-  const scale = routeName === "/login" ? 1.06 : routeName === "/search.html" ? 0.9 : 0.98;
+  const scale = routeName === "/search.html" ? 0.92 : 1;
   const barX = clamp(glassSmoothPointer.x + 0.18, 0.18, 0.88) * width;
   const barY = clamp(1 - glassSmoothPointer.y + 0.22, 0.2, 0.84) * height;
   const barRotate = (glassSmoothPointer.x - 0.5) * -8 + Math.cos(elapsed * 0.36) * 1.5;
 
   glassLayer.style.setProperty("--campus-glass-x", `${(glassSmoothPointer.x * 100).toFixed(2)}%`);
   glassLayer.style.setProperty("--campus-glass-y", `${((1 - glassSmoothPointer.y) * 100).toFixed(2)}%`);
-  glassLens.style.transform = `translate3d(${x.toFixed(2)}px, ${(y + drift).toFixed(2)}px, 0) translate(-50%, -50%) rotate(${rotate.toFixed(2)}deg) scale(${scale})`;
+  glassLens.style.transform = `translate3d(${x.toFixed(2)}px, ${(y + drift).toFixed(2)}px, 0) translate(-50%, -50%) scale(${scale})`;
   glassBar.style.transform = `translate3d(${barX.toFixed(2)}px, ${(barY - drift).toFixed(2)}px, 0) translate(-50%, -50%) rotate(${barRotate.toFixed(2)}deg)`;
+  updateMagnifierTransform(x, y + drift);
+  updateGlassTextFocus(x, y);
+}
+
+function updateMagnifierTransform(x, y) {
+  if (!glassMagnifierSource || !glassLens) {
+    return;
+  }
+
+  const width = Math.max(window.innerWidth || viewportWidth || 1, 1);
+  const height = Math.max(window.innerHeight || viewportHeight || 1, 1);
+  const lensSize = Math.max(1, glassLens.offsetWidth || 240);
+  const zoom = width <= 640 ? 1.36 : 1.42;
+  const lensX = Number.isFinite(x) ? x : glassSmoothPointer.x * width;
+  const lensY = Number.isFinite(y) ? y : (1 - glassSmoothPointer.y) * height;
+  const documentY = lensY + (window.scrollY || document.documentElement.scrollTop || 0);
+  const documentX = lensX + (window.scrollX || document.documentElement.scrollLeft || 0);
+  const tx = lensSize / 2 - documentX * zoom;
+  const ty = lensSize / 2 - documentY * zoom;
+
+  glassMagnifierSource.style.width = `${width}px`;
+  glassMagnifierSource.style.minHeight = `${Math.max(document.documentElement.scrollHeight, height)}px`;
+  glassMagnifierSource.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${zoom})`;
+}
+
+function updateGlassTextFocus(x, y) {
+  if (!glassLayer) {
+    return;
+  }
+
+  const node = document.elementFromPoint(
+    clamp(x, 1, Math.max(window.innerWidth - 1, 1)),
+    clamp(y, 1, Math.max(window.innerHeight - 1, 1)),
+  );
+  const textNode = node?.closest?.("h1, h2, h3, h4, h5, h6, p, strong, span, small, label, button, a, li");
+  const text = (textNode?.textContent || "").replace(/\s+/g, "");
+  const isOverText = text.length >= 2;
+  glassLayer.classList.toggle("is-over-text", isOverText);
+  if (glassTextFocus) {
+    glassTextFocus.textContent = isOverText ? trimFocusText(textNode.textContent) : "";
+  }
+}
+
+function trimFocusText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= 26) {
+    return text;
+  }
+  return `${text.slice(0, 24)}...`;
 }
 
 function animateFluidGlass(now = performance.now()) {
@@ -1270,6 +1494,7 @@ function setRoute(route) {
   matchFocusTarget = config.focus;
   document.body.dataset.campusSpline = "active";
   start();
+  scheduleMagnifierSync();
 }
 
 window.addEventListener("campus:route", (event) => {
@@ -1312,6 +1537,7 @@ window.CampusSplineScene = {
       videoCurrentTime: video ? Number(video.currentTime.toFixed(2)) : 0,
       hasRenderer: Boolean(gl && program),
       hasFluidGlass: Boolean(glassLayer && glassLens && glassBar),
+      hasMagnifier: Boolean(glassMagnifierSource),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,
       lowDetail,
       pixelRatio,

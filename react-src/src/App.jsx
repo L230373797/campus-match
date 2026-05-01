@@ -33,6 +33,24 @@ const feedCards = [
   },
 ]
 
+const revealTitleProps = {
+  baseOpacity: 0.24,
+  blurStrength: 2,
+  wordAnimationEnd: 'bottom 82%',
+}
+
+const revealBodyProps = {
+  baseOpacity: 0.3,
+  blurStrength: 2,
+  wordAnimationEnd: 'bottom 84%',
+}
+
+const revealSectionTitleProps = {
+  baseOpacity: 0.2,
+  blurStrength: 3,
+  wordAnimationEnd: 'bottom 74%',
+}
+
 const fallbackSchools = [
   { name: '北京大学', city: '北京', province: '北京' },
   { name: '清华大学', city: '北京', province: '北京' },
@@ -127,11 +145,15 @@ function MoodCard() {
       <div>
         <div className="section-label">自己</div>
         <div className="mood-score">
-          <span>今日心情</span>
+          <ScrollReveal as="span" {...revealSectionTitleProps}>
+            今日心情
+          </ScrollReveal>
           <strong>70</strong>
           <small>分</small>
         </div>
-        <p>今天适合先看看同校推荐，找一个能轻松聊起来的人。</p>
+        <ScrollReveal as="p" {...revealBodyProps}>
+          今天适合先看看同校推荐，找一个能轻松聊起来的人。
+        </ScrollReveal>
       </div>
       <div className="metric-bars">
         {moodMetrics.map((item) => (
@@ -167,7 +189,7 @@ function MatchPreview() {
     <section className="match-preview" id="match">
       <div className="preview-copy">
         <span className="section-label">今日推荐</span>
-        <ScrollReveal as="h2" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+        <ScrollReveal as="h2" {...revealTitleProps}>
           从同校、兴趣和节奏里，找到更自然的开场。
         </ScrollReveal>
         <div className="tag-row">
@@ -194,6 +216,12 @@ function MatchPreview() {
 function Feed() {
   return (
     <section className="feed" id="discover">
+      <div className="feed-head">
+        <span className="section-label">校园动态</span>
+        <ScrollReveal as="h2" {...revealSectionTitleProps}>
+          看看同校最近在找什么样的连接
+        </ScrollReveal>
+      </div>
       <div className="feed-tabs" aria-label="内容分类">
         {['关注', '为你推荐', '测试', '星座', '树洞', '心理'].map((tab, index) => (
           <button className={index === 1 ? 'active' : ''} type="button" key={tab}>
@@ -208,7 +236,9 @@ function Feed() {
               <span>{card.title.slice(0, 2)}</span>
             </div>
             <div>
-              <strong>{card.title}</strong>
+              <ScrollReveal as="strong" {...revealSectionTitleProps}>
+                {card.title}
+              </ScrollReveal>
               <p>{card.text}</p>
               <small>{card.meta}</small>
             </div>
@@ -373,10 +403,10 @@ function AuthPage() {
       <section className="auth-story">
         <div className="auth-story-copy">
           <span className="section-label">Campus Match</span>
-          <ScrollReveal as="h1" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+          <ScrollReveal as="h1" {...revealTitleProps}>
             先看见感觉，再开始认识。
           </ScrollReveal>
-          <ScrollReveal as="p" baseOpacity={0.3} blurStrength={2} wordAnimationEnd="bottom 84%">
+          <ScrollReveal as="p" {...revealBodyProps}>
             你可以慢慢往下滑。滑到底部时，登录或注册会自动出现，不用回头找入口。
           </ScrollReveal>
           <button className="primary-action" type="button" onClick={() => setOverlayOpen(true)}>
@@ -390,7 +420,7 @@ function AuthPage() {
         </div>
         <div className="auth-bottom">
           <span className="section-label">准备好了</span>
-          <ScrollReveal as="h2" baseOpacity={0.18} blurStrength={4} wordAnimationEnd="bottom 60%">
+          <ScrollReveal as="h2" {...revealSectionTitleProps}>
             从一个 QQ 邮箱验证码开始，进入你的校园匹配。
           </ScrollReveal>
           <button className="primary-action" type="button" onClick={() => setOverlayOpen(true)}>
@@ -562,10 +592,10 @@ function HomePage() {
         <div className="hero-card">
           <div className="hero-copy">
             <span className="section-label">Campus Match</span>
-            <ScrollReveal as="h1" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+            <ScrollReveal as="h1" {...revealTitleProps}>
               校园里的真实连接，从一条低压力消息开始
             </ScrollReveal>
-            <ScrollReveal as="p" baseOpacity={0.3} blurStrength={2} wordAnimationEnd="bottom 84%">
+            <ScrollReveal as="p" {...revealBodyProps}>
               基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。
             </ScrollReveal>
             <div className="hero-actions">
@@ -577,6 +607,12 @@ function HomePage() {
         </div>
       </section>
       <MoodCard />
+      <section className="section-intro" aria-label="功能入口介绍">
+        <span className="section-label">功能入口</span>
+        <ScrollReveal as="h2" {...revealSectionTitleProps}>
+          从性格、星座、生辰和树洞里找到开场理由
+        </ScrollReveal>
+      </section>
       <ShortcutGrid />
       <Feed />
       <BottomNav />

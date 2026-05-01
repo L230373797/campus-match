@@ -435,10 +435,29 @@
 }
 
 .mood-card,
+.section-intro,
 .shortcut-grid,
 .feed {
   width: min(1112px, 100%);
   margin: 18px auto 0;
+}
+
+.section-intro,
+.feed-head {
+  text-align: left;
+}
+
+.section-intro {
+  margin-top: 30px;
+}
+
+.section-intro h2,
+.feed-head h2 {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: rgba(245, 250, 255, 0.94);
+  font-size: 2.4rem;
+  line-height: 1.12;
 }
 
 .mood-card {
@@ -573,6 +592,10 @@
   gap: 14px;
 }
 
+.feed-head {
+  margin-bottom: 2px;
+}
+
 .feed-tabs {
   display: flex;
   gap: 18px;
@@ -655,6 +678,10 @@
 .feed-card strong {
   display: block;
   font-size: 18px;
+}
+
+.feed-card .scroll-reveal {
+  margin: 0;
 }
 
 .feed-card p {
@@ -1104,6 +1131,8 @@
   .mood-card,
   .shortcut,
   .feed-card,
+  .section-intro,
+  .feed-head,
   .auth-preview-panel,
   .auth-bottom {
     animation: card-rise both;
@@ -1185,6 +1214,11 @@
   .mood-card {
     grid-template-columns: 1fr;
     border-radius: 28px;
+  }
+
+  .section-intro h2,
+  .feed-head h2 {
+    font-size: 2rem;
   }
 
   .mood-score span {
@@ -1285,6 +1319,11 @@
     gap: 9px;
   }
 
+  .section-intro h2,
+  .feed-head h2 {
+    font-size: 1.72rem;
+  }
+
   .shortcut {
     min-height: 116px;
     border-radius: 22px;
@@ -1347,8 +1386,10 @@
   .auth-switch,
   .auth-form > *,
   .mood-card,
+  .section-intro,
   .shortcut,
   .feed-card,
+  .feed-head,
   .auth-preview-panel,
   .bar-track i {
     animation: none;

@@ -1,0 +1,105 @@
+.scroll-list-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-list {
+  max-height: min(720px, 78svh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 8px 2px 2px;
+  outline: none;
+  scroll-behavior: smooth;
+}
+
+.scroll-list.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.scroll-list.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.scroll-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(112, 223, 255, 0.72), rgba(255, 189, 220, 0.72));
+}
+
+.animated-list-motion {
+  margin-bottom: 14px;
+  cursor: pointer;
+  will-change: transform, opacity, filter;
+}
+
+.animated-list-motion:last-child {
+  margin-bottom: 0;
+}
+
+.animated-list-item {
+  border-radius: 28px;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background-color 220ms ease;
+}
+
+.animated-list-item.selected {
+  transform: translate3d(0, -2px, 0);
+}
+
+.item-text {
+  margin: 0;
+}
+
+.top-gradient,
+.bottom-gradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 64px;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.top-gradient {
+  top: 0;
+  background: linear-gradient(180deg, rgba(8, 17, 31, 0.82), transparent);
+}
+
+.bottom-gradient {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(8, 17, 31, 0.82), transparent);
+}
+
+@media (max-width: 860px) {
+  .scroll-list {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .top-gradient,
+  .bottom-gradient {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animated-list-motion,
+  .animated-list-item,
+  .top-gradient,
+  .bottom-gradient {
+    transition: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import AnimatedList from './AnimatedList'
 import ScrollReveal from './ScrollReveal'
 
 const discoveryTags = ['同校', 'MBTI', '生辰', '搭子', '树洞话题']
@@ -30,6 +31,26 @@ const feedCards = [
     title: '周末散步聊天',
     text: '从操场走到湖边，聊电影、歌单和最近的小烦恼。',
     meta: '同城校区 · 低压力',
+  },
+  {
+    title: 'MBTI 同频匹配',
+    text: '想找一个同样慢热但稳定的人，从一个小测试开始认识。',
+    meta: 'INFP · 轻聊天',
+  },
+  {
+    title: '生日缘分小卡',
+    text: '看看同一天或同星座的人，今天适不适合一起喝杯奶茶。',
+    meta: '生辰 · 星座',
+  },
+  {
+    title: '匿名树洞回应',
+    text: '有些话不用马上说给熟人听，先找一个温柔的陌生同学接住。',
+    meta: '树洞 · 心理',
+  },
+  {
+    title: '晚自习搭子',
+    text: '互相提醒别摸鱼，结束后可以一起走回宿舍。',
+    meta: '学习 · 同校',
   },
 ]
 
@@ -345,22 +366,28 @@ function Feed() {
           </button>
         ))}
       </div>
-      <div className="feed-grid">
-        {feedCards.map((card) => (
-          <article className="feed-card" key={card.title}>
+      <AnimatedList
+        className="feed-animated-list"
+        items={feedCards}
+        getItemKey={(card) => card.title}
+        showGradients={false}
+        displayScrollbar={false}
+        onItemSelect={(card) => {
+          window.history.replaceState({}, '', `/#discover-${encodeURIComponent(card.title)}`)
+        }}
+        renderItem={(card) => (
+          <article className="feed-card">
             <div className="feed-visual">
               <span>{card.title.slice(0, 2)}</span>
             </div>
             <div>
-              <ScrollReveal as="strong" {...revealSectionTitleProps}>
-                {card.title}
-              </ScrollReveal>
+              <strong>{card.title}</strong>
               <p>{card.text}</p>
               <small>{card.meta}</small>
             </div>
           </article>
-        ))}
-      </div>
+        )}
+      />
     </section>
   )
 }
@@ -1159,13 +1186,25 @@ function HomePage() {
 }
 
 function App() {
-  const [path, setPath] = useState(window.location.pathname)
+  const [locationKey, setLocationKey] = useState(`${window.location.pathname}${window.location.hash}`)
 
   useEffect(() => {
-    const onPopState = () => setPath(window.location.pathname)
+    const onPopState = () => setLocationKey(`${window.location.pathname}${window.location.hash}`)
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  useEffect(() => {
+    if (!window.location.hash) return undefined
+
+    const timer = window.setTimeout(() => {
+      document.querySelector(window.location.hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+
+    return () => window.clearTimeout(timer)
+  }, [locationKey])
+
+  const path = window.location.pathname
 
   if (path === '/login') {
     return <AuthPage />

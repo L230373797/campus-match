@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import ScrollReveal from './ScrollReveal'
 
 const discoveryTags = ['同校', 'MBTI', '生辰', '搭子', '树洞话题']
 
@@ -166,7 +167,9 @@ function MatchPreview() {
     <section className="match-preview" id="match">
       <div className="preview-copy">
         <span className="section-label">今日推荐</span>
-        <h2>从同校、兴趣和节奏里，找到更自然的开场。</h2>
+        <ScrollReveal as="h2" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+          从同校、兴趣和节奏里，找到更自然的开场。
+        </ScrollReveal>
         <div className="tag-row">
           {discoveryTags.map((tag) => (
             <span key={tag}>{tag}</span>
@@ -370,8 +373,12 @@ function AuthPage() {
       <section className="auth-story">
         <div className="auth-story-copy">
           <span className="section-label">Campus Match</span>
-          <h1>先看见感觉，再开始认识。</h1>
-          <p>你可以慢慢往下滑。滑到底部时，登录或注册会自动出现，不用回头找入口。</p>
+          <ScrollReveal as="h1" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+            先看见感觉，再开始认识。
+          </ScrollReveal>
+          <ScrollReveal as="p" baseOpacity={0.3} blurStrength={2} wordAnimationEnd="bottom 84%">
+            你可以慢慢往下滑。滑到底部时，登录或注册会自动出现，不用回头找入口。
+          </ScrollReveal>
           <button className="primary-action" type="button" onClick={() => setOverlayOpen(true)}>
             现在开始
           </button>
@@ -383,7 +390,9 @@ function AuthPage() {
         </div>
         <div className="auth-bottom">
           <span className="section-label">准备好了</span>
-          <h2>从一个 QQ 邮箱验证码开始，进入你的校园匹配。</h2>
+          <ScrollReveal as="h2" baseOpacity={0.18} blurStrength={4} wordAnimationEnd="bottom 60%">
+            从一个 QQ 邮箱验证码开始，进入你的校园匹配。
+          </ScrollReveal>
           <button className="primary-action" type="button" onClick={() => setOverlayOpen(true)}>
             打开登录注册
           </button>
@@ -553,8 +562,12 @@ function HomePage() {
         <div className="hero-card">
           <div className="hero-copy">
             <span className="section-label">Campus Match</span>
-            <h1>校园里的真实连接，从一条低压力消息开始</h1>
-            <p>基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。</p>
+            <ScrollReveal as="h1" baseOpacity={0.24} blurStrength={2} wordAnimationEnd="bottom 82%">
+              校园里的真实连接，从一条低压力消息开始
+            </ScrollReveal>
+            <ScrollReveal as="p" baseOpacity={0.3} blurStrength={2} wordAnimationEnd="bottom 84%">
+              基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。
+            </ScrollReveal>
             <div className="hero-actions">
               <a className="primary-action" href="/login">立即开始</a>
               <a className="ghost-action" href="#discover">先看看内容</a>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AnimatedList from './AnimatedList'
+import { AnimatePresence, motion } from 'motion/react'
 import ScrollReveal from './ScrollReveal'
 
 const FloatingLines = lazy(() => import('./FloatingLines'))
@@ -53,6 +54,36 @@ const feedCards = [
     title: '晚自习搭子',
     text: '互相提醒别摸鱼，结束后可以一起走回宿舍。',
     meta: '学习 · 同校',
+  },
+]
+
+const matchProfiles = [
+  {
+    id: 'library-match',
+    name: '晚风同学',
+    score: 86,
+    meta: '同校认证 · 图书馆 · INFP',
+    note: '喜欢安静自习、电影配乐和晚上的校园路灯。',
+    tags: ['自习搭子', '慢热', '电影'],
+    accent: 'cyan',
+  },
+  {
+    id: 'walk-match',
+    name: '湖边散步',
+    score: 81,
+    meta: '同城校区 · 周末 · 低压力',
+    note: '更喜欢边走边聊，不用一直找话题也舒服。',
+    tags: ['散步', '歌单', '树洞'],
+    accent: 'pink',
+  },
+  {
+    id: 'mbti-match',
+    name: '同频小卡',
+    score: 78,
+    meta: 'MBTI · 生辰 · 轻聊天',
+    note: '回复不一定快，但每一句都会认真看。',
+    tags: ['INFP', '星座', '慢节奏'],
+    accent: 'violet',
   },
 ]
 
@@ -407,6 +438,14 @@ function ShortcutGrid() {
 }
 
 function MatchPreview() {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const activeProfile = matchProfiles[activeIndex]
+  const nextProfile = matchProfiles[(activeIndex + 1) % matchProfiles.length]
+
+  const showNextProfile = () => {
+    setActiveIndex((current) => (current + 1) % matchProfiles.length)
+  }
+
   return (
     <section className="match-preview" id="match">
       <div className="preview-copy">
@@ -420,16 +459,47 @@ function MatchPreview() {
           ))}
         </div>
       </div>
-      <div className="profile-card">
-        <div className="avatar-ring">
-          <span />
+
+      <div className="match-deck" aria-live="polite">
+        <div className={`match-card-shadow ${nextProfile.accent}`}>
+          <span>{nextProfile.score}</span>
         </div>
-        <div>
-          <strong>73</strong>
-          <small>合拍分</small>
-        </div>
-        <p>同校认证 · 喜欢自习、电影和夜晚散步</p>
-        <button type="button">发现</button>
+        <AnimatePresence mode="wait">
+          <motion.article
+            className={`match-card ${activeProfile.accent}`}
+            key={activeProfile.id}
+            initial={{ opacity: 0, y: 24, rotate: -2, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -24, rotate: 2, scale: 0.96 }}
+            transition={{ duration: 0.42, ease: [0.2, 0.82, 0.2, 1] }}
+          >
+            <div className="match-orbit">
+              <span />
+            </div>
+            <div className="match-score">
+              <strong>{activeProfile.score}</strong>
+              <small>合拍分</small>
+            </div>
+            <div className="match-person">
+              <h3>{activeProfile.name}</h3>
+              <p>{activeProfile.meta}</p>
+            </div>
+            <p className="match-note">{activeProfile.note}</p>
+            <div className="match-tags">
+              {activeProfile.tags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+            </div>
+            <div className="match-actions">
+              <button className="ghost-match-action" type="button" onClick={showNextProfile}>
+                略过
+              </button>
+              <button className="primary-match-action" type="button" onClick={showNextProfile}>
+                喜欢
+              </button>
+            </div>
+          </motion.article>
+        </AnimatePresence>
       </div>
     </section>
   )

@@ -177,8 +177,8 @@ const profileFallback = {
 const interestOptions = ['自习搭子', '电影', '散步', '音乐', '咖啡', '运动', '摄影', '游戏']
 const sceneOptions = ['图书馆', '操场', '周末', '树洞', '食堂', '社团', '晚自习']
 const backgroundWaves = ['top', 'middle', 'bottom']
-const backgroundLineCount = [4, 6, 5]
-const backgroundLineDistance = [9, 7, 10]
+const backgroundLineCount = [3, 5, 3]
+const backgroundLineDistance = [12, 9, 13]
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('token')
@@ -285,14 +285,15 @@ function Background() {
           lineCount={backgroundLineCount}
           lineDistance={backgroundLineDistance}
           bendRadius={6}
-          bendStrength={-0.7}
+          bendStrength={-0.45}
           interactive
           parallax
-          parallaxStrength={0.08}
-          animationSpeed={0.55}
-          gradientStart="#5bdcff"
-          gradientMid="#e945f5"
-          gradientEnd="#ffd8e7"
+          parallaxStrength={0.05}
+          animationSpeed={0.42}
+          lineOpacity={0.3}
+          gradientStart="#7feeff"
+          gradientMid="#b58dff"
+          gradientEnd="#ffc8e8"
         />
       </Suspense>
       <div className="scene-ray scene-ray-a" />

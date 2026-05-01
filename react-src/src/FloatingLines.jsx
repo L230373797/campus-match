@@ -55,6 +55,7 @@ uniform vec2 parallaxOffset;
 
 uniform vec3 lineGradient[8];
 uniform int lineGradientCount;
+uniform float lineOpacity;
 
 const int MAX_LINES = 32;
 const vec3 BLACK = vec3(0.0);
@@ -77,11 +78,11 @@ vec3 backgroundColor(vec2 uv) {
 
 vec3 getLineColor(float t, vec3 baseColor) {
   if (lineGradientCount <= 0) {
-    return baseColor;
+    return baseColor * lineOpacity;
   }
 
   if (lineGradientCount == 1) {
-    return lineGradient[0] * 0.5;
+    return lineGradient[0] * lineOpacity;
   }
 
   float clampedT = clamp(t, 0.0, 0.9999);
@@ -92,7 +93,7 @@ vec3 getLineColor(float t, vec3 baseColor) {
 
   vec3 c1 = lineGradient[idx];
   vec3 c2 = lineGradient[idx2];
-  return mix(c1, c2, f) * 0.5;
+  return mix(c1, c2, f) * lineOpacity;
 }
 
 float wave(vec2 uv, float offset, vec2 screenUv, vec2 mouseUv, bool shouldBend) {
@@ -185,7 +186,10 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     }
   }
 
-  float alpha = clamp(max(max(col.r, col.g), col.b) * 1.7, 0.0, 0.9);
+  float edgeFade = 1.0 - smoothstep(0.72, 1.52, length(baseUv * vec2(0.75, 1.0)));
+  col *= edgeFade;
+
+  float alpha = clamp(max(max(col.r, col.g), col.b) * 1.35, 0.0, 0.72);
   fragColor = vec4(col, alpha);
 }
 
@@ -245,6 +249,7 @@ export default function FloatingLines({
   mouseDamping = 0.05,
   parallax = true,
   parallaxStrength = 0.12,
+  lineOpacity = 0.34,
   mixBlendMode = 'screen',
 }) {
   const containerRef = useRef(null)
@@ -334,6 +339,7 @@ export default function FloatingLines({
         value: Array.from({ length: MAX_GRADIENT_STOPS }, () => new Vector3(1, 1, 1)),
       },
       lineGradientCount: { value: 0 },
+      lineOpacity: { value: lineOpacity },
     }
 
     if (gradientStops.length > 0) {
@@ -455,6 +461,7 @@ export default function FloatingLines({
     gradientKey,
     gradientStops,
     interactive,
+    lineOpacity,
     middleLineCount,
     middleLineDistance,
     middleWavePosition?.rotate,

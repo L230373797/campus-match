@@ -3,9 +3,12 @@
   inset: -8%;
   z-index: 0;
   overflow: hidden;
-  opacity: 0.74;
+  opacity: 0.58;
   pointer-events: none;
   contain: layout paint size;
+  filter: blur(0.35px) saturate(0.96);
+  mask-image: radial-gradient(ellipse at 50% 48%, #000 0%, rgba(0, 0, 0, 0.86) 44%, transparent 86%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 48%, #000 0%, rgba(0, 0, 0, 0.86) 44%, transparent 86%);
 }
 
 .floating-lines-container canvas {
@@ -17,7 +20,8 @@
 @media (max-width: 860px) {
   .floating-lines-container {
     inset: -12%;
-    opacity: 0.52;
+    opacity: 0.42;
+    filter: blur(0.5px) saturate(0.9);
   }
 }
 

@@ -809,6 +809,22 @@
   font-weight: 750;
 }
 
+.shortcut-meta {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: rgba(245, 250, 255, 0.84);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
 .feed {
   display: grid;
   gap: 14px;
@@ -940,6 +956,69 @@
 
 .feed-card small {
   color: rgba(224, 237, 255, 0.52);
+}
+
+.feature-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 22px;
+  background: rgba(2, 8, 16, 0.34);
+  backdrop-filter: blur(14px);
+}
+
+.feature-sheet {
+  position: relative;
+  width: min(620px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 30px;
+  background: rgba(13, 24, 42, 0.88);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42), inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.feature-sheet > strong {
+  color: rgba(245, 250, 255, 0.96);
+  font-size: 28px;
+}
+
+.feature-sheet > p {
+  margin: 0;
+  color: rgba(224, 237, 255, 0.66);
+  line-height: 1.7;
+}
+
+.feature-sheet-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(245, 250, 255, 0.84);
+  background: rgba(255, 255, 255, 0.1);
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.wisdom-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.wisdom-card-list span {
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  color: rgba(245, 250, 255, 0.86);
+  background: rgba(255, 255, 255, 0.08);
+  line-height: 1.65;
 }
 
 .bottom-nav {
@@ -1098,8 +1177,19 @@
 
 .thread-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 16px;
+}
+
+.message-notice {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(120, 224, 255, 0.14);
+  border-radius: 18px;
+  color: rgba(224, 237, 255, 0.66);
+  background: rgba(120, 224, 255, 0.08);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .message-filter {
@@ -1312,6 +1402,11 @@
   color: #06111d;
   background: linear-gradient(180deg, #8feeff, #73d9ff);
   font-weight: 950;
+}
+
+.message-composer button:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 .profile-shell {

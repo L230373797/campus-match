@@ -211,6 +211,20 @@ const backgroundWaves = ['top', 'middle', 'bottom']
 const backgroundLineCount = [3, 5, 3]
 const backgroundLineDistance = [12, 9, 13]
 const matchAccents = ['cyan', 'pink', 'violet']
+const zodiacSigns = [
+  { name: '摩羯座', from: [12, 22] },
+  { name: '水瓶座', from: [1, 20] },
+  { name: '双鱼座', from: [2, 19] },
+  { name: '白羊座', from: [3, 21] },
+  { name: '金牛座', from: [4, 20] },
+  { name: '双子座', from: [5, 21] },
+  { name: '巨蟹座', from: [6, 22] },
+  { name: '狮子座', from: [7, 23] },
+  { name: '处女座', from: [8, 23] },
+  { name: '天秤座', from: [9, 23] },
+  { name: '天蝎座', from: [10, 24] },
+  { name: '射手座', from: [11, 23] },
+]
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('token')
@@ -255,6 +269,52 @@ function formatList(value) {
   return splitList(value).join('、')
 }
 
+function hasAuthToken() {
+  return Boolean(localStorage.getItem('token'))
+}
+
+function formatRelativeTime(value) {
+  const timestamp = Date.parse(value || '')
+  if (!Number.isFinite(timestamp)) return '刚刚'
+
+  const diff = Date.now() - timestamp
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  if (diff < minute) return '刚刚'
+  if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))}分钟前`
+  if (diff < day) return `${Math.max(1, Math.floor(diff / hour))}小时前`
+  if (diff < 2 * day) return '昨天'
+  return `${Math.max(2, Math.floor(diff / day))}天前`
+}
+
+function formatBirthDate(value) {
+  if (!value) return ''
+  const parts = String(value).split('-').map((part) => Number(part))
+  const month = parts[1]
+  const day = parts[2]
+  if (!month || !day) return ''
+  return `${month}月${day}日`
+}
+
+function zodiacFromBirthDate(value) {
+  if (!value) return ''
+  const parts = String(value).split('-').map((part) => Number(part))
+  const month = parts[1]
+  const day = parts[2]
+  if (!month || !day) return ''
+
+  for (let index = zodiacSigns.length - 1; index >= 0; index -= 1) {
+    const [fromMonth, fromDay] = zodiacSigns[index].from
+    if (month > fromMonth || (month === fromMonth && day >= fromDay)) {
+      return zodiacSigns[index].name
+    }
+  }
+
+  return '摩羯座'
+}
+
 function normalizeMatchProfile(user = {}, index = 0) {
   const id = user.id || user._id || `recommendation-${index}`
   const reasonTags = splitList(user.recommendation?.reasons)
@@ -281,6 +341,130 @@ function normalizeMatchProfile(user = {}, index = 0) {
     accent: matchAccents[index % matchAccents.length],
     source: user,
   }
+}
+
+function normalizeMessageThread(match = {}, index = 0) {
+  const user = match.user || {}
+  const name = user.nickname || user.name || '校园同学'
+  const school = [user.school, user.major || user.mbti || '轻聊天'].filter(Boolean).join(' · ')
+
+  return {
+    id: match.id || match._id || `match-${index}`,
+    name,
+    school: school || '同校 · 轻聊天',
+    time: formatRelativeTime(match.lastMessageAt || match.matchedAt),
+    unread: Number(match.unreadCount || 0),
+    online: Boolean(match.typing?.activeUsers?.length),
+    tone: matchAccents[index % matchAccents.length],
+    lastMessage: match.lastMessagePreview || '你们已经匹配，可以从一个轻松问题开始。',
+    messages: [],
+    sourceMatch: match,
+  }
+}
+
+function normalizeChatMessage(message = {}, currentUserId = '') {
+  const senderId = message.senderId || message.sender?.id || message.sender?._id || ''
+  return {
+    from: senderId && senderId === currentUserId ? 'me' : 'other',
+    text: message.content || message.text || '',
+    createdAt: message.createdAt,
+  }
+}
+
+function buildShortcutCards(homeData = {}, loading = false) {
+  const profile = homeData.profile || {}
+  const activity = homeData.activity || {}
+  const counts = activity.counts || {}
+  const recommendations = homeData.recommendations || []
+  const matches = homeData.matches || []
+  const membership = homeData.membership?.membership || profile.membership || {}
+  const tags = splitList(profile.tags)
+  const sceneTags = splitList(profile.sceneTags)
+  const zodiac = zodiacFromBirthDate(profile.birthDate)
+
+  const statusByTitle = {
+    MBTI: profile.mbti || (loading ? '正在读取资料' : '去资料页补充'),
+    星座: zodiac || (loading ? '正在读取生日' : '填生日生成'),
+    生辰: formatBirthDate(profile.birthDate) || (loading ? '正在读取生辰' : '去资料页补充'),
+    缘分盘: recommendations.length
+      ? `${recommendations.length} 个新推荐`
+      : `${counts.matches || matches.length || 0} 个匹配`,
+    倾诉: sceneTags.includes('树洞') ? '已加入树洞偏好' : (activity.insights?.[0] || '树洞话题已接入推荐'),
+    智慧卡: recommendations[0]?.nickname
+      ? `给 ${recommendations[0].nickname} 的开场`
+      : (tags[0] ? `${tags[0]} 开场` : membership.title || '登录后生成'),
+  }
+
+  const actionByTitle = {
+    MBTI: 'profile',
+    星座: 'profile',
+    生辰: 'profile',
+    缘分盘: 'match',
+    倾诉: 'discover',
+    智慧卡: 'wisdom',
+  }
+
+  return shortcuts.map((item) => ({
+    ...item,
+    status: statusByTitle[item.title] || item.note,
+    action: actionByTitle[item.title],
+  }))
+}
+
+function buildFeedCards(homeData = {}) {
+  const cards = []
+  const recommendations = homeData.recommendations || []
+  const matches = homeData.matches || []
+  const activity = homeData.activity || {}
+
+  recommendations.slice(0, 4).forEach((user, index) => {
+    const reasons = splitList(user.recommendation?.reasons)
+    const meta = [user.school, user.mbti, reasons[0]].filter(Boolean).join(' · ')
+    cards.push({
+      title: `认识 ${user.nickname || user.name || '校园同学'}`,
+      text: user.bio || reasons.join('、') || '系统按你的资料整理出的同校推荐，可以先从一个轻松话题开始。',
+      meta: meta || '同校推荐 · 合拍资料',
+      visual: user.nickname || `推荐${index + 1}`,
+    })
+  })
+
+  matches.slice(0, 2).forEach((match) => {
+    const user = match.user || {}
+    cards.push({
+      title: `和 ${user.nickname || '新匹配'} 继续聊聊`,
+      text: match.lastMessagePreview || '你们已经匹配，发一句轻松的开场就能继续认识。',
+      meta: [user.school, '匹配消息'].filter(Boolean).join(' · '),
+      visual: '消息',
+    })
+  })
+
+  ;(activity.footprints || []).slice(0, 2).forEach((item) => {
+    const profile = item.profile || {}
+    cards.push({
+      title: `重新看看 ${profile.nickname || '略过的同学'}`,
+      text: profile.bio || '这里会记录你略过的资料，方便之后重新整理推荐方向。',
+      meta: [profile.school, item.note || '足迹'].filter(Boolean).join(' · '),
+      visual: '足迹',
+    })
+  })
+
+  return cards.length ? cards : feedCards
+}
+
+function buildWisdomCards(homeData = {}) {
+  const profile = homeData.profile || {}
+  const recommendations = homeData.recommendations || []
+  const target = recommendations[0] || {}
+  const targetName = target.nickname || target.name || '对方'
+  const sharedTags = splitList(target.tags).concat(splitList(target.sceneTags)).slice(0, 2)
+  const ownTags = splitList(profile.tags).concat(splitList(profile.sceneTags)).slice(0, 2)
+  const topic = sharedTags[0] || ownTags[0] || '最近的校园生活'
+
+  return [
+    `看到你也提到${topic}，想问问你最近最舒服的一次校园瞬间是什么？`,
+    `${targetName}的资料里有一点挺合拍：${target.bio || sharedTags.join('、') || '节奏很轻松'}。可以从这里开聊。`,
+    profile.mbti ? `用你的 ${profile.mbti} 风格开场：不急着热络，先问一个具体又好回答的小问题。` : '资料补上 MBTI 后，破冰卡会更贴近你的聊天节奏。',
+  ]
 }
 
 function userToProfileForm(user = {}) {
@@ -452,14 +636,15 @@ function MoodCard() {
   )
 }
 
-function ShortcutGrid() {
+function ShortcutGrid({ items = shortcuts, onSelect }) {
   return (
     <section className="shortcut-grid" aria-label="功能入口">
-      {shortcuts.map((item) => (
-        <button className="shortcut" type="button" key={item.title}>
+      {items.map((item) => (
+        <button className="shortcut" type="button" key={item.title} onClick={() => onSelect?.(item)}>
           <span className={`shortcut-glyph ${item.tone}`}>{item.title.slice(0, 1)}</span>
           <strong>{item.title}</strong>
           <small>{item.note}</small>
+          {item.status && <span className="shortcut-meta">{item.status}</span>}
         </button>
       ))}
     </section>
@@ -623,7 +808,7 @@ function MatchPreview() {
   )
 }
 
-function Feed() {
+function Feed({ items = feedCards }) {
   return (
     <section className="feed" id="discover">
       <div className="feed-head">
@@ -641,7 +826,7 @@ function Feed() {
       </div>
       <AnimatedList
         className="feed-animated-list"
-        items={feedCards}
+        items={items}
         getItemKey={(card) => card.title}
         showGradients={false}
         displayScrollbar={false}
@@ -651,7 +836,7 @@ function Feed() {
         renderItem={(card) => (
           <article className="feed-card">
             <div className="feed-visual">
-              <span>{card.title.slice(0, 2)}</span>
+              <span>{(card.visual || card.title).slice(0, 2)}</span>
             </div>
             <div>
               <strong>{card.title}</strong>
@@ -662,6 +847,40 @@ function Feed() {
         )}
       />
     </section>
+  )
+}
+
+function FeatureSheet({ shortcut, homeData, onClose }) {
+  if (!shortcut) return null
+
+  const cards = buildWisdomCards(homeData)
+
+  return (
+    <div className="feature-sheet-backdrop" role="presentation" onClick={onClose}>
+      <motion.aside
+        className="feature-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={shortcut.title}
+        onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 18, scale: 0.98 }}
+        transition={{ duration: 0.28, ease: [0.2, 0.82, 0.2, 1] }}
+      >
+        <button className="feature-sheet-close" type="button" onClick={onClose} aria-label="关闭">
+          ×
+        </button>
+        <span className={`shortcut-glyph ${shortcut.tone}`}>{shortcut.title.slice(0, 1)}</span>
+        <strong>{shortcut.title}</strong>
+        <p>{shortcut.status || shortcut.note}</p>
+        <div className="wisdom-card-list">
+          {cards.map((card) => (
+            <span key={card}>{card}</span>
+          ))}
+        </div>
+      </motion.aside>
+    </div>
   )
 }
 
@@ -1422,8 +1641,168 @@ function ProfilePage() {
 }
 
 function MessagesPage() {
+  const [threads, setThreads] = useState(messageThreads)
   const [selectedId, setSelectedId] = useState(messageThreads[0]?.id)
-  const selectedThread = messageThreads.find((thread) => thread.id === selectedId) || messageThreads[0]
+  const [messagesByThread, setMessagesByThread] = useState(() =>
+    Object.fromEntries(messageThreads.map((thread) => [thread.id, thread.messages])),
+  )
+  const [currentUserId, setCurrentUserId] = useState('')
+  const [filter, setFilter] = useState('全部')
+  const [composer, setComposer] = useState('')
+  const [messageNotice, setMessageNotice] = useState(() =>
+    hasAuthToken() ? '正在同步真实匹配和消息。' : '登录后会同步真实匹配和消息。',
+  )
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (!hasAuthToken()) return undefined
+
+    let mounted = true
+    Promise.resolve().then(() => {
+      if (mounted) setMessagesLoading(true)
+    })
+
+    Promise.allSettled([apiRequest('/users/profile'), apiRequest('/matches')])
+      .then(([profileResult, matchesResult]) => {
+        if (!mounted) return
+
+        if (profileResult.status === 'fulfilled') {
+          const user = profileResult.value.data?.user || {}
+          setCurrentUserId(user.id || user._id || '')
+        }
+
+        if (matchesResult.status !== 'fulfilled') {
+          setMessageNotice(matchesResult.reason?.message || '消息接口暂时没有返回，先保留预览会话。')
+          return
+        }
+
+        const matches = matchesResult.value.data?.matches || []
+        const nextThreads = matches.map(normalizeMessageThread)
+
+        if (!nextThreads.length) {
+          setMessageNotice('现在还没有真实匹配，喜欢互相通过后会自动出现在这里。')
+          return
+        }
+
+        setThreads(nextThreads)
+        setSelectedId((current) => (nextThreads.some((thread) => thread.id === current) ? current : nextThreads[0].id))
+        setMessagesByThread((current) => ({
+          ...Object.fromEntries(nextThreads.map((thread) => [thread.id, current[thread.id] || []])),
+        }))
+        const unreadTotal = matchesResult.value.data?.unreadTotal ?? nextThreads.reduce((total, item) => total + item.unread, 0)
+        setMessageNotice(unreadTotal > 0 ? `有 ${unreadTotal} 条未读消息。` : '真实匹配已同步，可以继续聊天。')
+      })
+      .finally(() => {
+        if (mounted) setMessagesLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const selectedThread = threads.find((thread) => thread.id === selectedId) || threads[0]
+  const selectedMessages = messagesByThread[selectedThread?.id] || selectedThread?.messages || []
+  const filteredThreads = useMemo(() => {
+    if (filter === '未读') return threads.filter((thread) => thread.unread > 0)
+    if (filter === '同校') return threads.filter((thread) => thread.school.includes('同校') || thread.sourceMatch?.user?.school)
+    if (filter === '树洞') return threads.filter((thread) => `${thread.school}${thread.lastMessage}`.includes('树洞'))
+    return threads
+  }, [filter, threads])
+  const unreadTotal = threads.reduce((total, thread) => total + thread.unread, 0)
+  const onlineTotal = threads.filter((thread) => thread.online).length
+
+  useEffect(() => {
+    if (!hasAuthToken() || !selectedThread?.sourceMatch || !currentUserId) return undefined
+
+    let mounted = true
+    Promise.resolve().then(() => {
+      if (mounted) setMessagesLoading(true)
+    })
+
+    apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}?limit=40`)
+      .then((payload) => {
+        if (!mounted) return
+
+        const nextMessages = (payload.data?.messages || []).map((message) => normalizeChatMessage(message, currentUserId))
+        const nextMatch = payload.data?.match
+
+        setMessagesByThread((current) => ({
+          ...current,
+          [selectedThread.id]: nextMessages,
+        }))
+
+        if (nextMatch) {
+          setThreads((current) =>
+            current.map((thread, index) =>
+              thread.id === selectedThread.id
+                ? { ...normalizeMessageThread(nextMatch, index), tone: thread.tone }
+                : thread,
+            ),
+          )
+        }
+      })
+      .catch((error) => {
+        if (mounted) setMessageNotice(error.message || '聊天记录同步失败，请稍后再试。')
+      })
+      .finally(() => {
+        if (mounted) setMessagesLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [currentUserId, selectedThread?.id, selectedThread?.sourceMatch])
+
+  const handleSendMessage = async () => {
+    const content = composer.trim()
+    if (!content || sending) return
+
+    if (!hasAuthToken()) {
+      navigateTo('/login')
+      return
+    }
+
+    if (!selectedThread?.sourceMatch) {
+      setMessageNotice('这是预览会话。互相喜欢形成真实匹配后，就能发送到后端保存。')
+      return
+    }
+
+    setSending(true)
+    try {
+      const payload = await apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      })
+      const nextMessage = { ...normalizeChatMessage(payload.data?.message, currentUserId), from: 'me' }
+      const nextMatch = payload.data?.match
+
+      setMessagesByThread((current) => ({
+        ...current,
+        [selectedThread.id]: [...(current[selectedThread.id] || []), nextMessage],
+      }))
+      setThreads((current) =>
+        current.map((thread) =>
+          thread.id === selectedThread.id
+            ? {
+                ...thread,
+                lastMessage: content,
+                time: '刚刚',
+                unread: 0,
+                sourceMatch: nextMatch || thread.sourceMatch,
+              }
+            : thread,
+        ),
+      )
+      setComposer('')
+      setMessageNotice('消息已发送。')
+    } catch (error) {
+      setMessageNotice(error.message || '发送失败，请稍后再试。')
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <main className="app-shell messages-shell">
@@ -1441,24 +1820,25 @@ function MessagesPage() {
           </ScrollReveal>
         </div>
         <div className="messages-hero-stats">
-          <span><strong>3</strong>新消息</span>
-          <span><strong>2</strong>在线</span>
-          <span><strong>6</strong>会话</span>
+          <span><strong>{unreadTotal}</strong>新消息</span>
+          <span><strong>{onlineTotal}</strong>在线</span>
+          <span><strong>{threads.length}</strong>会话</span>
         </div>
       </section>
 
       <section className="messages-layout" aria-label="消息中心">
         <aside className="messages-panel thread-panel">
+          {messageNotice && <p className="message-notice">{messageNotice}</p>}
           <div className="message-filter" aria-label="消息筛选">
-            {['全部', '未读', '同校', '树洞'].map((item, index) => (
-              <button className={index === 0 ? 'active' : ''} type="button" key={item}>
+            {['全部', '未读', '同校', '树洞'].map((item) => (
+              <button className={filter === item ? 'active' : ''} type="button" key={item} onClick={() => setFilter(item)}>
                 {item}
               </button>
             ))}
           </div>
           <AnimatedList
             className="message-thread-list"
-            items={messageThreads}
+            items={filteredThreads}
             getItemKey={(thread) => thread.id}
             initialSelectedIndex={0}
             onItemSelect={(thread) => setSelectedId(thread.id)}
@@ -1480,6 +1860,7 @@ function MessagesPage() {
           />
         </aside>
 
+        {selectedThread && (
         <section className="messages-panel chat-panel" aria-label="聊天预览">
           <div className="chat-head">
             <div className={`message-avatar ${selectedThread.tone}`}>{selectedThread.name.slice(0, 1)}</div>
@@ -1491,7 +1872,11 @@ function MessagesPage() {
           </div>
 
           <div className="chat-bubbles">
-            {selectedThread.messages.map((message, index) => (
+            {messagesLoading && selectedThread.sourceMatch && <p>正在同步聊天记录...</p>}
+            {!messagesLoading && selectedMessages.length === 0 && (
+              <p>你们已经匹配了，先发一句轻松的开场吧。</p>
+            )}
+            {selectedMessages.map((message, index) => (
               <p className={message.from === 'me' ? 'me' : ''} key={`${selectedThread.id}-${index}`}>
                 {message.text}
               </p>
@@ -1499,10 +1884,23 @@ function MessagesPage() {
           </div>
 
           <div className="message-composer" aria-label="发送消息">
-            <input placeholder="写一句轻松的开场..." />
-            <button type="button">发送</button>
+            <input
+              placeholder="写一句轻松的开场..."
+              value={composer}
+              onChange={(event) => setComposer(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+            />
+            <button type="button" onClick={handleSendMessage} disabled={sending}>
+              {sending ? '发送中' : '发送'}
+            </button>
           </div>
         </section>
+        )}
       </section>
 
       <BottomNav active="chat" />
@@ -1511,6 +1909,74 @@ function MessagesPage() {
 }
 
 function HomePage() {
+  const [homeData, setHomeData] = useState({
+    profile: null,
+    activity: null,
+    recommendations: [],
+    matches: [],
+    membership: null,
+  })
+  const [homeLoading, setHomeLoading] = useState(false)
+  const [activeShortcut, setActiveShortcut] = useState(null)
+
+  useEffect(() => {
+    if (!hasAuthToken()) return undefined
+
+    let mounted = true
+    Promise.resolve().then(() => {
+      if (mounted) setHomeLoading(true)
+    })
+
+    Promise.allSettled([
+      apiRequest('/users/profile'),
+      apiRequest('/users/activity'),
+      apiRequest('/users/recommendations?limit=6'),
+      apiRequest('/matches'),
+      apiRequest('/membership'),
+    ])
+      .then(([profileResult, activityResult, recommendationResult, matchesResult, membershipResult]) => {
+        if (!mounted) return
+
+        setHomeData({
+          profile: profileResult.status === 'fulfilled' ? profileResult.value.data?.user || null : null,
+          activity: activityResult.status === 'fulfilled' ? activityResult.value.data || null : null,
+          recommendations:
+            recommendationResult.status === 'fulfilled' ? recommendationResult.value.data?.users || [] : [],
+          matches: matchesResult.status === 'fulfilled' ? matchesResult.value.data?.matches || [] : [],
+          membership: membershipResult.status === 'fulfilled' ? membershipResult.value.data || null : null,
+        })
+      })
+      .finally(() => {
+        if (mounted) setHomeLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const shortcutItems = useMemo(() => buildShortcutCards(homeData, homeLoading), [homeData, homeLoading])
+  const feedItems = useMemo(() => buildFeedCards(homeData), [homeData])
+
+  const handleShortcutSelect = (item) => {
+    if (item.action === 'profile') {
+      navigateTo('/profile')
+      return
+    }
+
+    if (item.action === 'match') {
+      navigateTo('/#match')
+      return
+    }
+
+    if (item.action === 'discover') {
+      navigateTo('/#discover')
+      return
+    }
+
+    setActiveShortcut(item)
+  }
+
   return (
     <main className="app-shell">
       <Background />
@@ -1540,8 +2006,17 @@ function HomePage() {
           从性格、星座、生辰和树洞里找到开场理由
         </ScrollReveal>
       </section>
-      <ShortcutGrid />
-      <Feed />
+      <ShortcutGrid items={shortcutItems} onSelect={handleShortcutSelect} />
+      <Feed items={feedItems} />
+      <AnimatePresence>
+        {activeShortcut && (
+          <FeatureSheet
+            shortcut={activeShortcut}
+            homeData={homeData}
+            onClose={() => setActiveShortcut(null)}
+          />
+        )}
+      </AnimatePresence>
       <BottomNav active="home" />
     </main>
   )

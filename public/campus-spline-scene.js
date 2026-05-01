@@ -20,11 +20,14 @@ let stage;
 let canvas;
 let video;
 let switcher;
+let glassLayer;
+let glassLens;
 let gl;
 let program;
 let vertexBuffer;
 let active = false;
 let rafId = 0;
+let glassRafId = 0;
 let resizeRafId = 0;
 let lastFrameTime = 0;
 let startTime = performance.now();
@@ -38,6 +41,7 @@ let routeName = window.location.pathname;
 let backgroundMode = readBackgroundMode();
 let targetPointer = { x: 0.5, y: 0.5 };
 let smoothPointer = { x: 0.5, y: 0.5 };
+let glassSmoothPointer = { x: 0.5, y: 0.5 };
 let orientationListening = false;
 let orientationPromptBound = false;
 let orientationBaseline = null;
@@ -394,6 +398,92 @@ function ensureStageStyles() {
         conic-gradient(from 220deg at 48% 34%, rgba(80, 232, 255, .42), rgba(255, 128, 224, .34), rgba(173, 142, 255, .28), rgba(80, 232, 255, .42)),
         linear-gradient(135deg, #050711, #07101d 48%, #140d20);
     }
+    #campus-fluid-glass {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      contain: layout paint style;
+      transition: opacity .42s ease;
+      --campus-glass-x: 50%;
+      --campus-glass-y: 50%;
+      --campus-glass-size: clamp(168px, 23vw, 330px);
+    }
+    body[data-campus-spline="active"] #campus-fluid-glass {
+      opacity: .88;
+    }
+    #campus-fluid-glass::before {
+      content: "";
+      position: absolute;
+      width: calc(var(--campus-glass-size) * 1.82);
+      height: calc(var(--campus-glass-size) * 1.82);
+      left: var(--campus-glass-x);
+      top: var(--campus-glass-y);
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      background:
+        radial-gradient(circle at 42% 38%, rgba(255,255,255,.18), transparent 0 18%, rgba(135,218,255,.10) 28%, transparent 55%),
+        conic-gradient(from 110deg, rgba(118,224,255,.18), rgba(255,154,217,.16), rgba(194,166,255,.14), rgba(118,224,255,.18));
+      filter: blur(22px) saturate(1.24);
+      mix-blend-mode: screen;
+      opacity: .72;
+    }
+    .campus-fluid-lens {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--campus-glass-size);
+      aspect-ratio: 1;
+      border-radius: 999px;
+      overflow: hidden;
+      isolation: isolate;
+      will-change: transform;
+      border: 1px solid rgba(255,255,255,.38);
+      background:
+        radial-gradient(circle at 31% 20%, rgba(255,255,255,.74), rgba(255,255,255,.20) 17%, transparent 33%),
+        radial-gradient(circle at 70% 76%, rgba(118,224,255,.26), transparent 30%),
+        conic-gradient(from 230deg at 50% 50%, rgba(120,226,255,.22), rgba(255,156,219,.18), rgba(196,170,255,.22), rgba(120,226,255,.22)),
+        rgba(255,255,255,.06);
+      box-shadow:
+        0 30px 90px rgba(0,0,0,.28),
+        0 0 46px rgba(115,213,255,.17),
+        inset 0 1px 1px rgba(255,255,255,.86),
+        inset 0 -22px 46px rgba(74,120,190,.18);
+      backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
+      -webkit-backdrop-filter: blur(18px) saturate(1.6) contrast(1.06);
+    }
+    .campus-fluid-lens::before,
+    .campus-fluid-lens::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .campus-fluid-lens::before {
+      border-radius: inherit;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.5), transparent 28%, rgba(255,255,255,.11) 52%, transparent 70%),
+        radial-gradient(ellipse at 34% 18%, rgba(255,255,255,.72), transparent 0 18%, rgba(255,255,255,.18) 26%, transparent 46%);
+      mix-blend-mode: screen;
+      opacity: .8;
+      animation: campusFluidSheen 7s ease-in-out infinite alternate;
+    }
+    .campus-fluid-lens::after {
+      inset: 8%;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.22);
+      box-shadow:
+        inset 18px 0 34px rgba(117,225,255,.18),
+        inset -18px 0 34px rgba(255,151,216,.16),
+        inset 0 -18px 38px rgba(120,111,255,.14);
+      opacity: .86;
+    }
+    @keyframes campusFluidSheen {
+      0% { transform: translate3d(-8%, -6%, 0) rotate(-12deg) scale(1.02); }
+      100% { transform: translate3d(8%, 7%, 0) rotate(14deg) scale(1.08); }
+    }
     body[data-campus-spline="active"] {
       background: #050711 !important;
     }
@@ -517,6 +607,70 @@ function createStage() {
   }
 
   return stage;
+}
+
+function createFluidGlass() {
+  if (glassLayer) {
+    return glassLayer;
+  }
+
+  ensureStageStyles();
+  glassLayer = document.createElement("div");
+  glassLayer.id = "campus-fluid-glass";
+  glassLayer.setAttribute("aria-hidden", "true");
+
+  glassLens = document.createElement("div");
+  glassLens.className = "campus-fluid-lens";
+  glassLayer.appendChild(glassLens);
+  document.body.appendChild(glassLayer);
+  updateFluidGlass(performance.now(), true);
+  return glassLayer;
+}
+
+function updateFluidGlass(now = performance.now(), force = false) {
+  if (!glassLayer || !glassLens) {
+    return;
+  }
+
+  const width = Math.max(window.innerWidth || viewportWidth || 1, 1);
+  const height = Math.max(window.innerHeight || viewportHeight || 1, 1);
+  const damping = force || prefersReducedMotion.matches ? 1 : lowDetail ? 0.16 : 0.1;
+  glassSmoothPointer.x += (targetPointer.x - glassSmoothPointer.x) * damping;
+  glassSmoothPointer.y += (targetPointer.y - glassSmoothPointer.y) * damping;
+
+  const x = glassSmoothPointer.x * width;
+  const y = (1 - glassSmoothPointer.y) * height;
+  const elapsed = (now - startTime) / 1000;
+  const drift = prefersReducedMotion.matches ? 0 : Math.sin(elapsed * 0.74) * 2.5;
+  const rotate = (glassSmoothPointer.x - 0.5) * 13 + Math.sin(elapsed * 0.42) * 2;
+  const scale = routeName === "/login" ? 1.06 : routeName === "/search.html" ? 0.9 : 0.98;
+
+  glassLayer.style.setProperty("--campus-glass-x", `${(glassSmoothPointer.x * 100).toFixed(2)}%`);
+  glassLayer.style.setProperty("--campus-glass-y", `${((1 - glassSmoothPointer.y) * 100).toFixed(2)}%`);
+  glassLens.style.transform = `translate3d(${x.toFixed(2)}px, ${(y + drift).toFixed(2)}px, 0) translate(-50%, -50%) rotate(${rotate.toFixed(2)}deg) scale(${scale})`;
+}
+
+function animateFluidGlass(now = performance.now()) {
+  if (!active || document.hidden || !glassLayer || !glassLens) {
+    glassRafId = 0;
+    return;
+  }
+
+  updateFluidGlass(now);
+  glassRafId = requestAnimationFrame(animateFluidGlass);
+}
+
+function scheduleFluidGlassAnimation() {
+  if (!active || glassRafId || document.hidden) {
+    return;
+  }
+
+  if (prefersReducedMotion.matches) {
+    updateFluidGlass(performance.now(), true);
+    return;
+  }
+
+  glassRafId = requestAnimationFrame(animateFluidGlass);
 }
 
 function createVideoBackground() {
@@ -773,6 +927,7 @@ function requestResizeScene() {
   resizeRafId = requestAnimationFrame(() => {
     resizeRafId = 0;
     resizeScene();
+    updateFluidGlass(performance.now(), true);
     renderFrame(performance.now());
   });
 }
@@ -786,6 +941,7 @@ function handlePointerMove(event) {
       y: clamp(1 - event.clientY / height, 0.04, 0.96),
     };
     updateVideoMotion();
+    scheduleFluidGlassAnimation();
   }
 }
 
@@ -793,6 +949,7 @@ function handleScroll() {
   const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
   scrollProgress = clamp(window.scrollY / maxScroll, 0, 1);
   updateVideoMotion();
+  scheduleFluidGlassAnimation();
 }
 
 function updateUniforms(now) {
@@ -860,12 +1017,15 @@ function scheduleAnimation() {
 
 function start() {
   createStage();
+  createFluidGlass();
   active = true;
   stage?.classList.add("is-active");
   handleScroll();
   syncVideoBackgroundState();
+  updateFluidGlass(performance.now(), true);
   renderFrame(performance.now());
   scheduleAnimation();
+  scheduleFluidGlassAnimation();
 }
 
 function stop() {
@@ -877,6 +1037,10 @@ function stop() {
   if (rafId) {
     cancelAnimationFrame(rafId);
     rafId = 0;
+  }
+  if (glassRafId) {
+    cancelAnimationFrame(glassRafId);
+    glassRafId = 0;
   }
 }
 
@@ -891,12 +1055,17 @@ function handleVisibilityChange() {
       cancelAnimationFrame(rafId);
       rafId = 0;
     }
+    if (glassRafId) {
+      cancelAnimationFrame(glassRafId);
+      glassRafId = 0;
+    }
     return;
   }
 
   syncVideoBackgroundState();
   renderFrame(performance.now());
   scheduleAnimation();
+  scheduleFluidGlassAnimation();
 }
 
 function handleMotionPreferenceChange() {
@@ -909,8 +1078,10 @@ function handleMotionPreferenceChange() {
     rafId = 0;
   }
   syncVideoBackgroundState();
+  updateFluidGlass(performance.now(), true);
   renderFrame(performance.now());
   scheduleAnimation();
+  scheduleFluidGlassAnimation();
 }
 
 function handleContextLost(event) {
@@ -1020,6 +1191,7 @@ function applyOrientation(beta, gamma, simulated) {
     y: clamp(0.5 + deltaBeta / 58, 0.12, 0.88),
   };
   updateVideoMotion();
+  scheduleFluidGlassAnimation();
   orientationLastAt = Date.now();
   orientationStatus = simulated ? "simulated" : "active";
 }
@@ -1028,7 +1200,9 @@ function resetOrientationControl() {
   orientationBaseline = null;
   targetPointer = { x: 0.5, y: 0.5 };
   smoothPointer = { x: 0.5, y: 0.5 };
+  glassSmoothPointer = { x: 0.5, y: 0.5 };
   updateVideoMotion();
+  updateFluidGlass(performance.now(), true);
 }
 
 function setRoute(route) {
@@ -1079,6 +1253,7 @@ window.CampusSplineScene = {
       videoPaused: video ? video.paused : true,
       videoCurrentTime: video ? Number(video.currentTime.toFixed(2)) : 0,
       hasRenderer: Boolean(gl && program),
+      hasFluidGlass: Boolean(glassLayer && glassLens),
       canvasPixels: canvas ? canvas.width * canvas.height : 0,
       lowDetail,
       pixelRatio,

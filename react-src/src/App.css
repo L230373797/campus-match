@@ -707,6 +707,18 @@
   align-items: center;
   padding: 8px;
   transform: translateX(-50%);
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.2, 0.82, 0.2, 1),
+    filter 220ms ease;
+  will-change: transform, opacity;
+}
+
+.bottom-nav.hidden {
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(10px);
+  transform: translate3d(-50%, 18px, 0) scale(0.96);
 }
 
 .bottom-nav a {
@@ -1157,7 +1169,7 @@
 
 @media (max-width: 860px) {
   .app-shell {
-    padding: 20px 14px 108px;
+    padding: 20px 14px calc(154px + env(safe-area-inset-bottom));
   }
 
   .topbar {
@@ -1241,8 +1253,16 @@
     grid-template-columns: 1fr;
   }
 
+  .feed {
+    padding-bottom: 24px;
+  }
+
   .bottom-nav {
     display: grid;
+    width: min(520px, calc(100vw - 22px));
+    min-height: 68px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    border-radius: 26px;
   }
 
   .auth-story {
@@ -1336,6 +1356,12 @@
   .bottom-nav {
     display: grid;
     border-radius: 24px;
+    min-height: 66px;
+    padding: 7px;
+  }
+
+  .bottom-nav a {
+    min-height: 50px;
   }
 
   .auth-story-copy h1 {

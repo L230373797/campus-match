@@ -250,6 +250,7 @@ function Feed() {
 }
 
 function BottomNav() {
+  const [hidden, setHidden] = useState(false)
   const items = [
     ['home', '首页'],
     ['chat', '消息'],
@@ -258,8 +259,29 @@ function BottomNav() {
     ['user', '我的'],
   ]
 
+  useEffect(() => {
+    let lastY = window.scrollY
+
+    const onScroll = () => {
+      const currentY = window.scrollY
+      const scrollingDown = currentY > lastY + 8
+      const scrollingUp = currentY < lastY - 8
+
+      if (currentY < 80 || scrollingUp) {
+        setHidden(false)
+      } else if (scrollingDown) {
+        setHidden(true)
+      }
+
+      lastY = currentY
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   return (
-    <nav className="bottom-nav" aria-label="底部导航">
+    <nav className={`bottom-nav ${hidden ? 'hidden' : ''}`} aria-label="底部导航">
       {items.map(([icon, label], index) => (
         <a className={index === 2 ? 'center' : ''} href="/" key={label}>
           <Icon name={icon} />

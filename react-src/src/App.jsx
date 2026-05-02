@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AnimatedList from './AnimatedList'
+import PillNav from './PillNav'
 import { AnimatePresence, motion } from 'motion/react'
 import ScrollReveal from './ScrollReveal'
 
@@ -211,6 +212,13 @@ const backgroundWaves = ['top', 'middle', 'bottom']
 const backgroundLineCount = [3, 5, 3]
 const backgroundLineDistance = [12, 9, 13]
 const matchAccents = ['cyan', 'pink', 'violet']
+const navItems = [
+  { label: '首页', href: '/' },
+  { label: '发现', href: '/#discover' },
+  { label: '匹配', href: '/#match' },
+  { label: '消息', href: '/messages' },
+  { label: '我的', href: '/profile' },
+]
 const zodiacSigns = [
   { name: '摩羯座', from: [12, 22] },
   { name: '水瓶座', from: [1, 20] },
@@ -550,58 +558,24 @@ function Background() {
 }
 
 function Header() {
+  const activeHref = (() => {
+    if (window.location.pathname === '/messages') return '/messages'
+    if (window.location.pathname === '/profile') return '/profile'
+    if (window.location.hash === '#discover') return '/#discover'
+    if (window.location.hash === '#match') return '/#match'
+    return '/'
+  })()
+
   return (
-    <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark">
-          <Icon name="spark" />
-        </span>
-        <span>
-          <strong>校园匹配</strong>
-          <small>同校真实连接，低压力开始</small>
-        </span>
-      </div>
-      <nav className="desktop-nav" aria-label="主要入口">
-        <a
-          href="/#discover"
-          onClick={(event) => {
-            event.preventDefault()
-            navigateTo('/#discover')
-          }}
-        >
-          发现
-        </a>
-        <a
-          href="/#match"
-          onClick={(event) => {
-            event.preventDefault()
-            navigateTo('/#match')
-          }}
-        >
-          匹配
-        </a>
-        <a
-          href="/profile"
-          onClick={(event) => {
-            event.preventDefault()
-            navigateTo('/profile')
-          }}
-        >
-          我的
-        </a>
-      </nav>
-      <a
-        className="top-action"
-        href="/#discover"
-        onClick={(event) => {
-          event.preventDefault()
-          navigateTo('/#discover')
-        }}
-      >
-        进入发现
-        <span aria-hidden="true">→</span>
-      </a>
-    </header>
+    <PillNav
+      logoLabel="校园匹配"
+      items={navItems}
+      activeHref={activeHref}
+      baseColor="#f5faff"
+      pillColor="#07111f"
+      hoveredPillTextColor="#07111f"
+      onNavigate={navigateTo}
+    />
   )
 }
 

@@ -63,6 +63,15 @@ const treeholeFallback = [
 ]
 
 const moodChoices = ['轻松', '想聊天', '有点累', '需要陪伴']
+const feedTabs = ['为你推荐', '测试', '星座', '树洞', '心理', '搭子']
+const feedTabKeywords = {
+  为你推荐: [],
+  测试: ['MBTI', '测试', '性格', '生辰'],
+  星座: ['星座', '生日', '生辰'],
+  树洞: ['树洞', '倾诉', '匿名'],
+  心理: ['心理', '烦恼', '压力', '低压力'],
+  搭子: ['搭子', '自习', '散步', '学习'],
+}
 
 const feedCards = [
   {
@@ -571,6 +580,27 @@ function normalizeTreeholes(value) {
     .filter((item) => item.content)
 }
 
+function buildFeedPages(items = feedCards) {
+  const source = items.length ? items : feedCards
+  return feedTabs.map((tab) => {
+    const keywords = feedTabKeywords[tab] || []
+    const matched = keywords.length
+      ? source.filter((card) => keywords.some((keyword) => `${card.title} ${card.text} ${card.meta}`.includes(keyword)))
+      : source
+    const cards = matched.length >= 2 ? matched : source
+
+    return {
+      tab,
+      cards: cards.slice(0, 6).map((card, index) => ({
+        ...card,
+        visual: card.visual || (tab === '为你推荐' ? card.title : tab),
+        meta: card.meta || `${tab} · 校园内容`,
+        pageKey: `${tab}-${card.title}-${index}`,
+      })),
+    }
+  })
+}
+
 function userToProfileForm(user = {}) {
   return {
     nickname: user.nickname || '',
@@ -880,6 +910,76 @@ function MatchPreview() {
 }
 
 function Feed({ items = feedCards }) {
+  const pages = useMemo(() => buildFeedPages(items), [items])
+  const scrollerRef = useRef(null)
+  const dragStateRef = useRef({ active: false, startX: 0, scrollLeft: 0 })
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return undefined
+
+    let frame = 0
+    const updateActivePage = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const pageWidth = Math.max(scroller.clientWidth, 1)
+        const nextIndex = Math.round(scroller.scrollLeft / pageWidth)
+        setActiveIndex(Math.max(0, Math.min(pages.length - 1, nextIndex)))
+      })
+    }
+
+    scroller.addEventListener('scroll', updateActivePage, { passive: true })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      scroller.removeEventListener('scroll', updateActivePage)
+    }
+  }, [pages.length])
+
+  const goToPage = (index) => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    scroller.scrollTo({ left: index * scroller.clientWidth, behavior: 'smooth' })
+    setActiveIndex(index)
+  }
+
+  const snapToNearestPage = () => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const index = Math.round(scroller.scrollLeft / Math.max(scroller.clientWidth, 1))
+    goToPage(Math.max(0, Math.min(pages.length - 1, index)))
+  }
+
+  const onPointerDown = (event) => {
+    if (event.pointerType !== 'mouse') return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    dragStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      scrollLeft: scroller.scrollLeft,
+    }
+    scroller.setPointerCapture?.(event.pointerId)
+    scroller.classList.add('dragging')
+  }
+
+  const onPointerMove = (event) => {
+    const scroller = scrollerRef.current
+    const dragState = dragStateRef.current
+    if (!scroller || !dragState.active) return
+    event.preventDefault()
+    scroller.scrollLeft = dragState.scrollLeft - (event.clientX - dragState.startX)
+  }
+
+  const onPointerUp = (event) => {
+    const scroller = scrollerRef.current
+    if (!scroller || !dragStateRef.current.active) return
+    dragStateRef.current.active = false
+    scroller.releasePointerCapture?.(event.pointerId)
+    scroller.classList.remove('dragging')
+    snapToNearestPage()
+  }
+
   return (
     <section className="feed" id="discover">
       <div className="feed-head">
@@ -889,34 +989,55 @@ function Feed({ items = feedCards }) {
         </ScrollReveal>
       </div>
       <div className="feed-tabs" aria-label="内容分类">
-        {['关注', '为你推荐', '测试', '星座', '树洞', '心理'].map((tab, index) => (
-          <button className={index === 1 ? 'active' : ''} type="button" key={tab}>
-            {tab}
+        {pages.map((page, index) => (
+          <button
+            className={index === activeIndex ? 'active' : ''}
+            type="button"
+            key={page.tab}
+            onClick={() => goToPage(index)}
+          >
+            {page.tab}
           </button>
         ))}
       </div>
-      <AnimatedList
-        className="feed-animated-list"
-        items={items}
-        getItemKey={(card) => card.title}
-        showGradients={false}
-        displayScrollbar={false}
-        onItemSelect={(card) => {
-          window.history.replaceState({}, '', `/#discover-${encodeURIComponent(card.title)}`)
-        }}
-        renderItem={(card) => (
-          <article className="feed-card">
-            <div className="feed-visual">
-              <span>{(card.visual || card.title).slice(0, 2)}</span>
-            </div>
-            <div>
-              <strong>{card.title}</strong>
-              <p>{card.text}</p>
-              <small>{card.meta}</small>
-            </div>
-          </article>
-        )}
-      />
+      <div
+        className="feed-swipe-track"
+        ref={scrollerRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        {pages.map((page) => (
+          <div className="feed-page" key={page.tab} aria-label={page.tab}>
+            {page.cards.map((card) => (
+              <article
+                className="feed-card"
+                key={card.pageKey}
+                onClick={() => {
+                  window.history.replaceState({}, '', `/#discover-${encodeURIComponent(card.title)}`)
+                }}
+              >
+                <div className="feed-visual">
+                  <span>{(card.visual || card.title).slice(0, 2)}</span>
+                </div>
+                <div>
+                  <strong>{card.title}</strong>
+                  <p>{card.text}</p>
+                  <small>{card.meta}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="feed-page-dots" aria-hidden="true">
+        {pages.map((page, index) => (
+          <button className={index === activeIndex ? 'active' : ''} type="button" key={page.tab} tabIndex={-1}>
+            <span />
+          </button>
+        ))}
+      </div>
     </section>
   )
 }

@@ -1414,7 +1414,8 @@
 }
 
 .profile-hero,
-.profile-layout {
+.profile-layout,
+.profile-insights-grid {
   width: min(1112px, 100%);
   margin: 22px auto 0;
 }
@@ -1579,6 +1580,13 @@
   gap: 16px;
 }
 
+.profile-insights-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.22fr) minmax(260px, 0.9fr) minmax(260px, 0.9fr);
+  align-items: start;
+  gap: 16px;
+}
+
 .profile-panel {
   border-radius: 30px;
   padding: clamp(20px, 3vw, 28px);
@@ -1638,6 +1646,194 @@
   color: rgba(245, 250, 255, 0.96);
   font-size: clamp(1.9rem, 3vw, 2.7rem);
   line-height: 1.08;
+}
+
+.profile-panel-head p {
+  max-width: 520px;
+  margin: 8px 0 0;
+  color: rgba(224, 237, 255, 0.62);
+  line-height: 1.65;
+}
+
+.membership-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.membership-status {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #06111d;
+  background: linear-gradient(180deg, #ffffff, #dbeaff 62%, #ffd8e7);
+  font-size: 13px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.membership-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.membership-meta span {
+  min-height: 74px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 22px;
+  padding: 12px;
+  color: rgba(224, 237, 255, 0.6);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.membership-meta strong {
+  color: rgba(245, 250, 255, 0.95);
+  font-size: 20px;
+}
+
+.membership-plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.membership-plan {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 280px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.membership-plan.active {
+  border-color: rgba(120, 224, 255, 0.34);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(120, 224, 255, 0.16), transparent 34%),
+    rgba(255, 255, 255, 0.08);
+}
+
+.membership-plan strong,
+.activity-card strong {
+  color: rgba(245, 250, 255, 0.94);
+}
+
+.membership-plan p,
+.activity-card p,
+.empty-state {
+  margin: 6px 0 0;
+  color: rgba(224, 237, 255, 0.62);
+  line-height: 1.58;
+}
+
+.membership-plan > span {
+  color: rgba(245, 250, 255, 0.96);
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.membership-plan ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.membership-plan li {
+  color: rgba(224, 237, 255, 0.64);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.membership-plan li::before {
+  content: "• ";
+  color: #76e6ff;
+}
+
+.membership-plan button,
+.wide-action {
+  width: 100%;
+}
+
+.activity-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.activity-card {
+  min-height: 126px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.activity-card.compact {
+  min-height: 104px;
+}
+
+.activity-card small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(224, 237, 255, 0.46);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.activity-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-card button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 12px;
+  color: rgba(245, 250, 255, 0.86);
+  background: rgba(255, 255, 255, 0.1);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.activity-card button:hover {
+  color: #06111d;
+  background: linear-gradient(180deg, #ffffff, #dbeaff 62%, #ffd8e7);
+}
+
+.activity-card button:disabled,
+.membership-plan button:disabled,
+.wide-action:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.match-profile-sheet .message-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 20px;
 }
 
 .profile-form-grid {
@@ -2412,6 +2608,14 @@
     grid-template-columns: 1fr;
   }
 
+  .profile-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .membership-plans {
+    grid-template-columns: 1fr;
+  }
+
   .profile-panel {
     border-radius: 28px;
   }
@@ -2594,6 +2798,18 @@
   .profile-summary,
   .profile-panel {
     padding: 18px;
+  }
+
+  .membership-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-card {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .profile-title h1 {

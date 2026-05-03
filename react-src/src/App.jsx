@@ -323,6 +323,23 @@ function zodiacFromBirthDate(value) {
   return '摩羯座'
 }
 
+function formatShortDate(value) {
+  const timestamp = Date.parse(value || '')
+  if (!Number.isFinite(timestamp)) return '长期有效'
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatPlanPrice(plan = {}, cycle = 'monthly') {
+  const price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice
+  if (!price) return '免费'
+  return `¥${price}/${cycle === 'yearly' ? '年' : '月'}`
+}
+
+function profileId(profile = {}) {
+  return profile.id || profile._id || profile.userId || ''
+}
+
 function normalizeMatchProfile(user = {}, index = 0) {
   const id = user.id || user._id || `recommendation-${index}`
   const reasonTags = splitList(user.recommendation?.reasons)
@@ -858,6 +875,54 @@ function FeatureSheet({ shortcut, homeData, onClose }) {
   )
 }
 
+function MatchProfileSheet({ thread, onClose, onReveal }) {
+  const match = thread?.sourceMatch || {}
+  const profile = match.user || {}
+  if (!thread) return null
+
+  const tags = [...splitList(profile.tags), ...splitList(profile.sceneTags)].slice(0, 6)
+  const revealed = Boolean(match.identityRevealed)
+
+  return (
+    <div className="feature-sheet-backdrop" role="presentation" onClick={onClose}>
+      <motion.aside
+        className="feature-sheet match-profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="匹配资料"
+        onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 18, scale: 0.98 }}
+        transition={{ duration: 0.28, ease: [0.2, 0.82, 0.2, 1] }}
+      >
+        <button className="feature-sheet-close" type="button" onClick={onClose} aria-label="关闭">
+          ×
+        </button>
+        <span className={`message-avatar ${thread.tone}`}>{thread.name.slice(0, 1)}</span>
+        <strong>{profile.nickname || thread.name}</strong>
+        <p>{[profile.school, profile.grade, profile.major, profile.mbti].filter(Boolean).join(' · ') || thread.school}</p>
+        <div className="wisdom-card-list">
+          <span>{profile.bio || '对方还没有写太多介绍，可以先从一个轻松问题开始。'}</span>
+          <span>{revealed ? '双方已确认公开身份，可以更放心地继续聊。' : '现在仍是低压力匹配状态，双方确认后再公开更多身份信息。'}</span>
+        </div>
+        {tags.length > 0 && (
+          <div className="profile-badges">
+            {tags.map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+        )}
+        {match.id && (
+          <button className="primary-action" type="button" onClick={() => onReveal?.(match.id)}>
+            {revealed ? '已公开身份' : '申请公开身份'}
+          </button>
+        )}
+      </motion.aside>
+    </div>
+  )
+}
+
 function BottomNav({ active = 'home' }) {
   const [hidden, setHidden] = useState(false)
   const items = [
@@ -1236,6 +1301,10 @@ function ProfilePage() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [notice, setNotice] = useState(hasStoredToken ? '' : '当前是本地预览。登录后，资料和头像会保存到你的账号里。')
   const [error, setError] = useState('')
+  const [activity, setActivity] = useState(null)
+  const [membership, setMembership] = useState(null)
+  const [activityBusy, setActivityBusy] = useState('')
+  const [membershipBusy, setMembershipBusy] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -1249,11 +1318,27 @@ function ProfilePage() {
 
     async function loadProfile() {
       try {
-        const payload = await apiRequest('/users/profile')
+        const [profileResult, activityResult, membershipResult] = await Promise.allSettled([
+          apiRequest('/users/profile'),
+          apiRequest('/users/activity'),
+          apiRequest('/membership'),
+        ])
         if (!mounted) return
+
+        if (profileResult.status !== 'fulfilled') {
+          throw profileResult.reason
+        }
+
+        const payload = profileResult.value
         const loadedUser = payload.data?.user || profileFallback
         setUser(loadedUser)
         setForm(userToProfileForm(loadedUser))
+        if (activityResult.status === 'fulfilled') {
+          setActivity(activityResult.value.data || null)
+        }
+        if (membershipResult.status === 'fulfilled') {
+          setMembership(membershipResult.value.data || null)
+        }
         setIsLoggedIn(true)
       } catch (err) {
         if (!mounted) return
@@ -1338,6 +1423,92 @@ function ProfilePage() {
     }
   }
 
+  const refreshActivity = async () => {
+    if (!isLoggedIn) return
+    const payload = await apiRequest('/users/activity')
+    setActivity(payload.data || null)
+  }
+
+  const removeActivityItem = async (type, item) => {
+    const targetId = profileId(item.profile)
+    if (!targetId || activityBusy) return
+
+    setActivityBusy(`${type}-${targetId}`)
+    setError('')
+    try {
+      const endpoint =
+        type === 'liked'
+          ? `/users/activity/liked/${encodeURIComponent(targetId)}`
+          : `/users/activity/footprints/${encodeURIComponent(targetId)}`
+      const payload = await apiRequest(endpoint, { method: 'DELETE' })
+      setActivity(payload.data || null)
+      setNotice(type === 'liked' ? '已从喜欢列表移除。' : '已移除这条足迹。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActivityBusy('')
+    }
+  }
+
+  const clearFootprints = async () => {
+    if (activityBusy) return
+
+    setActivityBusy('footprints-all')
+    setError('')
+    try {
+      const payload = await apiRequest('/users/activity/footprints', { method: 'DELETE' })
+      setActivity(payload.data || null)
+      setNotice('足迹已清空。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActivityBusy('')
+    }
+  }
+
+  const resetRecommendations = async () => {
+    if (activityBusy) return
+
+    setActivityBusy('recommendations-reset')
+    setError('')
+    try {
+      const payload = await apiRequest('/users/recommendations/reset', { method: 'POST' })
+      setActivity(payload.data?.activity || activity)
+      if (payload.data?.user) {
+        setUser(payload.data.user)
+        setForm(userToProfileForm(payload.data.user))
+      }
+      setNotice(payload.message || '已重新整理推荐。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActivityBusy('')
+    }
+  }
+
+  const subscribePlan = async (planId, billingCycle = 'monthly') => {
+    if (membershipBusy || !isLoggedIn) return
+
+    setMembershipBusy(`${planId}-${billingCycle}`)
+    setError('')
+    try {
+      const payload = await apiRequest('/membership/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ planId, billingCycle }),
+      })
+      setMembership(payload.data || null)
+      if (payload.data?.user) {
+        setUser(payload.data.user)
+        setForm(userToProfileForm(payload.data.user))
+      }
+      setNotice(payload.message || '会员状态已更新。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMembershipBusy('')
+    }
+  }
+
   const handleAvatarFile = async (file) => {
     if (!file) return
     setAvatarMenuOpen(false)
@@ -1385,7 +1556,15 @@ function ProfilePage() {
   }
 
   const stats = user.stats || {}
+  const activityCounts = activity?.counts || {}
+  const displayStats = {
+    matches: activityCounts.matches ?? stats.matches ?? 0,
+    likes: activityCounts.liked ?? stats.likes ?? 0,
+    views: activityCounts.footprints ?? stats.views ?? 0,
+  }
   const avatarSrc = avatarPreview || user.avatar
+  const currentMembership = membership?.membership || user.membership || {}
+  const plans = membership?.plans || []
   const verificationText = {
     verified: '校园已认证',
     approved: '校园已认证',
@@ -1445,9 +1624,9 @@ function ProfilePage() {
           </div>
 
           <div className="profile-stats" aria-label="账号数据">
-            <span><strong>{stats.matches ?? 0}</strong>合拍</span>
-            <span><strong>{stats.likes ?? 0}</strong>喜欢</span>
-            <span><strong>{stats.views ?? 0}</strong>浏览</span>
+            <span><strong>{displayStats.matches}</strong>合拍</span>
+            <span><strong>{displayStats.likes}</strong>喜欢</span>
+            <span><strong>{displayStats.views}</strong>足迹</span>
           </div>
         </div>
       </section>
@@ -1609,6 +1788,129 @@ function ProfilePage() {
         </aside>
       </section>
 
+      <section className="profile-insights-grid" aria-label="账号功能">
+        <section className="profile-panel membership-panel">
+          <div className="profile-panel-head">
+            <div>
+              <span className="section-label">会员中心</span>
+              <h2>{currentMembership.title || '免费用户'}</h2>
+              <p>{currentMembership.description || '先用基础功能体验真实校园连接。'}</p>
+            </div>
+            <span className="membership-status">
+              {currentMembership.status === 'active' ? '使用中' : '已到期'}
+            </span>
+          </div>
+          <div className="membership-meta">
+            <span>推荐额度 <strong>{currentMembership.limits?.recommendationWindow || 12}</strong></span>
+            <span>到期时间 <strong>{formatShortDate(currentMembership.expiresAt)}</strong></span>
+          </div>
+          <div className="membership-plans">
+            {plans.map((plan) => {
+              const active = currentMembership.planId === plan.id
+              const busy = membershipBusy === `${plan.id}-monthly`
+              return (
+                <article className={`membership-plan ${active ? 'active' : ''}`} key={plan.id}>
+                  <div>
+                    <strong>{plan.name}</strong>
+                    <p>{plan.description}</p>
+                  </div>
+                  <span>{formatPlanPrice(plan)}</span>
+                  <ul>
+                    {plan.features.slice(0, 3).map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className={active ? 'ghost-action' : 'primary-action'}
+                    type="button"
+                    disabled={!isLoggedIn || Boolean(membershipBusy) || active}
+                    onClick={() => subscribePlan(plan.id)}
+                  >
+                    {busy ? '开通中' : active ? '当前方案' : '切换方案'}
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="profile-panel activity-panel">
+          <div className="profile-panel-head">
+            <div>
+              <span className="section-label">我的喜欢</span>
+              <h2>聊得来的连接</h2>
+            </div>
+            <button className="ghost-action" type="button" onClick={refreshActivity} disabled={!isLoggedIn || Boolean(activityBusy)}>
+              刷新
+            </button>
+          </div>
+          <div className="activity-list">
+            {(activity?.liked || []).slice(0, 4).map((item) => {
+              const profile = item.profile || {}
+              const id = profileId(profile)
+              return (
+                <article className="activity-card" key={item.id || id}>
+                  <div>
+                    <strong>{profile.nickname || '校园同学'}</strong>
+                    <p>{profile.bio || item.lastMessagePreview || '已经互相喜欢，可以从消息里继续聊。'}</p>
+                    <small>{[profile.school, profile.mbti, formatRelativeTime(item.actionAt)].filter(Boolean).join(' · ')}</small>
+                  </div>
+                  <div className="activity-actions">
+                    {item.matchId && (
+                      <button type="button" onClick={() => navigateTo('/messages')}>
+                        去聊天
+                      </button>
+                    )}
+                    <button type="button" disabled={activityBusy === `liked-${id}`} onClick={() => removeActivityItem('liked', item)}>
+                      移除
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+            {(!activity?.liked || activity.liked.length === 0) && (
+              <p className="empty-state">喜欢的人会出现在这里。先去首页看看今日推荐。</p>
+            )}
+          </div>
+        </section>
+
+        <section className="profile-panel activity-panel">
+          <div className="profile-panel-head">
+            <div>
+              <span className="section-label">浏览足迹</span>
+              <h2>重新整理推荐方向</h2>
+            </div>
+            <button className="ghost-action" type="button" onClick={clearFootprints} disabled={!isLoggedIn || activityBusy === 'footprints-all'}>
+              清空
+            </button>
+          </div>
+          <div className="activity-list">
+            {(activity?.footprints || []).slice(0, 4).map((item) => {
+              const profile = item.profile || {}
+              const id = profileId(profile)
+              return (
+                <article className="activity-card compact" key={item.id || id}>
+                  <div>
+                    <strong>{profile.nickname || '略过的同学'}</strong>
+                    <p>{profile.bio || item.note || '这条资料已经略过。'}</p>
+                    <small>{[profile.school, formatRelativeTime(item.actionAt)].filter(Boolean).join(' · ')}</small>
+                  </div>
+                  <button type="button" disabled={activityBusy === `footprints-${id}`} onClick={() => removeActivityItem('footprints', item)}>
+                    移除
+                  </button>
+                </article>
+              )
+            })}
+            {(!activity?.footprints || activity.footprints.length === 0) && (
+              <p className="empty-state">暂时没有足迹。略过推荐后会记录在这里。</p>
+            )}
+          </div>
+          <button className="primary-action wide-action" type="button" onClick={resetRecommendations} disabled={!isLoggedIn || activityBusy === 'recommendations-reset'}>
+            {activityBusy === 'recommendations-reset' ? '整理中' : '重新整理推荐'}
+          </button>
+        </section>
+      </section>
+
       <BottomNav active="user" />
     </main>
   )
@@ -1628,6 +1930,7 @@ function MessagesPage() {
   )
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [profileSheetThread, setProfileSheetThread] = useState(null)
 
   useEffect(() => {
     if (!hasAuthToken()) return undefined
@@ -1778,6 +2081,42 @@ function MessagesPage() {
     }
   }
 
+  const handleRevealIdentity = async (matchId) => {
+    if (!matchId) return
+
+    try {
+      const payload = await apiRequest(`/matches/${encodeURIComponent(matchId)}/reveal`, { method: 'POST' })
+      const bothRevealed = Boolean(payload.data?.bothRevealed)
+      setThreads((current) =>
+        current.map((thread) =>
+          thread.id === matchId
+            ? {
+                ...thread,
+                sourceMatch: {
+                  ...(thread.sourceMatch || {}),
+                  identityRevealed: bothRevealed || thread.sourceMatch?.identityRevealed,
+                },
+              }
+            : thread,
+        ),
+      )
+      setProfileSheetThread((current) =>
+        current?.id === matchId
+          ? {
+              ...current,
+              sourceMatch: {
+                ...(current.sourceMatch || {}),
+                identityRevealed: bothRevealed || current.sourceMatch?.identityRevealed,
+              },
+            }
+          : current,
+      )
+      setMessageNotice(payload.data?.message || '申请已发送。')
+    } catch (error) {
+      setMessageNotice(error.message || '申请没有成功，请稍后再试。')
+    }
+  }
+
   return (
     <main className="app-shell messages-shell">
       <Background />
@@ -1842,7 +2181,7 @@ function MessagesPage() {
               <strong>{selectedThread.name}</strong>
               <span>{selectedThread.school}</span>
             </div>
-            <button className="ghost-action" type="button">查看资料</button>
+            <button className="ghost-action" type="button" onClick={() => setProfileSheetThread(selectedThread)}>查看资料</button>
           </div>
 
           <div className="chat-bubbles">
@@ -1876,6 +2215,15 @@ function MessagesPage() {
         </section>
         )}
       </section>
+      <AnimatePresence>
+        {profileSheetThread && (
+          <MatchProfileSheet
+            thread={profileSheetThread}
+            onClose={() => setProfileSheetThread(null)}
+            onReveal={handleRevealIdentity}
+          />
+        )}
+      </AnimatePresence>
 
       <BottomNav active="chat" />
     </main>

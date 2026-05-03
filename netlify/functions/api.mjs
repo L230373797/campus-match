@@ -2111,16 +2111,16 @@ function normalizePrivacyRequestType(type) {
 }
 
 function privacyRequestTypeLabel(type) {
-  return type === "delete_account" ? "Account deletion" : "Profile data deletion";
+  return type === "delete_account" ? "注销账号" : "清空资料";
 }
 
 function privacyRequestStatusLabel(status) {
   return {
-    pending: "Pending",
-    completed: "Completed",
-    rejected: "Rejected",
-    cancelled: "Cancelled",
-  }[status] || "Pending";
+    pending: "待处理",
+    completed: "已完成",
+    rejected: "已驳回",
+    cancelled: "已撤回",
+  }[status] || "待处理";
 }
 
 function normalizePrivacyRequest(request) {
@@ -2202,7 +2202,7 @@ async function reviewPrivacyRequest(store, targetUser, { requestId, status, note
   return {
     user: updatedUser,
     request: reviewedRequest,
-    message: action === "completed" ? "Privacy request completed" : "Privacy request rejected",
+    message: action === "completed" ? "账号资料请求已完成" : "账号资料请求已驳回",
   };
 }
 
@@ -2236,7 +2236,7 @@ function anonymizeUserProfile(user, now, deleted) {
   return {
     ...user,
     studentId: "",
-    nickname: deleted ? "Deleted user" : "Profile cleared",
+    nickname: deleted ? "账号已注销" : "资料已清空",
     school: "",
     grade: "",
     major: "",
@@ -2303,11 +2303,11 @@ async function redactUserMessagesAndMatches(store, user, now) {
 
       return {
         ...message,
-        content: "[Message deleted]",
+        content: "[消息已删除]",
         sender: {
           id: user.id,
           _id: user.id,
-          nickname: "Deleted user",
+          nickname: "用户已隐藏",
         },
         redactedAt: now,
       };
@@ -2319,7 +2319,7 @@ async function redactUserMessagesAndMatches(store, user, now) {
       snapshots[user.id] = {
         id: user.id,
         _id: user.id,
-        nickname: "Deleted user",
+        nickname: "用户已隐藏",
         school: "",
         major: "",
         grade: "",

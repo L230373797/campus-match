@@ -264,123 +264,202 @@ if ([Threading.Thread]::CurrentThread.ApartmentState -ne "STA") {
   exit 0
 }
 
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Windows.Forms.Application]::EnableVisualStyles()
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "校园匹配管理器"
-$form.StartPosition = "CenterScreen"
-$form.Size = New-Object System.Drawing.Size(960, 760)
-$form.MinimumSize = New-Object System.Drawing.Size(900, 700)
-$form.BackColor = [System.Drawing.Color]::FromArgb(9, 17, 30)
+$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="校园匹配管理器"
+        Width="1080"
+        Height="760"
+        MinWidth="960"
+        MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F5F7"
+        FontFamily="Segoe UI Variable, Microsoft YaHei UI, Segoe UI">
+  <Window.Resources>
+    <Style x:Key="CardButtonStyle" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <ContentPresenter/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
 
-$fontTitle = New-Object System.Drawing.Font("Microsoft YaHei UI", 22, [System.Drawing.FontStyle]::Bold)
-$fontBody = New-Object System.Drawing.Font("Microsoft YaHei UI", 10)
-$fontSmall = New-Object System.Drawing.Font("Microsoft YaHei UI", 9)
-$fontButton = New-Object System.Drawing.Font("Microsoft YaHei UI", 10, [System.Drawing.FontStyle]::Bold)
-$fontGroup = New-Object System.Drawing.Font("Microsoft YaHei UI", 12, [System.Drawing.FontStyle]::Bold)
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="272"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
 
-$title = New-Object System.Windows.Forms.Label
-$title.Text = "校园匹配管理器"
-$title.Font = $fontTitle
-$title.ForeColor = [System.Drawing.Color]::White
-$title.AutoSize = $true
-$title.Location = New-Object System.Drawing.Point(28, 24)
-$form.Controls.Add($title)
+    <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#E5E5EA" BorderThickness="0,0,1,0">
+      <Grid Margin="28,28,24,28">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-$subtitle = New-Object System.Windows.Forms.Label
-$subtitle.Text = "把线上后台、本地服务、MySQL、备份、源码和云端入口都收在这里。"
-$subtitle.Font = $fontBody
-$subtitle.ForeColor = [System.Drawing.Color]::FromArgb(190, 205, 225)
-$subtitle.AutoSize = $true
-$subtitle.Location = New-Object System.Drawing.Point(32, 70)
-$form.Controls.Add($subtitle)
+        <StackPanel>
+          <TextBlock Text="校园匹配" FontSize="28" FontWeight="SemiBold" Foreground="#1D1D1F"/>
+          <TextBlock Text="管理中心" Margin="0,4,0,0" FontSize="15" Foreground="#6E6E73"/>
+        </StackPanel>
 
-$refreshButton = New-Object System.Windows.Forms.Button
-$refreshButton.Text = "刷新状态"
-$refreshButton.Font = $fontButton
-$refreshButton.Size = New-Object System.Drawing.Size(106, 34)
-$refreshButton.Location = New-Object System.Drawing.Point(810, 30)
-$refreshButton.BackColor = [System.Drawing.Color]::FromArgb(218, 234, 255)
-$refreshButton.ForeColor = [System.Drawing.Color]::FromArgb(5, 15, 28)
-$refreshButton.FlatStyle = "Flat"
-$form.Controls.Add($refreshButton)
+        <Border Grid.Row="1" Margin="0,28,0,0" Padding="16" CornerRadius="18" Background="#F5F5F7">
+          <StackPanel>
+            <TextBlock Text="生产环境" FontSize="13" FontWeight="SemiBold" Foreground="#1D1D1F"/>
+            <TextBlock Text="campus-match-sansui.netlify.app" Margin="0,6,0,0" FontSize="12" Foreground="#6E6E73" TextWrapping="Wrap"/>
+            <TextBlock Text="当前分支：netlify-current-source" Margin="0,10,0,0" FontSize="12" Foreground="#86868B" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
 
-$statusPanel = New-Object System.Windows.Forms.FlowLayoutPanel
-$statusPanel.Location = New-Object System.Drawing.Point(30, 108)
-$statusPanel.Size = New-Object System.Drawing.Size(886, 132)
-$statusPanel.BackColor = [System.Drawing.Color]::Transparent
-$statusPanel.FlowDirection = "LeftToRight"
-$statusPanel.WrapContents = $true
-$form.Controls.Add($statusPanel)
+        <StackPanel Grid.Row="2" Margin="0,30,0,0">
+          <TextBlock Text="常用入口" FontSize="12" FontWeight="SemiBold" Foreground="#86868B"/>
+          <TextBlock Text="线上用户端" Margin="0,18,0,0" FontSize="15" Foreground="#1D1D1F"/>
+          <TextBlock Text="线上管理端" Margin="0,16,0,0" FontSize="15" Foreground="#1D1D1F"/>
+          <TextBlock Text="本地网站" Margin="0,16,0,0" FontSize="15" Foreground="#1D1D1F"/>
+          <TextBlock Text="MySQL 数据库" Margin="0,16,0,0" FontSize="15" Foreground="#1D1D1F"/>
+          <TextBlock Text="备份与归档" Margin="0,16,0,0" FontSize="15" Foreground="#1D1D1F"/>
+        </StackPanel>
 
-$contentPanel = New-Object System.Windows.Forms.Panel
-$contentPanel.Location = New-Object System.Drawing.Point(30, 260)
-$contentPanel.Size = New-Object System.Drawing.Size(886, 398)
-$contentPanel.BackColor = [System.Drawing.Color]::Transparent
-$contentPanel.Anchor = "Top,Bottom,Left,Right"
-$form.Controls.Add($contentPanel)
+        <TextBlock Grid.Row="3" Text="所有入口只做打开和检查，不会自动处理真实用户资料。"
+                   FontSize="12" Foreground="#86868B" TextWrapping="Wrap"/>
+      </Grid>
+    </Border>
 
-$footer = New-Object System.Windows.Forms.Label
-$footer.Text = "Ready."
-$footer.Font = $fontSmall
-$footer.ForeColor = [System.Drawing.Color]::FromArgb(160, 175, 198)
-$footer.AutoSize = $false
-$footer.Size = New-Object System.Drawing.Size(880, 26)
-$footer.Location = New-Object System.Drawing.Point(34, 682)
-$footer.Anchor = "Bottom,Left,Right"
-$form.Controls.Add($footer)
+    <Grid Grid.Column="1" Margin="34,30,38,30">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
 
-$toolTip = New-Object System.Windows.Forms.ToolTip
-$toolTip.AutoPopDelay = 10000
-$toolTip.InitialDelay = 350
-$toolTip.ReshowDelay = 150
+      <Grid>
+        <StackPanel>
+          <TextBlock Text="今天要管理什么？" FontSize="34" FontWeight="SemiBold" Foreground="#1D1D1F"/>
+          <TextBlock Text="网站、后台、数据库和部署入口都在这里。" Margin="0,8,0,0" FontSize="15" Foreground="#6E6E73"/>
+        </StackPanel>
+        <Button x:Name="RefreshButton" Content="刷新状态" Width="108" Height="36" HorizontalAlignment="Right" VerticalAlignment="Top"
+                Background="#1D1D1F" Foreground="#FFFFFF" BorderThickness="0" FontWeight="SemiBold"/>
+      </Grid>
 
-function StatusColor {
+      <WrapPanel x:Name="StatusWrap" Grid.Row="1" Margin="0,28,0,10"/>
+
+      <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <StackPanel x:Name="ActionsStack"/>
+      </ScrollViewer>
+
+      <TextBlock x:Name="FooterText" Grid.Row="3" Text="Ready." Margin="0,18,0,0" FontSize="12" Foreground="#86868B"/>
+    </Grid>
+  </Grid>
+</Window>
+"@
+
+[xml]$xamlDocument = $xaml
+$reader = New-Object System.Xml.XmlNodeReader $xamlDocument
+$window = [Windows.Markup.XamlReader]::Load($reader)
+
+$RefreshButton = $window.FindName("RefreshButton")
+$StatusWrap = $window.FindName("StatusWrap")
+$ActionsStack = $window.FindName("ActionsStack")
+$FooterText = $window.FindName("FooterText")
+$CardButtonStyle = $window.Resources["CardButtonStyle"]
+
+function New-Brush {
+  param([string]$Color)
+  return New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($Color))
+}
+
+function New-Thickness {
+  param([string]$Value)
+  $converter = New-Object System.Windows.ThicknessConverter
+  return $converter.ConvertFromString($Value)
+}
+
+function New-Shadow {
+  return New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{
+    Color = [System.Windows.Media.ColorConverter]::ConvertFromString("#1D1D1F")
+    BlurRadius = 24
+    ShadowDepth = 8
+    Opacity = 0.08
+  }
+}
+
+function New-Text {
+  param(
+    [string]$Text,
+    [double]$Size,
+    [string]$Color,
+    [string]$Weight = "Normal",
+    [string]$Margin = "0"
+  )
+
+  $textBlock = New-Object System.Windows.Controls.TextBlock
+  $textBlock.Text = $Text
+  $textBlock.FontSize = $Size
+  $textBlock.Foreground = New-Brush $Color
+  $textBlock.FontWeight = $Weight
+  $textBlock.Margin = New-Thickness $Margin
+  $textBlock.TextWrapping = "Wrap"
+  return $textBlock
+}
+
+function StatusAccent {
   param([string]$Level)
-  if ($Level -eq "OK") { return [System.Drawing.Color]::FromArgb(50, 210, 145) }
-  if ($Level -eq "FAIL") { return [System.Drawing.Color]::FromArgb(255, 98, 116) }
-  return [System.Drawing.Color]::FromArgb(255, 198, 85)
+  if ($Level -eq "OK") { return "#34C759" }
+  if ($Level -eq "FAIL") { return "#FF3B30" }
+  return "#FF9F0A"
 }
 
 function Refresh-StatusCards {
-  $statusPanel.Controls.Clear()
+  $StatusWrap.Children.Clear()
   foreach ($item in Get-HealthSummaries) {
-    $card = New-Object System.Windows.Forms.Panel
-    $card.Size = New-Object System.Drawing.Size(276, 58)
-    $card.Margin = New-Object System.Windows.Forms.Padding(0, 0, 16, 14)
-    $card.BackColor = [System.Drawing.Color]::FromArgb(25, 37, 54)
-    $statusPanel.Controls.Add($card)
+    $card = New-Object System.Windows.Controls.Border
+    $card.Width = 248
+    $card.Height = 86
+    $card.Margin = New-Thickness "0,0,14,14"
+    $card.Padding = New-Thickness "16,14,16,14"
+    $card.CornerRadius = 18
+    $card.Background = New-Brush "#FFFFFF"
+    $card.BorderBrush = New-Brush "#E5E5EA"
+    $card.BorderThickness = New-Thickness "1"
+    $card.Effect = New-Shadow
 
-    $dot = New-Object System.Windows.Forms.Label
-    $dot.Text = "●"
-    $dot.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 11, [System.Drawing.FontStyle]::Bold)
-    $dot.ForeColor = StatusColor $item.Result.Level
-    $dot.AutoSize = $true
-    $dot.Location = New-Object System.Drawing.Point(12, 10)
-    $card.Controls.Add($dot)
+    $stack = New-Object System.Windows.Controls.StackPanel
+    $top = New-Object System.Windows.Controls.DockPanel
 
-    $name = New-Object System.Windows.Forms.Label
-    $name.Text = "$($item.Name)  [$($item.Result.Level)]"
-    $name.Font = $fontButton
-    $name.ForeColor = [System.Drawing.Color]::White
-    $name.AutoSize = $true
-    $name.Location = New-Object System.Drawing.Point(34, 9)
-    $card.Controls.Add($name)
+    $dot = New-Object System.Windows.Shapes.Ellipse
+    $dot.Width = 9
+    $dot.Height = 9
+    $dot.Fill = New-Brush (StatusAccent $item.Result.Level)
+    $dot.Margin = New-Thickness "0,5,8,0"
+    [System.Windows.Controls.DockPanel]::SetDock($dot, "Left")
+    $top.Children.Add($dot) | Out-Null
 
-    $detail = New-Object System.Windows.Forms.Label
-    $detail.Text = $item.Result.Text
-    $detail.Font = $fontSmall
-    $detail.ForeColor = [System.Drawing.Color]::FromArgb(180, 196, 218)
-    $detail.AutoEllipsis = $true
-    $detail.AutoSize = $false
-    $detail.Size = New-Object System.Drawing.Size(226, 22)
-    $detail.Location = New-Object System.Drawing.Point(34, 31)
-    $toolTip.SetToolTip($detail, $item.Result.Text)
-    $card.Controls.Add($detail)
+    $title = New-Text "$($item.Name)  $($item.Result.Level)" 13 "#1D1D1F" "SemiBold"
+    $top.Children.Add($title) | Out-Null
+    $stack.Children.Add($top) | Out-Null
+
+    $detail = New-Text $item.Result.Text 12 "#6E6E73" "Normal" "0,9,0,0"
+    $detail.MaxHeight = 34
+    $detail.ToolTip = $item.Result.Text
+    $stack.Children.Add($detail) | Out-Null
+
+    $card.Child = $stack
+    $StatusWrap.Children.Add($card) | Out-Null
   }
-  $footer.Text = "状态已更新：" + (Get-Date).ToString("HH:mm:ss")
+  $FooterText.Text = "状态已更新：" + (Get-Date).ToString("HH:mm:ss")
 }
 
 function Show-HealthDialog {
@@ -391,81 +470,75 @@ function Show-HealthDialog {
     $lines.Add("[$($item.Result.Level)] $($item.Name) - $($item.Result.Text)")
   }
 
-  [System.Windows.Forms.MessageBox]::Show(
+  [System.Windows.MessageBox]::Show(
     ($lines -join [Environment]::NewLine),
     "校园匹配体检",
-    [System.Windows.Forms.MessageBoxButtons]::OK,
-    [System.Windows.Forms.MessageBoxIcon]::Information
+    [System.Windows.MessageBoxButton]::OK,
+    [System.Windows.MessageBoxImage]::Information
   ) | Out-Null
   Refresh-StatusCards
 }
 
-function Add-Group {
-  param([string]$GroupName, [int]$Column, [int]$Row)
+function New-ActionCard {
+  param([hashtable]$Action)
 
-  $panel = New-Object System.Windows.Forms.Panel
-  $panel.Size = New-Object System.Drawing.Size(426, 178)
-  $panel.Location = New-Object System.Drawing.Point(($Column * 458), ($Row * 204))
-  $panel.BackColor = [System.Drawing.Color]::FromArgb(18, 29, 45)
-  $contentPanel.Controls.Add($panel)
+  $button = New-Object System.Windows.Controls.Button
+  $button.Style = $CardButtonStyle
+  $button.Width = 246
+  $button.Height = 96
+  $button.Margin = New-Thickness "0,0,14,14"
+  $button.ToolTip = $Action.Hint
 
-  $label = New-Object System.Windows.Forms.Label
-  $label.Text = $GroupName
-  $label.Font = $fontGroup
-  $label.ForeColor = [System.Drawing.Color]::White
-  $label.AutoSize = $true
-  $label.Location = New-Object System.Drawing.Point(16, 14)
-  $panel.Controls.Add($label)
+  $card = New-Object System.Windows.Controls.Border
+  $card.CornerRadius = 20
+  $card.Padding = New-Thickness "18"
+  $card.Background = New-Brush "#FFFFFF"
+  $card.BorderBrush = New-Brush "#E5E5EA"
+  $card.BorderThickness = New-Thickness "1"
+  $card.Effect = New-Shadow
 
-  return $panel
-}
+  $stack = New-Object System.Windows.Controls.StackPanel
+  $stack.Children.Add((New-Text $Action.Label 15 "#1D1D1F" "SemiBold")) | Out-Null
+  $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,9,0,0"
+  $hint.MaxHeight = 36
+  $stack.Children.Add($hint) | Out-Null
 
-function Add-ActionButton {
-  param(
-    [System.Windows.Forms.Panel]$Panel,
-    [hashtable]$Action,
-    [int]$Index
-  )
-
-  $column = $Index % 2
-  $row = [Math]::Floor($Index / 2)
-  $button = New-Object System.Windows.Forms.Button
-  $button.Text = $Action.Label
-  $button.Font = $fontButton
-  $button.ForeColor = [System.Drawing.Color]::FromArgb(4, 15, 28)
-  $button.BackColor = [System.Drawing.Color]::FromArgb(226, 239, 255)
-  $button.FlatStyle = "Flat"
-  $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(118, 200, 255)
-  $button.Size = New-Object System.Drawing.Size(184, 38)
-  $button.Location = New-Object System.Drawing.Point((16 + $column * 206), (52 + $row * 48))
-  $toolTip.SetToolTip($button, $Action.Hint)
+  $card.Child = $stack
+  $button.Content = $card
   $button.Add_Click({
     try {
-      $footer.Text = "正在执行：" + $Action.Label
+      $FooterText.Text = "正在打开：" + $Action.Label
       & $Action.Run
-      $footer.Text = "已打开：" + $Action.Label
+      $FooterText.Text = "已打开：" + $Action.Label
     } catch {
-      $footer.Text = "执行失败：" + $_.Exception.Message
-      [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "执行失败", "OK", "Error") | Out-Null
+      $FooterText.Text = "执行失败：" + $_.Exception.Message
+      [System.Windows.MessageBox]::Show($_.Exception.Message, "执行失败", "OK", "Error") | Out-Null
     }
   }.GetNewClosure())
-  $Panel.Controls.Add($button)
+  return $button
 }
 
-$groupOrder = @("网站入口", "本地服务", "数据文件", "云端管理")
-$groupPanels = @{}
-for ($i = 0; $i -lt $groupOrder.Count; $i++) {
-  $groupPanels[$groupOrder[$i]] = Add-Group -GroupName $groupOrder[$i] -Column ($i % 2) -Row ([Math]::Floor($i / 2))
-}
+function Add-ActionSection {
+  param([string]$GroupName)
 
-foreach ($groupName in $groupOrder) {
-  $items = @($Actions | Where-Object { $_.Group -eq $groupName })
-  for ($i = 0; $i -lt $items.Count; $i++) {
-    Add-ActionButton -Panel $groupPanels[$groupName] -Action $items[$i] -Index $i
+  $section = New-Object System.Windows.Controls.StackPanel
+  $section.Margin = New-Thickness "0,0,0,24"
+  $section.Children.Add((New-Text $GroupName 19 "#1D1D1F" "SemiBold" "0,0,0,12")) | Out-Null
+
+  $wrap = New-Object System.Windows.Controls.WrapPanel
+  $items = @($Actions | Where-Object { $_.Group -eq $GroupName })
+  foreach ($action in $items) {
+    $wrap.Children.Add((New-ActionCard $action)) | Out-Null
   }
+  $section.Children.Add($wrap) | Out-Null
+  $ActionsStack.Children.Add($section) | Out-Null
 }
 
-$refreshButton.Add_Click({ Refresh-StatusCards })
-$form.Add_Shown({ Refresh-StatusCards })
+foreach ($groupName in @("网站入口", "本地服务", "数据文件", "云端管理")) {
+  Add-ActionSection $groupName
+}
 
-[void]$form.ShowDialog()
+$RefreshButton.Add_Click({ Refresh-StatusCards })
+$window.Add_Loaded({ Refresh-StatusCards })
+
+[void]$window.ShowDialog()

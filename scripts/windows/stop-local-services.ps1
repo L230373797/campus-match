@@ -20,7 +20,7 @@ function Stop-ProcessIfAlive {
 
 $targetPids = New-Object System.Collections.Generic.HashSet[int]
 
-foreach ($port in @(3000, 3138, 18789)) {
+foreach ($port in @(3000, 3138)) {
   Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue |
     ForEach-Object { [void]$targetPids.Add([int]$_.OwningProcess) }
 }
@@ -30,9 +30,7 @@ $processes = Get-CimInstance Win32_Process | Where-Object {
   $_.Name -match '^(cmd|node|npm|netlify)\.exe$' -and (
     $_.CommandLine -match $escapedRoot -or
     $_.CommandLine -match 'server/index\.mjs' -or
-    $_.CommandLine -match 'vite.*--port 3138' -or
-    $_.CommandLine -match 'openclaw.*gateway' -or
-    $_.CommandLine -match 'gateway --port 18789'
+    $_.CommandLine -match 'vite.*--port 3138'
   )
 }
 
@@ -49,13 +47,13 @@ foreach ($targetPid in @($targetPids)) {
 Start-Sleep -Milliseconds 600
 
 $remainingPorts = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-  Where-Object { $_.LocalPort -in @(3000, 3138, 18789) }
+  Where-Object { $_.LocalPort -in @(3000, 3138) }
 
 if ($remainingPorts) {
   Write-Host "仍有服务占用端口：" -ForegroundColor Yellow
   $remainingPorts | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table -AutoSize
 } else {
-  Write-Host "本地网站、接口和 OpenClaw 网关已停止。" -ForegroundColor Green
+  Write-Host "本地网站和接口已停止。OpenClaw 网关不受此脚本影响。" -ForegroundColor Green
 }
 
 if (!$NoPause.IsPresent) {

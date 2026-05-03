@@ -251,7 +251,7 @@ $Actions = @(
   @{ Group = "网站入口"; Label = "本地用户端"; Hint = "$LocalBase/login"; Run = { Open-Url "$LocalBase/login" } },
   @{ Group = "网站入口"; Label = "本地管理端"; Hint = "$LocalBase/admin.html"; Run = { Open-Url "$LocalBase/admin.html" } },
   @{ Group = "本地服务"; Label = "启动本地网站"; Hint = "启动 Vite + 本地 API"; Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" } },
-  @{ Group = "本地服务"; Label = "停止本地服务"; Hint = "关闭本地网站、接口和 OpenClaw 网关"; Run = { Invoke-ProjectScript "scripts\windows\stop-local-services.ps1" @("-NoPause") | Out-Null; Refresh-StatusCards } },
+  @{ Group = "本地服务"; Label = "停止本地服务"; Hint = "只关闭校园项目本地网站和接口"; Run = { Invoke-ProjectScript "scripts\windows\stop-local-services.ps1" @("-NoPause") | Out-Null; Refresh-StatusCards } },
   @{ Group = "本地服务"; Label = "一键体检"; Hint = "检查网站、数据库、备份、GitHub"; Run = { Show-HealthDialog } },
   @{ Group = "本地服务"; Label = "打开 MySQL"; Hint = "使用 HeidiSQL 查看本地数据库"; Run = { Start-ProjectScript "scripts\windows\open-mysql-viewer.ps1" } },
   @{ Group = "本地服务"; Label = "同步线上数据"; Hint = "把线上数据同步到本地 MySQL"; Run = { Start-ProjectScript "scripts\windows\sync-mysql-desktop.ps1" } },

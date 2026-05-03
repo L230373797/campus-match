@@ -376,6 +376,10 @@ $ActionsStack = $window.FindName("ActionsStack")
 $FooterText = $window.FindName("FooterText")
 $CardButtonStyle = $window.Resources["CardButtonStyle"]
 
+$RefreshButton.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
+$RefreshScale = New-Object System.Windows.Media.ScaleTransform 1, 1
+$RefreshButton.RenderTransform = $RefreshScale
+
 function New-Brush {
   param([string]$Color)
   return New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($Color))
@@ -498,7 +502,8 @@ function Animate-Opacity {
   param(
     [System.Windows.UIElement]$Element,
     [double]$Value,
-    [int]$Duration = 150
+    [int]$Duration = 150,
+    [int]$Delay = 0
   )
 
   $ease = New-Object System.Windows.Media.Animation.CubicEase
@@ -507,6 +512,9 @@ function Animate-Opacity {
   $animation = New-Object System.Windows.Media.Animation.DoubleAnimation
   $animation.To = $Value
   $animation.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  if ($Delay -gt 0) {
+    $animation.BeginTime = [TimeSpan]::FromMilliseconds($Delay)
+  }
   $animation.EasingFunction = $ease
   $Element.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $animation)
 }
@@ -516,7 +524,8 @@ function Animate-ScaleXY {
     [System.Windows.Media.ScaleTransform]$Scale,
     [double]$X,
     [double]$Y,
-    [int]$Duration = 180
+    [int]$Duration = 180,
+    [int]$Delay = 0
   )
 
   $ease = New-Object System.Windows.Media.Animation.CubicEase
@@ -525,11 +534,17 @@ function Animate-ScaleXY {
   $scaleX = New-Object System.Windows.Media.Animation.DoubleAnimation
   $scaleX.To = $X
   $scaleX.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  if ($Delay -gt 0) {
+    $scaleX.BeginTime = [TimeSpan]::FromMilliseconds($Delay)
+  }
   $scaleX.EasingFunction = $ease
 
   $scaleY = New-Object System.Windows.Media.Animation.DoubleAnimation
   $scaleY.To = $Y
   $scaleY.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  if ($Delay -gt 0) {
+    $scaleY.BeginTime = [TimeSpan]::FromMilliseconds($Delay)
+  }
   $scaleY.EasingFunction = $ease
 
   $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $scaleX)
@@ -614,8 +629,92 @@ function StatusAccent {
   return "#FF9F0A"
 }
 
+function Get-ActionIcon {
+  param([hashtable]$Action)
+
+  $label = $Action.Label
+  if ($label -like "*用户端*") { return [char]0xE80F }
+  if ($label -like "*管理端*") { return [char]0xE713 }
+  if ($label -like "*启动*") { return [char]0xE768 }
+  if ($label -like "*体检*") { return [char]0xE8FB }
+  if ($label -like "*MySQL*") { return [char]0xE8D4 }
+  if ($label -like "*同步*") { return [char]0xE895 }
+  if ($label -like "*备份*") { return [char]0xE74B }
+  if ($label -like "*目录*") { return [char]0xE8B7 }
+  if ($label -like "*源码*") { return [char]0xE943 }
+  if ($label -like "*GitHub*") { return [char]0xE8EE }
+  if ($label -like "*Netlify*") { return [char]0xE753 }
+  if ($label -like "*部署*") { return [char]0xE7C3 }
+  if ($label -like "*说明*") { return [char]0xE8A5 }
+  return [char]0xE71D
+}
+
+function Get-GroupIcon {
+  param([string]$GroupName)
+
+  if ($GroupName -eq "网站入口") { return [char]0xE774 }
+  if ($GroupName -eq "本地服务") { return [char]0xE977 }
+  if ($GroupName -eq "数据文件") { return [char]0xE8B7 }
+  if ($GroupName -eq "云端管理") { return [char]0xE753 }
+  return [char]0xE71D
+}
+
+function New-IconText {
+  param(
+    [string]$Glyph,
+    [double]$Size = 17,
+    [string]$Color = "#1D1D1F"
+  )
+
+  $icon = New-Object System.Windows.Controls.TextBlock
+  $icon.Text = $Glyph
+  $icon.FontFamily = New-Object System.Windows.Media.FontFamily "Segoe MDL2 Assets"
+  $icon.FontSize = $Size
+  $icon.Foreground = New-Brush $Color
+  $icon.HorizontalAlignment = "Center"
+  $icon.VerticalAlignment = "Center"
+  return $icon
+}
+
+function New-IconBadge {
+  param(
+    [string]$Glyph,
+    [double]$Size = 36,
+    [switch]$Small
+  )
+
+  $badge = New-Object System.Windows.Controls.Border
+  $badge.Width = $Size
+  $badge.Height = $Size
+  $badge.CornerRadius = New-Object System.Windows.CornerRadius ($Size / 2.35)
+  $badge.Background = New-LiquidGlowBrush
+  $badge.BorderBrush = New-LiquidBorderBrush
+  $badge.BorderThickness = New-Thickness "1"
+  $iconSize = 17
+  if ($Small.IsPresent) {
+    $iconSize = 13
+  }
+  $badge.Child = New-IconText $Glyph $iconSize "#1D1D1F"
+  return $badge
+}
+
+function Animate-StatusCardEntrance {
+  param(
+    [System.Windows.Controls.Border]$Card,
+    [int]$Delay = 0
+  )
+
+  $Card.Opacity = 0
+  $Card.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
+  $scale = New-Object System.Windows.Media.ScaleTransform 0.965, 0.965
+  $Card.RenderTransform = $scale
+  Animate-Opacity -Element $Card -Value 1 -Duration 240 -Delay $Delay
+  Animate-ScaleXY -Scale $scale -X 1 -Y 1 -Duration 260 -Delay $Delay
+}
+
 function Refresh-StatusCards {
   $StatusWrap.Children.Clear()
+  $index = 0
   foreach ($item in Get-HealthSummaries) {
     $card = New-Object System.Windows.Controls.Border
     $card.Width = 248
@@ -667,8 +766,27 @@ function Refresh-StatusCards {
     $layers.Children.Add($stack) | Out-Null
     $card.Child = $layers
     $StatusWrap.Children.Add($card) | Out-Null
+    Animate-StatusCardEntrance -Card $card -Delay ($index * 35)
+    $index += 1
   }
   $FooterText.Text = "状态已更新：" + (Get-Date).ToString("HH:mm:ss")
+}
+
+function Invoke-StatusRefresh {
+  try {
+    $RefreshButton.IsEnabled = $false
+    $RefreshButton.Content = "刷新中"
+    $FooterText.Text = "正在刷新状态..."
+    Animate-Scale -Scale $RefreshScale -Value 0.94 -Duration 80
+    Animate-Opacity -Element $StatusWrap -Value 0.52 -Duration 120
+    $window.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+    Refresh-StatusCards
+  } finally {
+    $RefreshButton.Content = "刷新状态"
+    $RefreshButton.IsEnabled = $true
+    Animate-Scale -Scale $RefreshScale -Value 1 -Duration 180
+    Animate-Opacity -Element $StatusWrap -Value 1 -Duration 180
+  }
 }
 
 function Show-HealthDialog {
@@ -733,14 +851,30 @@ function New-ActionCard {
   $rim.IsHitTestVisible = $false
   $layers.Children.Add($rim) | Out-Null
 
+  $content = New-Object System.Windows.Controls.Grid
+  $content.Margin = New-Thickness "18"
+  $iconColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $iconColumn.Width = New-Object System.Windows.GridLength 40
+  $textColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $textColumn.Width = New-Object System.Windows.GridLength 1, ([System.Windows.GridUnitType]::Star)
+  $content.ColumnDefinitions.Add($iconColumn) | Out-Null
+  $content.ColumnDefinitions.Add($textColumn) | Out-Null
+
+  $iconBadge = New-IconBadge (Get-ActionIcon $Action)
+  $iconBadge.VerticalAlignment = "Top"
+  [System.Windows.Controls.Grid]::SetColumn($iconBadge, 0)
+  $content.Children.Add($iconBadge) | Out-Null
+
   $stack = New-Object System.Windows.Controls.StackPanel
-  $stack.Margin = New-Thickness "18"
+  $stack.Margin = New-Thickness "12,0,0,0"
   $stack.Children.Add((New-Text $Action.Label 15 "#1D1D1F" "SemiBold")) | Out-Null
   $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,9,0,0"
   $hint.MaxHeight = 36
   $stack.Children.Add($hint) | Out-Null
+  [System.Windows.Controls.Grid]::SetColumn($stack, 1)
+  $content.Children.Add($stack) | Out-Null
 
-  $layers.Children.Add($stack) | Out-Null
+  $layers.Children.Add($content) | Out-Null
   $card.Child = $layers
   $button.Content = $card
   $button.Tag = [PSCustomObject]@{
@@ -813,19 +947,125 @@ function New-ActionCard {
   return $button
 }
 
+function Set-ActionSectionOpen {
+  param(
+    [object]$State,
+    [bool]$Open
+  )
+
+  if ($Open) {
+    $State.IsOpen = $true
+    $State.Chevron.Text = [char]0xE70E
+    $State.Content.Visibility = [System.Windows.Visibility]::Visible
+    $State.Content.Opacity = 0
+    $State.Scale.ScaleX = 1
+    $State.Scale.ScaleY = 0.965
+    Animate-Opacity -Element $State.Content -Value 1 -Duration 170
+    Animate-ScaleXY -Scale $State.Scale -X 1 -Y 1 -Duration 190
+    $State.Header.BorderBrush = New-LiquidBorderBrush -Selected
+    return
+  }
+
+  $State.IsOpen = $false
+  $State.Chevron.Text = [char]0xE70D
+  $State.Header.BorderBrush = New-LiquidBorderBrush
+  $fade = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $fade.To = 0
+  $fade.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds(140))
+  $fade.Add_Completed({
+    if (-not $State.IsOpen) {
+      $State.Content.Visibility = [System.Windows.Visibility]::Collapsed
+    }
+  }.GetNewClosure())
+  $State.Content.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $fade)
+  Animate-ScaleXY -Scale $State.Scale -X 1 -Y 0.965 -Duration 140
+}
+
 function Add-ActionSection {
   param([string]$GroupName)
 
   $section = New-Object System.Windows.Controls.StackPanel
-  $section.Margin = New-Thickness "0,0,0,24"
-  $section.Children.Add((New-Text $GroupName 19 "#1D1D1F" "SemiBold" "0,0,0,12")) | Out-Null
+  $section.Margin = New-Thickness "0,0,0,18"
+
+  $items = @($Actions | Where-Object { $_.Group -eq $GroupName })
+  $headerButton = New-Object System.Windows.Controls.Button
+  $headerButton.Style = $CardButtonStyle
+  $headerButton.Margin = New-Thickness "0,0,14,12"
+  $headerButton.HorizontalContentAlignment = "Stretch"
+
+  $header = New-Object System.Windows.Controls.Border
+  $header.Padding = New-Thickness "13,10,13,10"
+  $header.CornerRadius = 18
+  $header.Background = New-LiquidBrush
+  $header.BorderBrush = New-LiquidBorderBrush -Selected
+  $header.BorderThickness = New-Thickness "1"
+
+  $headerGrid = New-Object System.Windows.Controls.Grid
+  $groupIconColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $groupIconColumn.Width = New-Object System.Windows.GridLength 34
+  $groupTitleColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $groupTitleColumn.Width = New-Object System.Windows.GridLength 1, ([System.Windows.GridUnitType]::Star)
+  $groupCountColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $groupCountColumn.Width = New-Object System.Windows.GridLength 58
+  $groupChevronColumn = New-Object System.Windows.Controls.ColumnDefinition
+  $groupChevronColumn.Width = New-Object System.Windows.GridLength 24
+  $headerGrid.ColumnDefinitions.Add($groupIconColumn) | Out-Null
+  $headerGrid.ColumnDefinitions.Add($groupTitleColumn) | Out-Null
+  $headerGrid.ColumnDefinitions.Add($groupCountColumn) | Out-Null
+  $headerGrid.ColumnDefinitions.Add($groupChevronColumn) | Out-Null
+
+  $groupBadge = New-IconBadge (Get-GroupIcon $GroupName) 30 -Small
+  [System.Windows.Controls.Grid]::SetColumn($groupBadge, 0)
+  $headerGrid.Children.Add($groupBadge) | Out-Null
+
+  $title = New-Text $GroupName 18 "#1D1D1F" "SemiBold" "10,2,0,0"
+  [System.Windows.Controls.Grid]::SetColumn($title, 1)
+  $headerGrid.Children.Add($title) | Out-Null
+
+  $countText = New-Text "$($items.Count) 个入口" 12 "#86868B" "SemiBold" "0,4,8,0"
+  $countText.HorizontalAlignment = "Right"
+  [System.Windows.Controls.Grid]::SetColumn($countText, 2)
+  $headerGrid.Children.Add($countText) | Out-Null
+
+  $chevron = New-IconText ([char]0xE70E) 13 "#6E6E73"
+  [System.Windows.Controls.Grid]::SetColumn($chevron, 3)
+  $headerGrid.Children.Add($chevron) | Out-Null
+
+  $header.Child = $headerGrid
+  $headerButton.Content = $header
+  $section.Children.Add($headerButton) | Out-Null
 
   $wrap = New-Object System.Windows.Controls.WrapPanel
-  $items = @($Actions | Where-Object { $_.Group -eq $GroupName })
   foreach ($action in $items) {
     $wrap.Children.Add((New-ActionCard $action)) | Out-Null
   }
-  $section.Children.Add($wrap) | Out-Null
+
+  $contentHost = New-Object System.Windows.Controls.Border
+  $contentHost.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.0
+  $contentScale = New-Object System.Windows.Media.ScaleTransform 1, 1
+  $contentHost.RenderTransform = $contentScale
+  $contentHost.Child = $wrap
+  $section.Children.Add($contentHost) | Out-Null
+
+  $state = [PSCustomObject]@{
+    IsOpen = $true
+    Content = $contentHost
+    Scale = $contentScale
+    Chevron = $chevron
+    Header = $header
+  }
+  $headerButton.Tag = $state
+  $headerButton.Add_Click({
+    $sectionState = $headerButton.Tag
+    Set-ActionSectionOpen -State $sectionState -Open (-not $sectionState.IsOpen)
+  }.GetNewClosure())
+  $headerButton.Add_MouseEnter({
+    $header.Effect = New-Shadow -Opacity 0.1 -BlurRadius 26 -ShadowDepth 8
+  }.GetNewClosure())
+  $headerButton.Add_MouseLeave({
+    $header.Effect = $null
+  }.GetNewClosure())
+
   $ActionsStack.Children.Add($section) | Out-Null
 }
 
@@ -833,7 +1073,7 @@ foreach ($groupName in @("网站入口", "本地服务", "数据文件", "云端
   Add-ActionSection $groupName
 }
 
-$RefreshButton.Add_Click({ Refresh-StatusCards })
+$RefreshButton.Add_Click({ Invoke-StatusRefresh })
 $window.Add_Loaded({ Refresh-StatusCards })
 
 [void]$window.ShowDialog()

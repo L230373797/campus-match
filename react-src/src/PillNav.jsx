@@ -30,6 +30,7 @@ function PillNav({
   const mobileMenuRef = useRef(null)
   const navItemsRef = useRef(null)
   const logoRef = useRef(null)
+  const pillRefs = useRef([])
 
   useEffect(() => {
     const layout = () => {
@@ -118,6 +119,18 @@ function PillNav({
       logoTweenRef.current?.kill()
     }
   }, [items, ease, initialLoadAnimation])
+
+  useEffect(() => {
+    const activeIndex = items.findIndex((item) => item.href === activeHref)
+    if (activeIndex < 0) return
+
+    const activePill = pillRefs.current[activeIndex]
+    activePill?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    })
+  }, [activeHref, items])
 
   const handleEnter = (index) => {
     const tl = tlRefs.current[index]
@@ -250,6 +263,9 @@ function PillNav({
                   onClick={(event) => handleLinkClick(event, item.href)}
                   onMouseEnter={() => handleEnter(index)}
                   onMouseLeave={() => handleLeave(index)}
+                  ref={(element) => {
+                    pillRefs.current[index] = element
+                  }}
                 >
                   <span
                     className="hover-circle"

@@ -684,14 +684,64 @@ function Background() {
 }
 
 function Header() {
-  const activeHref = (() => {
+  const getActiveHref = () => {
     if (window.location.pathname === '/messages') return '/messages'
     if (window.location.pathname === '/profile') return '/profile'
     if (window.location.hash === '#tests') return '/#tests'
     if (window.location.hash === '#discover') return '/#discover'
     if (window.location.hash === '#match') return '/#match'
     return '/'
-  })()
+  }
+  const [activeHref, setActiveHref] = useState(getActiveHref)
+
+  useEffect(() => {
+    const updateActiveHref = () => {
+      if (window.location.pathname === '/messages') {
+        setActiveHref('/messages')
+        return
+      }
+      if (window.location.pathname === '/profile') {
+        setActiveHref('/profile')
+        return
+      }
+      if (window.location.pathname !== '/') {
+        setActiveHref('/')
+        return
+      }
+      if (window.scrollY < 320) {
+        setActiveHref('/')
+        return
+      }
+
+      const sections = [
+        { href: '/#match', selector: '#match' },
+        { href: '/#tests', selector: '#tests' },
+        { href: '/#discover', selector: '#discover' },
+      ]
+      const current = sections.find(({ selector }) => {
+        const element = document.querySelector(selector)
+        if (!element) return false
+        const rect = element.getBoundingClientRect()
+        return rect.top <= 170 && rect.bottom > 170
+      })
+      setActiveHref(current?.href || '/')
+    }
+
+    let frame = 0
+    const onScroll = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(updateActiveHref)
+    }
+
+    frame = window.requestAnimationFrame(updateActiveHref)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('popstate', updateActiveHref)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('popstate', updateActiveHref)
+    }
+  }, [])
 
   return (
     <PillNav

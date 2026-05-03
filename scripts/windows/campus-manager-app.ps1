@@ -278,7 +278,7 @@ $xaml = @"
         MinHeight="700"
         WindowStartupLocation="CenterScreen"
         Background="#F5F5F7"
-        FontFamily="Segoe UI Variable, Microsoft YaHei UI, Segoe UI">
+        FontFamily="Microsoft YaHei UI, Segoe UI">
   <Window.Resources>
     <Style x:Key="CardButtonStyle" TargetType="Button">
       <Setter Property="Background" Value="Transparent"/>
@@ -621,6 +621,9 @@ function New-Text {
   $textBlock.FontWeight = $Weight
   $textBlock.Margin = New-Thickness $Margin
   $textBlock.TextWrapping = "Wrap"
+  $textBlock.FontFamily = New-Object System.Windows.Media.FontFamily "Microsoft YaHei UI, Segoe UI"
+  $textBlock.LineStackingStrategy = [System.Windows.LineStackingStrategy]::BlockLineHeight
+  $textBlock.LineHeight = [Math]::Ceiling($Size * 1.36)
   return $textBlock
 }
 
@@ -732,30 +735,30 @@ function Get-ActionIcon {
   param([hashtable]$Action)
 
   $label = $Action.Label
-  if ($label -like "*用户端*") { return [char]0xE80F }
-  if ($label -like "*管理端*") { return [char]0xE713 }
-  if ($label -like "*启动*") { return [char]0xE768 }
-  if ($label -like "*体检*") { return [char]0xE8FB }
-  if ($label -like "*MySQL*") { return [char]0xE8D4 }
-  if ($label -like "*同步*") { return [char]0xE895 }
-  if ($label -like "*备份*") { return [char]0xE74B }
-  if ($label -like "*目录*") { return [char]0xE8B7 }
-  if ($label -like "*源码*") { return [char]0xE943 }
-  if ($label -like "*GitHub*") { return [char]0xE8EE }
-  if ($label -like "*Netlify*") { return [char]0xE753 }
-  if ($label -like "*部署*") { return [char]0xE7C3 }
-  if ($label -like "*说明*") { return [char]0xE8A5 }
-  return [char]0xE71D
+  if ($label -like "*用户端*") { return "站" }
+  if ($label -like "*管理端*") { return "管" }
+  if ($label -like "*启动*") { return "启" }
+  if ($label -like "*体检*") { return "检" }
+  if ($label -like "*MySQL*") { return "SQL" }
+  if ($label -like "*同步*") { return "同" }
+  if ($label -like "*备份*") { return "备" }
+  if ($label -like "*目录*") { return "夹" }
+  if ($label -like "*源码*") { return "码" }
+  if ($label -like "*GitHub*") { return "GH" }
+  if ($label -like "*Netlify*") { return "云" }
+  if ($label -like "*部署*") { return "发" }
+  if ($label -like "*说明*") { return "文" }
+  return "入"
 }
 
 function Get-GroupIcon {
   param([string]$GroupName)
 
-  if ($GroupName -eq "网站入口") { return [char]0xE774 }
-  if ($GroupName -eq "本地服务") { return [char]0xE977 }
-  if ($GroupName -eq "数据文件") { return [char]0xE8B7 }
-  if ($GroupName -eq "云端管理") { return [char]0xE753 }
-  return [char]0xE71D
+  if ($GroupName -eq "网站入口") { return "站" }
+  if ($GroupName -eq "本地服务") { return "服" }
+  if ($GroupName -eq "数据文件") { return "数" }
+  if ($GroupName -eq "云端管理") { return "云" }
+  return "组"
 }
 
 function New-IconText {
@@ -767,9 +770,13 @@ function New-IconText {
 
   $icon = New-Object System.Windows.Controls.TextBlock
   $icon.Text = $Glyph
-  $icon.FontFamily = New-Object System.Windows.Media.FontFamily "Segoe MDL2 Assets"
+  $icon.FontFamily = New-Object System.Windows.Media.FontFamily "Microsoft YaHei UI, Segoe UI"
   $icon.FontSize = $Size
   $icon.Foreground = New-Brush $Color
+  $icon.FontWeight = "SemiBold"
+  $icon.TextAlignment = "Center"
+  $icon.LineStackingStrategy = [System.Windows.LineStackingStrategy]::BlockLineHeight
+  $icon.LineHeight = [Math]::Ceiling($Size * 1.2)
   $icon.HorizontalAlignment = "Center"
   $icon.VerticalAlignment = "Center"
   return $icon
@@ -791,6 +798,8 @@ function New-IconBadge {
   $badge.BorderThickness = New-Thickness "1"
   $iconSize = 17
   if ($Small.IsPresent) {
+    $iconSize = 12
+  } elseif ($Glyph.Length -gt 1) {
     $iconSize = 13
   }
   $badge.Child = New-IconText $Glyph $iconSize "#1D1D1F"
@@ -914,7 +923,7 @@ function New-ActionCard {
   $button = New-Object System.Windows.Controls.Button
   $button.Style = $CardButtonStyle
   $button.Width = 246
-  $button.Height = 114
+  $button.Height = 128
   $button.Margin = New-Thickness "0,0,14,14"
   $button.ToolTip = $Action.Hint
   $button.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
@@ -954,9 +963,9 @@ function New-ActionCard {
   $layers.Children.Add($rim) | Out-Null
 
   $content = New-Object System.Windows.Controls.Grid
-  $content.Margin = New-Thickness "18"
+  $content.Margin = New-Thickness "18,17,18,15"
   $iconColumn = New-Object System.Windows.Controls.ColumnDefinition
-  $iconColumn.Width = New-Object System.Windows.GridLength 40
+  $iconColumn.Width = New-Object System.Windows.GridLength 42
   $textColumn = New-Object System.Windows.Controls.ColumnDefinition
   $textColumn.Width = New-Object System.Windows.GridLength 1, ([System.Windows.GridUnitType]::Star)
   $content.ColumnDefinitions.Add($iconColumn) | Out-Null
@@ -970,12 +979,12 @@ function New-ActionCard {
   $stack = New-Object System.Windows.Controls.StackPanel
   $stack.Margin = New-Thickness "12,0,0,0"
   $stack.Children.Add((New-Text $Action.Label 15 "#1D1D1F" "SemiBold")) | Out-Null
-  $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,9,0,0"
-  $hint.MaxHeight = 36
+  $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,7,0,0"
+  $hint.MaxHeight = 34
   $stack.Children.Add($hint) | Out-Null
 
   $statusRow = New-Object System.Windows.Controls.DockPanel
-  $statusRow.Margin = New-Thickness "0,10,0,0"
+  $statusRow.Margin = New-Thickness "0,8,0,0"
   $statusDot = New-Object System.Windows.Shapes.Ellipse
   $statusDot.Width = 7
   $statusDot.Height = 7
@@ -984,7 +993,8 @@ function New-ActionCard {
   [System.Windows.Controls.DockPanel]::SetDock($statusDot, "Left")
   $statusRow.Children.Add($statusDot) | Out-Null
 
-  $statusText = New-Text "待刷新" 11 "#86868B" "SemiBold"
+  $statusText = New-Text "待刷新" 12 "#86868B" "SemiBold"
+  $statusText.TextWrapping = "NoWrap"
   $statusRow.Children.Add($statusText) | Out-Null
   $stack.Children.Add($statusRow) | Out-Null
 
@@ -1076,7 +1086,7 @@ function Set-ActionSectionOpen {
 
   if ($Open) {
     $State.IsOpen = $true
-    $State.Chevron.Text = [char]0xE70E
+    $State.Chevron.Text = "v"
     $State.Content.Visibility = [System.Windows.Visibility]::Visible
     $State.Content.Opacity = 0
     $State.Scale.ScaleX = 1
@@ -1088,7 +1098,7 @@ function Set-ActionSectionOpen {
   }
 
   $State.IsOpen = $false
-  $State.Chevron.Text = [char]0xE70D
+  $State.Chevron.Text = ">"
   $State.Header.BorderBrush = New-LiquidBorderBrush
   $fade = New-Object System.Windows.Media.Animation.DoubleAnimation
   $fade.To = 0
@@ -1148,7 +1158,7 @@ function Add-ActionSection {
   [System.Windows.Controls.Grid]::SetColumn($countText, 2)
   $headerGrid.Children.Add($countText) | Out-Null
 
-  $chevron = New-IconText ([char]0xE70E) 13 "#6E6E73"
+  $chevron = New-IconText "v" 13 "#6E6E73"
   [System.Windows.Controls.Grid]::SetColumn($chevron, 3)
   $headerGrid.Children.Add($chevron) | Out-Null
 

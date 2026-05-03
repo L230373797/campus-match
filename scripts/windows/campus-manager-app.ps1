@@ -379,6 +379,8 @@ $CardButtonStyle = $window.Resources["CardButtonStyle"]
 $RefreshButton.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
 $RefreshScale = New-Object System.Windows.Media.ScaleTransform 1, 1
 $RefreshButton.RenderTransform = $RefreshScale
+$script:ActionCardStates = New-Object System.Collections.Generic.List[object]
+$script:LastHealthSummaries = @()
 
 function New-Brush {
   param([string]$Color)
@@ -629,6 +631,103 @@ function StatusAccent {
   return "#FF9F0A"
 }
 
+function StatusLabel {
+  param([string]$Level)
+  if ($Level -eq "OK") { return "正常" }
+  if ($Level -eq "FAIL") { return "异常" }
+  return "注意"
+}
+
+function Get-HealthResult {
+  param(
+    [array]$Summaries,
+    [string]$Name
+  )
+
+  foreach ($summary in $Summaries) {
+    if ($summary.Name -eq $Name) {
+      return $summary.Result
+    }
+  }
+
+  return @{ Level = "WARN"; Text = "还没有刷新状态" }
+}
+
+function Resolve-ActionStatus {
+  param(
+    [hashtable]$Action,
+    [array]$Summaries
+  )
+
+  $label = $Action.Label
+  $result = $null
+  $short = "可打开"
+
+  if ($label -like "*线上用户端*" -or $label -like "*线上管理端*" -or $label -like "*Netlify*" -or $label -like "*部署记录*") {
+    $result = Get-HealthResult $Summaries "线上"
+    $short = "线上" + (StatusLabel $result.Level)
+  } elseif ($label -like "*本地用户端*" -or $label -like "*本地管理端*" -or $label -like "*启动本地网站*") {
+    $result = Get-HealthResult $Summaries "本地"
+    if ($result.Level -eq "OK") { $short = "本地已启动" } else { $short = "本地未启动" }
+  } elseif ($label -like "*MySQL*" -or $label -like "*同步线上数据*") {
+    $result = Get-HealthResult $Summaries "数据库"
+    if ($result.Level -eq "OK") { $short = "数据库正常" } else { $short = "数据库需检查" }
+  } elseif ($label -like "*备份数据库*" -or $label -like "*备份目录*") {
+    $result = Get-HealthResult $Summaries "备份"
+    if ($result.Level -eq "OK") { $short = "备份正常" } else { $short = "备份需更新" }
+  } elseif ($label -like "*GitHub*") {
+    $result = Get-HealthResult $Summaries "GitHub"
+    if ($result.Level -eq "OK") { $short = "GitHub 已同步" } else { $short = "GitHub 需同步" }
+  } elseif ($label -like "*源码文件夹*") {
+    if (Test-Path -LiteralPath $ProjectRoot.Path) {
+      $result = @{ Level = "OK"; Text = "源码目录可打开：$($ProjectRoot.Path)" }
+      $short = "源码可打开"
+    } else {
+      $result = @{ Level = "FAIL"; Text = "找不到源码目录" }
+      $short = "源码缺失"
+    }
+  } elseif ($label -like "*归档目录*") {
+    if (Test-Path -LiteralPath $ArchiveDir) {
+      $result = @{ Level = "OK"; Text = "归档目录可打开：$ArchiveDir" }
+      $short = "归档可打开"
+    } else {
+      $result = @{ Level = "WARN"; Text = "归档目录还没有创建" }
+      $short = "归档未创建"
+    }
+  } elseif ($label -like "*运营说明*") {
+    $guidePath = Join-Path $ProjectRoot "OPERATOR-GUIDE.md"
+    if (Test-Path -LiteralPath $guidePath) {
+      $result = @{ Level = "OK"; Text = "运营说明可打开：$guidePath" }
+      $short = "说明可打开"
+    } else {
+      $result = @{ Level = "WARN"; Text = "还没有运营说明文件" }
+      $short = "说明缺失"
+    }
+  } else {
+    $result = @{ Level = "OK"; Text = "入口可用：$($Action.Hint)" }
+  }
+
+  return @{ Level = $result.Level; Text = $short; Detail = $result.Text }
+}
+
+function Update-ActionCardStatuses {
+  param([array]$Summaries)
+
+  foreach ($state in $script:ActionCardStates) {
+    $status = Resolve-ActionStatus -Action $state.Action -Summaries $Summaries
+    $state.StatusDot.Fill = New-Brush (StatusAccent $status.Level)
+    $state.StatusText.Text = $status.Text
+    $statusColor = "#B76E00"
+    if ($status.Level -eq "OK") {
+      $statusColor = "#3A3A3C"
+    } elseif ($status.Level -eq "FAIL") {
+      $statusColor = "#D70015"
+    }
+    $state.StatusText.Foreground = New-Brush $statusColor
+    $state.StatusText.ToolTip = $status.Detail
+  }
+}
+
 function Get-ActionIcon {
   param([hashtable]$Action)
 
@@ -714,8 +813,10 @@ function Animate-StatusCardEntrance {
 
 function Refresh-StatusCards {
   $StatusWrap.Children.Clear()
+  $summaries = @(Get-HealthSummaries)
+  $script:LastHealthSummaries = $summaries
   $index = 0
-  foreach ($item in Get-HealthSummaries) {
+  foreach ($item in $summaries) {
     $card = New-Object System.Windows.Controls.Border
     $card.Width = 248
     $card.Height = 86
@@ -769,6 +870,7 @@ function Refresh-StatusCards {
     Animate-StatusCardEntrance -Card $card -Delay ($index * 35)
     $index += 1
   }
+  Update-ActionCardStatuses -Summaries $summaries
   $FooterText.Text = "状态已更新：" + (Get-Date).ToString("HH:mm:ss")
 }
 
@@ -812,7 +914,7 @@ function New-ActionCard {
   $button = New-Object System.Windows.Controls.Button
   $button.Style = $CardButtonStyle
   $button.Width = 246
-  $button.Height = 96
+  $button.Height = 114
   $button.Margin = New-Thickness "0,0,14,14"
   $button.ToolTip = $Action.Hint
   $button.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
@@ -871,6 +973,21 @@ function New-ActionCard {
   $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,9,0,0"
   $hint.MaxHeight = 36
   $stack.Children.Add($hint) | Out-Null
+
+  $statusRow = New-Object System.Windows.Controls.DockPanel
+  $statusRow.Margin = New-Thickness "0,10,0,0"
+  $statusDot = New-Object System.Windows.Shapes.Ellipse
+  $statusDot.Width = 7
+  $statusDot.Height = 7
+  $statusDot.Fill = New-Brush "#C7C7CC"
+  $statusDot.Margin = New-Thickness "0,5,7,0"
+  [System.Windows.Controls.DockPanel]::SetDock($statusDot, "Left")
+  $statusRow.Children.Add($statusDot) | Out-Null
+
+  $statusText = New-Text "待刷新" 11 "#86868B" "SemiBold"
+  $statusRow.Children.Add($statusText) | Out-Null
+  $stack.Children.Add($statusRow) | Out-Null
+
   [System.Windows.Controls.Grid]::SetColumn($stack, 1)
   $content.Children.Add($stack) | Out-Null
 
@@ -878,12 +995,16 @@ function New-ActionCard {
   $card.Child = $layers
   $button.Content = $card
   $button.Tag = [PSCustomObject]@{
+    Action = $Action
     Card = $card
     Scale = $scale
     Rim = $rim
     Shine = $shine
     Glow = $glow
+    StatusDot = $statusDot
+    StatusText = $statusText
   }
+  $script:ActionCardStates.Add($button.Tag) | Out-Null
   $button.Add_MouseEnter({
     if ($script:SelectedActionButton -ne $button) {
       $card.BorderBrush = New-LiquidBorderBrush -Selected

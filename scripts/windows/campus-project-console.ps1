@@ -335,7 +335,7 @@ $actions = @(
   @{
     Label = "5omT5byA5pys5Zyw566h55CG5ZGY56uv"
     Hint = "6L+b5YWl5pys5Zyw566h55CG6aG16Z2i"
-    Run = { Open-Url "http://127.0.0.1:3138/admin" }
+    Run = { Open-Url "http://127.0.0.1:3138/admin.html" }
   },
   @{
     Label = "5omT5byA5pWw5o2u5bqT"
@@ -370,7 +370,7 @@ $actions = @(
   @{
     Label = "5omT5byA566h55CG5ZGY56uv"
     Hint = "6L+b5YWl572R56uZ566h55CG6aG16Z2i"
-    Run = { Open-Url "https://campus-match-sansui.netlify.app/admin" }
+    Run = { Open-Url "https://campus-match-sansui.netlify.app/admin.html" }
   },
   @{
     Label = "5omT5byAIE5ldGxpZnkg5ZCO5Y+w"
@@ -380,7 +380,7 @@ $actions = @(
   @{
     Label = "5omT5byAIEdpdEh1YiDku5PlupM="
     Hint = "5omT5byAIEdpdEh1YiDmupDnoIHku5PlupM="
-    Run = { Open-Url "https://github.com/L230373797/campus-match" }
+    Run = { Open-Url "https://github.com/L230373797/campus-match/tree/netlify-current-source" }
   }
 )
 

@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", icon: Home, label: "发现" },
-  { href: "/likes", icon: Heart, label: "喜欢" },
-  { href: "/matches", icon: MessageCircle, label: "消息" },
+  { href: "/#test", icon: Home, label: "测一测" },
+  { href: "/#discover", icon: Heart, label: "发现" },
+  { href: "/matches", icon: MessageCircle, label: "匹配" },
   { href: "/profile", icon: User, label: "我的" },
 ];
 
@@ -19,7 +19,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 z-50 safe-bottom">
       <div className="max-w-5xl mx-auto flex items-center justify-around h-16 sm:h-20 pb-[env(safe-area-inset-bottom)]">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item.href.startsWith("/#") ? pathname === "/" : pathname === item.href;
           return (
             <Link
               key={item.href}

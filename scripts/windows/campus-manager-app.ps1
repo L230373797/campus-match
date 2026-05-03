@@ -253,6 +253,7 @@ $Actions = @(
   @{ Group = "本地服务"; Label = "启动本地网站"; Hint = "启动 Vite + 本地 API"; Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" } },
   @{ Group = "本地服务"; Label = "停止本地服务"; Hint = "只关闭校园项目本地网站和接口"; Run = { Invoke-ProjectScript "scripts\windows\stop-local-services.ps1" @("-NoPause") | Out-Null; Refresh-StatusCards } },
   @{ Group = "本地服务"; Label = "一键体检"; Hint = "检查网站、数据库、备份、GitHub"; Run = { Show-HealthDialog } },
+  @{ Group = "本地服务"; Label = "环境修复"; Hint = "检查 Node、MySQL、端口、Netlify 和 .env.local"; Run = { Start-ProjectScript "scripts\windows\repair-environment-desktop.ps1" } },
   @{ Group = "本地服务"; Label = "打开 MySQL"; Hint = "使用 HeidiSQL 查看本地数据库"; Run = { Start-ProjectScript "scripts\windows\open-mysql-viewer.ps1" } },
   @{ Group = "本地服务"; Label = "同步线上数据"; Hint = "把线上数据同步到本地 MySQL"; Run = { Start-ProjectScript "scripts\windows\sync-mysql-desktop.ps1" } },
   @{ Group = "数据文件"; Label = "备份数据库"; Hint = "生成新的 .sql 备份"; Run = { Start-ProjectScript "scripts\windows\backup-mysql-desktop.ps1" } },
@@ -693,6 +694,9 @@ function Resolve-ActionStatus {
   } elseif ($label -like "*停止本地服务*") {
     $result = Get-HealthResult $Summaries "本地"
     if ($result.Level -eq "OK") { $short = "可停止" } else { $short = "已停止" }
+  } elseif ($label -like "*环境修复*") {
+    $result = Get-HealthResult $Summaries "数据库"
+    if ($result.Level -eq "OK") { $short = "环境可检查" } else { $short = "需要检查" }
   } elseif ($label -like "*本地用户端*" -or $label -like "*本地管理端*" -or $label -like "*启动本地网站*") {
     $result = Get-HealthResult $Summaries "本地"
     if ($result.Level -eq "OK") { $short = "本地已启动" } else { $short = "本地未启动" }
@@ -763,6 +767,7 @@ function Get-ActionIcon {
   if ($label -like "*管理端*") { return "管" }
   if ($label -like "*启动*") { return "启" }
   if ($label -like "*停止*") { return "停" }
+  if ($label -like "*环境*") { return "修" }
   if ($label -like "*体检*") { return "检" }
   if ($label -like "*MySQL*") { return "SQL" }
   if ($label -like "*同步*") { return "同" }

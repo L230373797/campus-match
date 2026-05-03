@@ -25,6 +25,45 @@ const shortcuts = [
   { title: '智慧卡', note: '破冰问题', tone: 'violet' },
 ]
 
+const insightFallback = {
+  moodScore: 70,
+  affinityScore: 82,
+  mbti: 'INFP',
+  zodiac: '双鱼座',
+  birthDate: '',
+  headline: 'INFP · 双鱼座，今天适合轻松认识新朋友',
+  tags: ['同校', '慢热', '树洞'],
+  selfInsight: {
+    moodScore: 70,
+    moodLabel: '轻松',
+    focus: '先从一个具体的小问题开始',
+  },
+  dailyCards: [
+    { title: '人格节奏', text: '慢一点开场更舒服，先问具体小事，再交换日常。' },
+    { title: '生辰提示', text: '今天适合轻松表达，可以从兴趣或校园小事聊起。' },
+    { title: '今日开场', text: '围绕「同校」开一句，会比泛泛打招呼更自然。' },
+    { title: '倾诉回声', text: '有些话可以先放进匿名树洞，再慢慢决定要不要认识谁。' },
+  ],
+  treeholeCount: 0,
+}
+
+const treeholeFallback = [
+  {
+    id: 'sample-treehole-1',
+    mood: '想被听见',
+    content: '最近有点累，但又不想把压力全说给熟人听。想先找一个能认真听的人。',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'sample-treehole-2',
+    mood: '轻轻吐槽',
+    content: '如果有人也喜欢晚饭后绕操场走两圈，大概会很好聊。',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+  },
+]
+
+const moodChoices = ['轻松', '想聊天', '有点累', '需要陪伴']
+
 const feedCards = [
   {
     title: '今晚图书馆搭子',
@@ -214,6 +253,7 @@ const backgroundLineDistance = [12, 9, 13]
 const matchAccents = ['cyan', 'pink', 'violet']
 const navItems = [
   { label: '首页', href: '/' },
+  { label: '测一测', href: '/#tests' },
   { label: '发现', href: '/#discover' },
   { label: '匹配', href: '/#match' },
   { label: '消息', href: '/messages' },
@@ -492,6 +532,45 @@ function buildWisdomCards(homeData = {}) {
   ]
 }
 
+function normalizeInsightPayload(value = {}, profile = {}) {
+  const birthDate = value.birthDate || profile.birthDate || ''
+  const zodiac = value.zodiac || zodiacFromBirthDate(birthDate)
+  const mbti = value.mbti || profile.mbti || ''
+  const tags = splitList(value.tags?.length ? value.tags : profile.tags).slice(0, 5)
+  const moodScore = Number(value.moodScore || value.selfInsight?.moodScore || insightFallback.moodScore)
+  const affinityScore = Number(value.affinityScore || 76)
+  return {
+    ...insightFallback,
+    ...value,
+    moodScore: Number.isFinite(moodScore) ? Math.max(1, Math.min(100, Math.round(moodScore))) : insightFallback.moodScore,
+    affinityScore: Number.isFinite(affinityScore) ? Math.max(1, Math.min(100, Math.round(affinityScore))) : 76,
+    mbti,
+    zodiac,
+    birthDate,
+    tags: tags.length ? tags : insightFallback.tags,
+    selfInsight: {
+      ...insightFallback.selfInsight,
+      ...(value.selfInsight || {}),
+    },
+    dailyCards: Array.isArray(value.dailyCards) && value.dailyCards.length ? value.dailyCards : insightFallback.dailyCards,
+    headline:
+      value.headline ||
+      (mbti && zodiac ? `${mbti} · ${zodiac}，今天适合轻松开场` : insightFallback.headline),
+  }
+}
+
+function normalizeTreeholes(value) {
+  const posts = Array.isArray(value) ? value : []
+  return posts
+    .map((item, index) => ({
+      id: item.id || `treehole-${index}`,
+      mood: item.mood || '想被听见',
+      content: item.content || '',
+      createdAt: item.createdAt || '',
+    }))
+    .filter((item) => item.content)
+}
+
 function userToProfileForm(user = {}) {
   return {
     nickname: user.nickname || '',
@@ -578,6 +657,7 @@ function Header() {
   const activeHref = (() => {
     if (window.location.pathname === '/messages') return '/messages'
     if (window.location.pathname === '/profile') return '/profile'
+    if (window.location.hash === '#tests') return '/#tests'
     if (window.location.hash === '#discover') return '/#discover'
     if (window.location.hash === '#match') return '/#match'
     return '/'
@@ -841,6 +921,164 @@ function Feed({ items = feedCards }) {
   )
 }
 
+function SelfInsightPanel({
+  insight = insightFallback,
+  treeholes = treeholeFallback,
+  onMoodUpdate,
+  onTreeholeSubmit,
+  busy = '',
+  notice = '',
+}) {
+  const [localMood, setLocalMood] = useState('')
+  const [treeholeText, setTreeholeText] = useState('')
+  const visibleTreeholes = treeholes.length ? treeholes : treeholeFallback
+  const selectedMood = localMood || insight.selfInsight?.moodLabel || '轻松'
+  const moodScores = {
+    轻松: 76,
+    想聊天: 84,
+    有点累: 58,
+    需要陪伴: 65,
+  }
+
+  const updateMood = async (mood) => {
+    setLocalMood(mood)
+    await onMoodUpdate?.({
+      moodLabel: mood,
+      moodScore: moodScores[mood] || insight.moodScore,
+      focus: mood === '有点累' ? '先找一个能认真听你说话的人' : '先从一个具体的小问题开始',
+    })
+  }
+
+  const submitTreehole = async (event) => {
+    event.preventDefault()
+    const content = treeholeText.trim()
+    if (content.length < 6 || busy === 'treehole') return
+    const ok = await onTreeholeSubmit?.({ content, mood: selectedMood })
+    if (ok !== false) {
+      setTreeholeText('')
+    }
+  }
+
+  return (
+    <section className="self-insight-panel" id="tests" aria-label="自我洞察和匿名倾诉">
+      <div className="self-insight-main">
+        <span className="section-label">测一测</span>
+        <ScrollReveal as="h2" {...revealSectionTitleProps}>
+          先认识自己，再认识更合拍的人
+        </ScrollReveal>
+        <p>{insight.headline}</p>
+        <div className="insight-score-row">
+          <span>
+            <strong>{insight.moodScore}</strong>
+            今日状态
+          </span>
+          <span>
+            <strong>{insight.affinityScore}</strong>
+            合拍指数
+          </span>
+        </div>
+        <div className="insight-pills">
+          <span>{insight.mbti || '补 MBTI'}</span>
+          <span>{insight.zodiac || '补生日'}</span>
+          <span>{formatBirthDate(insight.birthDate) || '生辰待补'}</span>
+        </div>
+        <div className="daily-card-grid">
+          {insight.dailyCards.slice(0, 4).map((card) => (
+            <article className="daily-card" key={card.title}>
+              <strong>{card.title}</strong>
+              <p>{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <aside className="treehole-panel">
+        <div className="treehole-head">
+          <div>
+            <span className="section-label">匿名倾诉</span>
+            <h3>把不好开口的话先放这里</h3>
+          </div>
+          <span>{insight.treeholeCount || treeholes.length} 条</span>
+        </div>
+        <div className="mood-choice-row" aria-label="选择此刻状态">
+          {moodChoices.map((mood) => (
+            <button
+              className={selectedMood === mood ? 'active' : ''}
+              key={mood}
+              type="button"
+              disabled={busy === 'mood'}
+              onClick={() => updateMood(mood)}
+            >
+              {mood}
+            </button>
+          ))}
+        </div>
+        <form className="treehole-form" onSubmit={submitTreehole}>
+          <textarea
+            value={treeholeText}
+            onChange={(event) => setTreeholeText(event.target.value)}
+            placeholder="写给一个还没认识、但愿意认真听的人。"
+            rows="4"
+          />
+          <button className="primary-action" type="submit" disabled={busy === 'treehole' || treeholeText.trim().length < 6}>
+            {busy === 'treehole' ? '放入树洞中' : '匿名放入树洞'}
+          </button>
+        </form>
+        {notice && <p className="treehole-notice">{notice}</p>}
+        <div className="treehole-list">
+          {visibleTreeholes.slice(0, 3).map((post) => (
+            <article className="treehole-card" key={post.id}>
+              <span>{post.mood}</span>
+              <p>{post.content}</p>
+              <small>{post.createdAt ? formatRelativeTime(post.createdAt) : '刚刚'}</small>
+            </article>
+          ))}
+        </div>
+      </aside>
+    </section>
+  )
+}
+
+function ProfileInsightPanel({ insight = insightFallback, treeholes = [] }) {
+  const tags = insight.tags?.length ? insight.tags : insightFallback.tags
+
+  return (
+    <section className="profile-panel profile-self-panel">
+      <div className="profile-panel-head">
+        <div>
+          <span className="section-label">我的画像</span>
+          <h2>{insight.headline}</h2>
+          <p>这里会把 MBTI、生辰、兴趣和倾诉状态汇总成更自然的匹配线索。</p>
+        </div>
+      </div>
+      <div className="profile-self-score">
+        <span>
+          <strong>{insight.moodScore}</strong>
+          今日状态
+        </span>
+        <span>
+          <strong>{insight.affinityScore}</strong>
+          合拍指数
+        </span>
+        <span>
+          <strong>{treeholes.length || insight.treeholeCount || 0}</strong>
+          树洞记录
+        </span>
+      </div>
+      <div className="profile-badges">
+        {(insight.mbti ? [insight.mbti] : []).concat(insight.zodiac ? [insight.zodiac] : [], tags).slice(0, 7).map((tag) => (
+          <span key={tag}>{tag}</span>
+        ))}
+      </div>
+      <div className="wisdom-card-list">
+        {insight.dailyCards.slice(0, 2).map((card) => (
+          <span key={card.title}>{card.text}</span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function FeatureSheet({ shortcut, homeData, onClose }) {
   if (!shortcut) return null
 
@@ -928,7 +1166,7 @@ function BottomNav({ active = 'home' }) {
   const items = [
     { key: 'home', icon: 'home', label: '首页', href: '/' },
     { key: 'chat', icon: 'chat', label: '消息', href: '/messages' },
-    { key: 'ai', icon: 'ai', label: '问问', href: '/#match' },
+    { key: 'ai', icon: 'ai', label: '问问', href: '/#tests' },
     { key: 'online', icon: 'online', label: '在线', href: '/#discover' },
     { key: 'user', icon: 'user', label: '我的', href: '/profile' },
   ]
@@ -1303,6 +1541,8 @@ function ProfilePage() {
   const [error, setError] = useState('')
   const [activity, setActivity] = useState(null)
   const [membership, setMembership] = useState(null)
+  const [insight, setInsight] = useState(() => normalizeInsightPayload(insightFallback, profileFallback))
+  const [treeholes, setTreeholes] = useState([])
   const [activityBusy, setActivityBusy] = useState('')
   const [membershipBusy, setMembershipBusy] = useState('')
 
@@ -1318,10 +1558,12 @@ function ProfilePage() {
 
     async function loadProfile() {
       try {
-        const [profileResult, activityResult, membershipResult] = await Promise.allSettled([
+        const [profileResult, activityResult, membershipResult, insightResult, treeholeResult] = await Promise.allSettled([
           apiRequest('/users/profile'),
           apiRequest('/users/activity'),
           apiRequest('/membership'),
+          apiRequest('/users/insights'),
+          apiRequest('/users/treeholes'),
         ])
         if (!mounted) return
 
@@ -1333,6 +1575,14 @@ function ProfilePage() {
         const loadedUser = payload.data?.user || profileFallback
         setUser(loadedUser)
         setForm(userToProfileForm(loadedUser))
+        setInsight(
+          insightResult.status === 'fulfilled'
+            ? normalizeInsightPayload(insightResult.value.data, loadedUser)
+            : normalizeInsightPayload({}, loadedUser),
+        )
+        if (treeholeResult.status === 'fulfilled') {
+          setTreeholes(normalizeTreeholes(treeholeResult.value.data?.posts))
+        }
         if (activityResult.status === 'fulfilled') {
           setActivity(activityResult.value.data || null)
         }
@@ -1402,6 +1652,7 @@ function ProfilePage() {
         const localUser = { ...user, ...body }
         setUser(localUser)
         setForm(userToProfileForm(localUser))
+        setInsight((current) => normalizeInsightPayload(current, localUser))
         setNotice('本地预览已更新。登录后可以把这些资料保存到账号里。')
         setEditing(false)
         return
@@ -1414,6 +1665,7 @@ function ProfilePage() {
       const updatedUser = payload.data?.user || { ...user, ...body }
       setUser(updatedUser)
       setForm(userToProfileForm(updatedUser))
+      setInsight((current) => normalizeInsightPayload(current, updatedUser))
       setNotice('资料已保存。')
       setEditing(false)
     } catch (err) {
@@ -1789,6 +2041,8 @@ function ProfilePage() {
       </section>
 
       <section className="profile-insights-grid" aria-label="账号功能">
+        <ProfileInsightPanel insight={insight} treeholes={treeholes} />
+
         <section className="profile-panel membership-panel">
           <div className="profile-panel-head">
             <div>
@@ -2237,9 +2491,13 @@ function HomePage() {
     recommendations: [],
     matches: [],
     membership: null,
+    insight: insightFallback,
+    treeholes: [],
   })
   const [homeLoading, setHomeLoading] = useState(false)
   const [activeShortcut, setActiveShortcut] = useState(null)
+  const [insightBusy, setInsightBusy] = useState('')
+  const [insightNotice, setInsightNotice] = useState('')
 
   useEffect(() => {
     if (!hasAuthToken()) return undefined
@@ -2255,17 +2513,28 @@ function HomePage() {
       apiRequest('/users/recommendations?limit=6'),
       apiRequest('/matches'),
       apiRequest('/membership'),
+      apiRequest('/users/insights'),
+      apiRequest('/users/treeholes'),
     ])
-      .then(([profileResult, activityResult, recommendationResult, matchesResult, membershipResult]) => {
+      .then(([profileResult, activityResult, recommendationResult, matchesResult, membershipResult, insightResult, treeholeResult]) => {
         if (!mounted) return
+        const profile = profileResult.status === 'fulfilled' ? profileResult.value.data?.user || null : null
 
         setHomeData({
-          profile: profileResult.status === 'fulfilled' ? profileResult.value.data?.user || null : null,
+          profile,
           activity: activityResult.status === 'fulfilled' ? activityResult.value.data || null : null,
           recommendations:
             recommendationResult.status === 'fulfilled' ? recommendationResult.value.data?.users || [] : [],
           matches: matchesResult.status === 'fulfilled' ? matchesResult.value.data?.matches || [] : [],
           membership: membershipResult.status === 'fulfilled' ? membershipResult.value.data || null : null,
+          insight:
+            insightResult.status === 'fulfilled'
+              ? normalizeInsightPayload(insightResult.value.data, profile || {})
+              : normalizeInsightPayload({}, profile || {}),
+          treeholes:
+            treeholeResult.status === 'fulfilled'
+              ? normalizeTreeholes(treeholeResult.value.data?.posts)
+              : [],
         })
       })
       .finally(() => {
@@ -2279,6 +2548,92 @@ function HomePage() {
 
   const shortcutItems = useMemo(() => buildShortcutCards(homeData, homeLoading), [homeData, homeLoading])
   const feedItems = useMemo(() => buildFeedCards(homeData), [homeData])
+  const visibleInsight = useMemo(
+    () => normalizeInsightPayload(homeData.insight, homeData.profile || profileFallback),
+    [homeData.insight, homeData.profile],
+  )
+
+  const updateHomeInsight = async (body) => {
+    if (!hasAuthToken()) {
+      setHomeData((current) => ({
+        ...current,
+        insight: normalizeInsightPayload({
+          ...current.insight,
+          moodScore: body.moodScore,
+          selfInsight: {
+            ...(current.insight?.selfInsight || {}),
+            ...body,
+          },
+        }, current.profile || profileFallback),
+      }))
+      setInsightNotice('本地预览已更新。登录后会保存到账号里。')
+      return true
+    }
+
+    setInsightBusy('mood')
+    setInsightNotice('')
+    try {
+      const payload = await apiRequest('/users/insights', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      setHomeData((current) => ({
+        ...current,
+        insight: normalizeInsightPayload(payload.data, current.profile || profileFallback),
+      }))
+      setInsightNotice(payload.message || '今日状态已更新。')
+      return true
+    } catch (error) {
+      setInsightNotice(error.message || '状态更新失败，再试一次。')
+      return false
+    } finally {
+      setInsightBusy('')
+    }
+  }
+
+  const submitTreehole = async (body) => {
+    if (!hasAuthToken()) {
+      const localPost = {
+        id: `local-treehole-${Date.now()}`,
+        ...body,
+        createdAt: new Date().toISOString(),
+      }
+      setHomeData((current) => ({
+        ...current,
+        treeholes: [localPost, ...(current.treeholes || [])],
+        insight: normalizeInsightPayload({
+          ...current.insight,
+          treeholeCount: (current.insight?.treeholeCount || 0) + 1,
+        }, current.profile || profileFallback),
+      }))
+      setInsightNotice('本地树洞已记下。登录后可以保存到账号里。')
+      return true
+    }
+
+    setInsightBusy('treehole')
+    setInsightNotice('')
+    try {
+      const payload = await apiRequest('/users/treeholes', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      setHomeData((current) => ({
+        ...current,
+        treeholes: normalizeTreeholes(payload.data?.posts),
+        insight: normalizeInsightPayload({
+          ...(current.insight || {}),
+          treeholeCount: payload.data?.posts?.length || current.insight?.treeholeCount || 0,
+        }, current.profile || profileFallback),
+      }))
+      setInsightNotice(payload.message || '已放进你的匿名树洞。')
+      return true
+    } catch (error) {
+      setInsightNotice(error.message || '树洞保存失败，再试一次。')
+      return false
+    } finally {
+      setInsightBusy('')
+    }
+  }
 
   const handleShortcutSelect = (item) => {
     if (item.action === 'profile') {
@@ -2329,6 +2684,14 @@ function HomePage() {
         </ScrollReveal>
       </section>
       <ShortcutGrid items={shortcutItems} onSelect={handleShortcutSelect} />
+      <SelfInsightPanel
+        insight={visibleInsight}
+        treeholes={homeData.treeholes}
+        onMoodUpdate={updateHomeInsight}
+        onTreeholeSubmit={submitTreehole}
+        busy={insightBusy}
+        notice={insightNotice}
+      />
       <Feed items={feedItems} />
       <AnimatePresence>
         {activeShortcut && (

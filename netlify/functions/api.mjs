@@ -440,6 +440,59 @@ async function handleUsers(req, store, segments, url) {
     return json({ success: true, data: activity });
   }
 
+  if (segments[1] === "insights" && req.method === "GET") {
+    return json({
+      success: true,
+      data: buildSelfInsightPayload(user),
+    });
+  }
+
+  if (segments[1] === "insights" && req.method === "POST") {
+    const body = await readBody(req);
+    const updatedUser = updateSelfInsight(user, body);
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "今日状态已更新",
+      data: buildSelfInsightPayload(updatedUser),
+    });
+  }
+
+  if (segments[1] === "treeholes" && req.method === "GET") {
+    return json({
+      success: true,
+      data: { posts: normalizeTreeholePosts(user.treeholePosts) },
+    });
+  }
+
+  if (segments[1] === "treeholes" && req.method === "POST") {
+    const body = await readBody(req);
+    const content = text(body.content).slice(0, 500);
+    if (content.length < 6) {
+      throw httpError("写一点更具体的倾诉内容吧", 400);
+    }
+
+    const post = normalizeTreeholePost({
+      id: makeId("treehole"),
+      content,
+      mood: text(body.mood).slice(0, 24) || "想被听见",
+      createdAt: new Date().toISOString(),
+      anonymous: true,
+    });
+    const updatedUser = {
+      ...user,
+      treeholePosts: [post, ...normalizeTreeholePosts(user.treeholePosts)].slice(0, 40),
+      sceneTags: uniqueTextValues([...(user.sceneTags || []), "树洞"]),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "已放进你的匿名树洞",
+      data: { post, posts: normalizeTreeholePosts(updatedUser.treeholePosts) },
+    }, 201);
+  }
+
   if (segments[1] === "activity" && segments[2] === "liked" && segments[3] && req.method === "DELETE") {
     const targetId = decodePathSegment(segments[3]);
     const updatedUser = removeActivityRecord(user, "like", targetId, new Date().toISOString());
@@ -1181,6 +1234,179 @@ function buildActivityInsights(user, { liked, footprints, matches }) {
   }
 
   return insights.slice(0, 3);
+}
+
+function buildSelfInsightPayload(user) {
+  const normalizedUser = normalizeUserRecord(user);
+  const selfInsight = normalizeSelfInsight(normalizedUser.selfInsight);
+  const mbti = normalizeMbti(normalizedUser.mbti);
+  const zodiac = zodiacNameFromBirthDate(normalizedUser.birthDate);
+  const tags = uniqueTextValues([
+    ...(normalizedUser.tags || []),
+    ...(normalizedUser.sceneTags || []),
+    normalizedUser.relationshipGoal,
+  ]).slice(0, 5);
+  const treeholes = normalizeTreeholePosts(normalizedUser.treeholePosts);
+  const completeness = profileCompletenessScore(normalizedUser);
+  const moodScore = selfInsight.moodScore || estimateMoodScore(normalizedUser, completeness);
+  const affinityScore = estimateAffinityScore(normalizedUser, completeness);
+  const dailyCards = buildDailyInsightCards(normalizedUser, {
+    mbti,
+    zodiac,
+    tags,
+    treeholes,
+    moodScore,
+    affinityScore,
+  });
+
+  return {
+    moodScore,
+    affinityScore,
+    mbti: mbti || "",
+    zodiac,
+    birthDate: normalizedUser.birthDate || "",
+    tags,
+    selfInsight,
+    dailyCards,
+    treeholeCount: treeholes.length,
+    headline: buildSelfInsightHeadline(normalizedUser, { mbti, zodiac, moodScore, affinityScore }),
+  };
+}
+
+function updateSelfInsight(user, body) {
+  const current = normalizeSelfInsight(user.selfInsight);
+  const moodScore = clampNumber(body.moodScore, 1, 100, current.moodScore || 70);
+  const moodLabel = text(body.moodLabel || current.moodLabel).slice(0, 24) || "平稳";
+  const focus = text(body.focus || current.focus).slice(0, 40) || "自然认识同校新朋友";
+  return {
+    ...user,
+    selfInsight: normalizeSelfInsight({
+      ...current,
+      moodScore,
+      moodLabel,
+      focus,
+      updatedAt: new Date().toISOString(),
+    }),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeSelfInsight(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    moodScore: clampNumber(source.moodScore, 1, 100, 70),
+    moodLabel: text(source.moodLabel).slice(0, 24) || "平稳",
+    focus: text(source.focus).slice(0, 40) || "自然认识同校新朋友",
+    updatedAt: text(source.updatedAt) || "",
+  };
+}
+
+function normalizeTreeholePosts(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeTreeholePost)
+    .filter((item) => item.content)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, 40);
+}
+
+function normalizeTreeholePost(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    id: text(source.id) || makeId("treehole"),
+    content: text(source.content).slice(0, 500),
+    mood: text(source.mood).slice(0, 24) || "想被听见",
+    createdAt: text(source.createdAt) || new Date().toISOString(),
+    anonymous: source.anonymous !== false,
+  };
+}
+
+function buildDailyInsightCards(user, context) {
+  const mbtiCard = context.mbti
+    ? `${context.mbti} 的开场适合慢一点：先问具体小事，再交换日常。`
+    : "补上 MBTI 后，系统会把聊天节奏也算进推荐。";
+  const zodiacCard = context.zodiac
+    ? `${context.zodiac} 今天适合轻松表达，可以从兴趣或校园小事聊起。`
+    : "填生日后，会生成星座和生辰角度的破冰提示。";
+  const treeholeCard = context.treeholes.length
+    ? `你最近留下了 ${context.treeholes.length} 条树洞，系统会更懂你想被怎样回应。`
+    : "有些话可以先放进匿名树洞，再慢慢决定要不要认识谁。";
+  const tag = context.tags[0] || user.major || "校园生活";
+
+  return [
+    { title: "人格节奏", text: mbtiCard },
+    { title: "生辰提示", text: zodiacCard },
+    { title: "今日开场", text: `围绕「${tag}」开一句，会比泛泛打招呼更自然。` },
+    { title: "倾诉回声", text: treeholeCard },
+  ];
+}
+
+function buildSelfInsightHeadline(user, { mbti, zodiac, moodScore, affinityScore }) {
+  if (mbti && zodiac) {
+    return `${mbti} · ${zodiac}，今天合拍指数 ${affinityScore}`;
+  }
+  if (mbti) {
+    return `${mbti} 的节奏已记录，今日状态 ${moodScore}`;
+  }
+  if (zodiac) {
+    return `${zodiac} 的轻松开场已生成`;
+  }
+  if (user.school) {
+    return `${user.school} 的同校匹配正在整理`;
+  }
+  return "先补几项资料，画像会更像你";
+}
+
+function estimateMoodScore(user, completeness) {
+  let score = 62 + Math.round(completeness * 20);
+  if (user.mbti) score += 4;
+  if (user.birthDate) score += 4;
+  if ((user.tags || []).length >= 3) score += 4;
+  return Math.max(50, Math.min(96, score));
+}
+
+function estimateAffinityScore(user, completeness) {
+  let score = 56 + Math.round(completeness * 24);
+  if (user.school) score += 5;
+  if (user.mbti) score += 5;
+  if (user.birthDate) score += 4;
+  if ((user.sceneTags || []).includes("树洞")) score += 3;
+  return Math.max(48, Math.min(99, score));
+}
+
+function zodiacNameFromBirthDate(value) {
+  const date = normalizeBirthDate(value);
+  if (!date) {
+    return "";
+  }
+  const month = Number(date.slice(5, 7));
+  const day = Number(date.slice(8, 10));
+  const signs = [
+    ["摩羯座", 12, 22],
+    ["水瓶座", 1, 20],
+    ["双鱼座", 2, 19],
+    ["白羊座", 3, 21],
+    ["金牛座", 4, 20],
+    ["双子座", 5, 21],
+    ["巨蟹座", 6, 22],
+    ["狮子座", 7, 23],
+    ["处女座", 8, 23],
+    ["天秤座", 9, 23],
+    ["天蝎座", 10, 24],
+    ["射手座", 11, 23],
+  ];
+
+  for (let index = signs.length - 1; index >= 0; index -= 1) {
+    const [name, fromMonth, fromDay] = signs[index];
+    if (month > fromMonth || (month === fromMonth && day >= fromDay)) {
+      return name;
+    }
+  }
+
+  return "摩羯座";
 }
 
 function rememberActivity(user, type, profile, now = new Date().toISOString()) {
@@ -2123,7 +2349,19 @@ function isActiveUser(user) {
 
 function publicUser(user) {
   const normalizedUser = normalizeUserRecord(user);
-  const { passwordHash, passwordSalt, skippedIds, dismissedLikedIds, dismissedRecommendationSignals, privacyRequests, privacyRequestStatus, activityLog, ...safeUser } = normalizedUser;
+  const {
+    passwordHash,
+    passwordSalt,
+    skippedIds,
+    dismissedLikedIds,
+    dismissedRecommendationSignals,
+    privacyRequests,
+    privacyRequestStatus,
+    activityLog,
+    treeholePosts,
+    selfInsight,
+    ...safeUser
+  } = normalizedUser;
 
   return {
     ...safeUser,

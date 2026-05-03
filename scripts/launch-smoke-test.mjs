@@ -94,6 +94,31 @@ await check("profile read and update", async () => {
   assert(updated.data?.user?.birthDate === "2004-10-08", "profile birth date should persist");
 });
 
+await check("self insight and treehole flow", async () => {
+  const insight = await call("/users/insights", { token: state.user.token });
+  assert(insight.data?.mbti === "INFP", "insights should include MBTI");
+  assert(insight.data?.zodiac, "insights should include zodiac");
+  assert(Array.isArray(insight.data?.dailyCards), "insights should return daily cards");
+
+  const updatedInsight = await call("/users/insights", {
+    method: "POST",
+    token: state.user.token,
+    body: { moodScore: 84, moodLabel: "想聊天", focus: "找一个轻松开场" },
+  });
+  assert(updatedInsight.data?.selfInsight?.moodLabel === "想聊天", "mood label should persist");
+
+  const treehole = await call("/users/treeholes", {
+    method: "POST",
+    token: state.user.token,
+    body: { mood: "想被听见", content: "今天想找一个能认真听我说话的人。" },
+  });
+  assert(treehole.data?.post?.id, "treehole post should be created");
+  assert(treehole.data?.posts?.length === 1, "treehole post should be listed");
+
+  const listed = await call("/users/treeholes", { token: state.user.token });
+  assert(listed.data?.posts?.[0]?.content.includes("认真听"), "treehole should persist");
+});
+
 await check("membership read and subscribe", async () => {
   const current = await call("/membership", { token: state.user.token });
   assert(Array.isArray(current.data?.plans), "membership plans should exist");

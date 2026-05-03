@@ -388,12 +388,90 @@ function New-Thickness {
 }
 
 function New-Shadow {
+  param(
+    [double]$Opacity = 0.08,
+    [double]$BlurRadius = 24,
+    [double]$ShadowDepth = 8
+  )
+
   return New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{
     Color = [System.Windows.Media.ColorConverter]::ConvertFromString("#1D1D1F")
-    BlurRadius = 24
-    ShadowDepth = 8
-    Opacity = 0.08
+    BlurRadius = $BlurRadius
+    ShadowDepth = $ShadowDepth
+    Opacity = $Opacity
   }
+}
+
+function New-GradientStop {
+  param(
+    [string]$Color,
+    [double]$Offset
+  )
+
+  $stop = New-Object System.Windows.Media.GradientStop
+  $stop.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($Color)
+  $stop.Offset = $Offset
+  return $stop
+}
+
+function New-LiquidBrush {
+  param([switch]$Selected)
+
+  $brush = New-Object System.Windows.Media.LinearGradientBrush
+  $brush.StartPoint = New-Object System.Windows.Point 0, 0
+  $brush.EndPoint = New-Object System.Windows.Point 1, 1
+  if ($Selected.IsPresent) {
+    $brush.GradientStops.Add((New-GradientStop "#FAFFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#EAF4FAFF" 0.42)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#F4F0F6FF" 1.0)) | Out-Null
+  } else {
+    $brush.GradientStops.Add((New-GradientStop "#FFFFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#FBFBFDFF" 1.0)) | Out-Null
+  }
+  return $brush
+}
+
+function Animate-Scale {
+  param(
+    [System.Windows.Media.ScaleTransform]$Scale,
+    [double]$Value,
+    [int]$Duration = 180
+  )
+
+  $ease = New-Object System.Windows.Media.Animation.CubicEase
+  $ease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
+
+  $scaleX = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $scaleX.To = $Value
+  $scaleX.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  $scaleX.EasingFunction = $ease
+
+  $scaleY = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $scaleY.To = $Value
+  $scaleY.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  $scaleY.EasingFunction = $ease
+
+  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $scaleX)
+  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $scaleY)
+}
+
+function Set-SelectedActionCard {
+  param([System.Windows.Controls.Button]$Button)
+
+  if ($script:SelectedActionButton -and $script:SelectedActionButton -ne $Button) {
+    $old = $script:SelectedActionButton.Tag
+    $old.Card.Background = New-LiquidBrush
+    $old.Card.BorderBrush = New-Brush "#E5E5EA"
+    $old.Card.Effect = New-Shadow
+    Animate-Scale -Scale $old.Scale -Value 1.0 -Duration 160
+  }
+
+  $script:SelectedActionButton = $Button
+  $state = $Button.Tag
+  $state.Card.Background = New-LiquidBrush -Selected
+  $state.Card.BorderBrush = New-Brush "#7CB9FF"
+  $state.Card.Effect = New-Shadow -Opacity 0.18 -BlurRadius 34 -ShadowDepth 14
+  Animate-Scale -Scale $state.Scale -Value 1.055 -Duration 210
 }
 
 function New-Text {
@@ -488,11 +566,14 @@ function New-ActionCard {
   $button.Height = 96
   $button.Margin = New-Thickness "0,0,14,14"
   $button.ToolTip = $Action.Hint
+  $button.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
+  $scale = New-Object System.Windows.Media.ScaleTransform 1, 1
+  $button.RenderTransform = $scale
 
   $card = New-Object System.Windows.Controls.Border
   $card.CornerRadius = 20
   $card.Padding = New-Thickness "18"
-  $card.Background = New-Brush "#FFFFFF"
+  $card.Background = New-LiquidBrush
   $card.BorderBrush = New-Brush "#E5E5EA"
   $card.BorderThickness = New-Thickness "1"
   $card.Effect = New-Shadow
@@ -505,8 +586,27 @@ function New-ActionCard {
 
   $card.Child = $stack
   $button.Content = $card
+  $button.Tag = [PSCustomObject]@{
+    Card = $card
+    Scale = $scale
+  }
+  $button.Add_MouseEnter({
+    if ($script:SelectedActionButton -ne $button) {
+      $card.BorderBrush = New-Brush "#D1D1D6"
+      $card.Effect = New-Shadow -Opacity 0.12 -BlurRadius 28 -ShadowDepth 10
+      Animate-Scale -Scale $scale -Value 1.018 -Duration 150
+    }
+  }.GetNewClosure())
+  $button.Add_MouseLeave({
+    if ($script:SelectedActionButton -ne $button) {
+      $card.BorderBrush = New-Brush "#E5E5EA"
+      $card.Effect = New-Shadow
+      Animate-Scale -Scale $scale -Value 1.0 -Duration 150
+    }
+  }.GetNewClosure())
   $button.Add_Click({
     try {
+      Set-SelectedActionCard -Button $button
       $FooterText.Text = "正在打开：" + $Action.Label
       & $Action.Run
       $FooterText.Text = "已打开：" + $Action.Label

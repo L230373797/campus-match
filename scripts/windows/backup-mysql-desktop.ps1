@@ -6,7 +6,8 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $EnvFile = Join-Path $ProjectRoot ".env.local"
 $Desktop = [Environment]::GetFolderPath("Desktop")
-$BackupDir = Join-Path $Desktop "campus-match-db-backups"
+$ProjectDesktopDir = Join-Path $Desktop "校园项目"
+$BackupDir = Join-Path $ProjectDesktopDir "数据备份"
 
 Set-Location $ProjectRoot
 

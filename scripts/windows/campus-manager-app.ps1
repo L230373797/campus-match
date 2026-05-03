@@ -5,8 +5,10 @@
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $Desktop = [Environment]::GetFolderPath("Desktop")
-$BackupDir = Join-Path $Desktop "campus-match-db-backups"
-$ArchiveDir = Join-Path $Desktop "校园项目\归档"
+$ProjectDesktopDir = Join-Path $Desktop "校园项目"
+$BackupDir = Join-Path $ProjectDesktopDir "数据备份"
+$ArchiveDir = Join-Path $ProjectDesktopDir "归档"
+$InstallerDir = Join-Path $ProjectDesktopDir "安装包"
 $OnlineBase = "https://campus-match-sansui.netlify.app"
 $LocalBase = "http://127.0.0.1:3138"
 

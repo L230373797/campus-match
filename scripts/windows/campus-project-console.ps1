@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$CheckOnly
 )
 
@@ -153,7 +153,7 @@ function Get-DatabaseSummary {
 }
 
 function Get-LatestBackupSummary {
-  $backupDir = Join-Path ([Environment]::GetFolderPath("Desktop")) "campus-match-db-backups"
+  $backupDir = Join-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "校园项目") "数据备份"
   if (!(Test-Path -LiteralPath $backupDir)) {
     return "$(Decode-Text "5aSH5Lu955uu5b2V"): $backupDir"
   }
@@ -216,7 +216,7 @@ function Test-DatabaseHealth {
 }
 
 function Test-BackupHealth {
-  $backupDir = Join-Path ([Environment]::GetFolderPath("Desktop")) "campus-match-db-backups"
+  $backupDir = Join-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "校园项目") "数据备份"
   $latest = $null
   if (Test-Path -LiteralPath $backupDir) {
     $latest = Get-ChildItem -LiteralPath $backupDir -Filter "*.sql" -File -ErrorAction SilentlyContinue |
@@ -600,3 +600,4 @@ $form.Controls.Add($closeButton)
 
 $form.Add_Shown({ Update-InfoCards })
 [void]$form.ShowDialog()
+

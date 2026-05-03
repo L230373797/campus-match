@@ -11,7 +11,7 @@ if (!$OutputRoot) {
 }
 
 if (!$ZipPath) {
-  $ZipPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "校园匹配管理器安装包.zip"
+  $ZipPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "校园项目\安装包\校园匹配管理器安装包.zip"
 }
 
 $OutputRootFull = [IO.Path]::GetFullPath($OutputRoot)

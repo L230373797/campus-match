@@ -7,7 +7,7 @@ $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $SourcePath = Join-Path $PSScriptRoot "CampusMatchManagerLauncher.cs"
 
 if (!$OutputPath) {
-  $OutputPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "校园匹配管理器.exe"
+  $OutputPath = Join-Path $env:LOCALAPPDATA "CampusMatchManager\校园匹配管理器.exe"
 }
 
 $CompilerCandidates = @(

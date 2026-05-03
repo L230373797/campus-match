@@ -35,6 +35,24 @@ function Start-ProjectScript {
   ) -WorkingDirectory $ProjectRoot -WindowStyle Hidden
 }
 
+function Invoke-ProjectScript {
+  param(
+    [string]$RelativePath,
+    [string[]]$ExtraArgs = @()
+  )
+
+  $scriptPath = Join-Path $ProjectRoot $RelativePath
+  $arguments = @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", $scriptPath
+  ) + $ExtraArgs
+
+  $process = Start-Process powershell.exe -ArgumentList $arguments -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru
+  $process.WaitForExit()
+  return $process.ExitCode
+}
+
 function Read-EnvFile {
   param([string]$Path)
   $values = @{}
@@ -233,6 +251,7 @@ $Actions = @(
   @{ Group = "网站入口"; Label = "本地用户端"; Hint = "$LocalBase/login"; Run = { Open-Url "$LocalBase/login" } },
   @{ Group = "网站入口"; Label = "本地管理端"; Hint = "$LocalBase/admin.html"; Run = { Open-Url "$LocalBase/admin.html" } },
   @{ Group = "本地服务"; Label = "启动本地网站"; Hint = "启动 Vite + 本地 API"; Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" } },
+  @{ Group = "本地服务"; Label = "停止本地服务"; Hint = "关闭本地网站、接口和 OpenClaw 网关"; Run = { Invoke-ProjectScript "scripts\windows\stop-local-services.ps1" @("-NoPause") | Out-Null; Refresh-StatusCards } },
   @{ Group = "本地服务"; Label = "一键体检"; Hint = "检查网站、数据库、备份、GitHub"; Run = { Show-HealthDialog } },
   @{ Group = "本地服务"; Label = "打开 MySQL"; Hint = "使用 HeidiSQL 查看本地数据库"; Run = { Start-ProjectScript "scripts\windows\open-mysql-viewer.ps1" } },
   @{ Group = "本地服务"; Label = "同步线上数据"; Hint = "把线上数据同步到本地 MySQL"; Run = { Start-ProjectScript "scripts\windows\sync-mysql-desktop.ps1" } },
@@ -671,6 +690,9 @@ function Resolve-ActionStatus {
   if ($label -like "*线上用户端*" -or $label -like "*线上管理端*" -or $label -like "*Netlify*" -or $label -like "*部署记录*") {
     $result = Get-HealthResult $Summaries "线上"
     $short = "线上" + (StatusLabel $result.Level)
+  } elseif ($label -like "*停止本地服务*") {
+    $result = Get-HealthResult $Summaries "本地"
+    if ($result.Level -eq "OK") { $short = "可停止" } else { $short = "已停止" }
   } elseif ($label -like "*本地用户端*" -or $label -like "*本地管理端*" -or $label -like "*启动本地网站*") {
     $result = Get-HealthResult $Summaries "本地"
     if ($result.Level -eq "OK") { $short = "本地已启动" } else { $short = "本地未启动" }
@@ -740,6 +762,7 @@ function Get-ActionIcon {
   if ($label -like "*用户端*") { return "站" }
   if ($label -like "*管理端*") { return "管" }
   if ($label -like "*启动*") { return "启" }
+  if ($label -like "*停止*") { return "停" }
   if ($label -like "*体检*") { return "检" }
   if ($label -like "*MySQL*") { return "SQL" }
   if ($label -like "*同步*") { return "同" }

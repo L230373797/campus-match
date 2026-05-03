@@ -421,14 +421,119 @@ function New-LiquidBrush {
   $brush.StartPoint = New-Object System.Windows.Point 0, 0
   $brush.EndPoint = New-Object System.Windows.Point 1, 1
   if ($Selected.IsPresent) {
-    $brush.GradientStops.Add((New-GradientStop "#FAFFFFFF" 0.0)) | Out-Null
-    $brush.GradientStops.Add((New-GradientStop "#EAF4FAFF" 0.42)) | Out-Null
-    $brush.GradientStops.Add((New-GradientStop "#F4F0F6FF" 1.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#F8FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#E9F8FDFF" 0.34)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#F1F0F7FF" 0.72)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#EEF7ECFF" 1.0)) | Out-Null
   } else {
-    $brush.GradientStops.Add((New-GradientStop "#FFFFFFFF" 0.0)) | Out-Null
-    $brush.GradientStops.Add((New-GradientStop "#FBFBFDFF" 1.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#F4FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#EAFBFDFF" 0.42)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#F8F7FBFF" 1.0)) | Out-Null
   }
   return $brush
+}
+
+function New-LiquidBorderBrush {
+  param([switch]$Selected)
+
+  $brush = New-Object System.Windows.Media.LinearGradientBrush
+  $brush.StartPoint = New-Object System.Windows.Point 0, 0
+  $brush.EndPoint = New-Object System.Windows.Point 1, 1
+  if ($Selected.IsPresent) {
+    $brush.GradientStops.Add((New-GradientStop "#DDFEFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#847CB9FF" 0.32)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#88FF78BA" 0.68)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#A6FFFFFF" 1.0)) | Out-Null
+  } else {
+    $brush.GradientStops.Add((New-GradientStop "#D9FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#58A9DEFF" 0.36)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#45FF8BC9" 0.75)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#A8E5E5EA" 1.0)) | Out-Null
+  }
+  return $brush
+}
+
+function New-LiquidShineBrush {
+  param([switch]$Selected)
+
+  $brush = New-Object System.Windows.Media.LinearGradientBrush
+  $brush.StartPoint = New-Object System.Windows.Point 0, 0
+  $brush.EndPoint = New-Object System.Windows.Point 1, 1
+  if ($Selected.IsPresent) {
+    $brush.GradientStops.Add((New-GradientStop "#90FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#24FFFFFF" 0.36)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#00FFFFFF" 0.58)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#35F2D8FF" 1.0)) | Out-Null
+  } else {
+    $brush.GradientStops.Add((New-GradientStop "#70FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#16FFFFFF" 0.42)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#00FFFFFF" 0.7)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#26C5F5FF" 1.0)) | Out-Null
+  }
+  return $brush
+}
+
+function New-LiquidGlowBrush {
+  param([switch]$Selected)
+
+  $brush = New-Object System.Windows.Media.RadialGradientBrush
+  $brush.Center = New-Object System.Windows.Point 0.18, 0.0
+  $brush.GradientOrigin = New-Object System.Windows.Point 0.18, 0.0
+  $brush.RadiusX = 0.95
+  $brush.RadiusY = 0.9
+  if ($Selected.IsPresent) {
+    $brush.GradientStops.Add((New-GradientStop "#C8FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#5EEAF7FF" 0.38)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#18FF8BC9" 0.72)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#00FFFFFF" 1.0)) | Out-Null
+  } else {
+    $brush.GradientStops.Add((New-GradientStop "#82FFFFFF" 0.0)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#32EAF7FF" 0.45)) | Out-Null
+    $brush.GradientStops.Add((New-GradientStop "#00FFFFFF" 1.0)) | Out-Null
+  }
+  return $brush
+}
+
+function Animate-Opacity {
+  param(
+    [System.Windows.UIElement]$Element,
+    [double]$Value,
+    [int]$Duration = 150
+  )
+
+  $ease = New-Object System.Windows.Media.Animation.CubicEase
+  $ease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
+
+  $animation = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $animation.To = $Value
+  $animation.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  $animation.EasingFunction = $ease
+  $Element.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $animation)
+}
+
+function Animate-ScaleXY {
+  param(
+    [System.Windows.Media.ScaleTransform]$Scale,
+    [double]$X,
+    [double]$Y,
+    [int]$Duration = 180
+  )
+
+  $ease = New-Object System.Windows.Media.Animation.CubicEase
+  $ease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
+
+  $scaleX = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $scaleX.To = $X
+  $scaleX.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  $scaleX.EasingFunction = $ease
+
+  $scaleY = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $scaleY.To = $Y
+  $scaleY.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
+  $scaleY.EasingFunction = $ease
+
+  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $scaleX)
+  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $scaleY)
 }
 
 function Animate-Scale {
@@ -437,22 +542,7 @@ function Animate-Scale {
     [double]$Value,
     [int]$Duration = 180
   )
-
-  $ease = New-Object System.Windows.Media.Animation.CubicEase
-  $ease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
-
-  $scaleX = New-Object System.Windows.Media.Animation.DoubleAnimation
-  $scaleX.To = $Value
-  $scaleX.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
-  $scaleX.EasingFunction = $ease
-
-  $scaleY = New-Object System.Windows.Media.Animation.DoubleAnimation
-  $scaleY.To = $Value
-  $scaleY.Duration = New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds($Duration))
-  $scaleY.EasingFunction = $ease
-
-  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $scaleX)
-  $Scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $scaleY)
+  Animate-ScaleXY -Scale $Scale -X $Value -Y $Value -Duration $Duration
 }
 
 function Set-SelectedActionCard {
@@ -461,17 +551,41 @@ function Set-SelectedActionCard {
   if ($script:SelectedActionButton -and $script:SelectedActionButton -ne $Button) {
     $old = $script:SelectedActionButton.Tag
     $old.Card.Background = New-LiquidBrush
-    $old.Card.BorderBrush = New-Brush "#E5E5EA"
+    $old.Card.BorderBrush = New-LiquidBorderBrush
     $old.Card.Effect = New-Shadow
+    if ($old.Rim) {
+      $old.Rim.BorderBrush = New-LiquidBorderBrush
+      Animate-Opacity -Element $old.Rim -Value 0.34 -Duration 140
+    }
+    if ($old.Shine) {
+      $old.Shine.Background = New-LiquidShineBrush
+      Animate-Opacity -Element $old.Shine -Value 0.34 -Duration 140
+    }
+    if ($old.Glow) {
+      $old.Glow.Background = New-LiquidGlowBrush
+      Animate-Opacity -Element $old.Glow -Value 0.2 -Duration 140
+    }
     Animate-Scale -Scale $old.Scale -Value 1.0 -Duration 160
   }
 
   $script:SelectedActionButton = $Button
   $state = $Button.Tag
   $state.Card.Background = New-LiquidBrush -Selected
-  $state.Card.BorderBrush = New-Brush "#7CB9FF"
-  $state.Card.Effect = New-Shadow -Opacity 0.18 -BlurRadius 34 -ShadowDepth 14
-  Animate-Scale -Scale $state.Scale -Value 1.055 -Duration 210
+  $state.Card.BorderBrush = New-LiquidBorderBrush -Selected
+  $state.Card.Effect = New-Shadow -Opacity 0.2 -BlurRadius 42 -ShadowDepth 16
+  if ($state.Rim) {
+    $state.Rim.BorderBrush = New-LiquidBorderBrush -Selected
+    Animate-Opacity -Element $state.Rim -Value 0.72 -Duration 180
+  }
+  if ($state.Shine) {
+    $state.Shine.Background = New-LiquidShineBrush -Selected
+    Animate-Opacity -Element $state.Shine -Value 0.62 -Duration 180
+  }
+  if ($state.Glow) {
+    $state.Glow.Background = New-LiquidGlowBrush -Selected
+    Animate-Opacity -Element $state.Glow -Value 0.54 -Duration 180
+  }
+  Animate-Scale -Scale $state.Scale -Value 1.065 -Duration 230
 }
 
 function New-Text {
@@ -508,13 +622,29 @@ function Refresh-StatusCards {
     $card.Height = 86
     $card.Margin = New-Thickness "0,0,14,14"
     $card.Padding = New-Thickness "16,14,16,14"
-    $card.CornerRadius = 18
-    $card.Background = New-Brush "#FFFFFF"
-    $card.BorderBrush = New-Brush "#E5E5EA"
+    $card.CornerRadius = 20
+    $card.Background = New-LiquidBrush
+    $card.BorderBrush = New-LiquidBorderBrush
     $card.BorderThickness = New-Thickness "1"
     $card.Effect = New-Shadow
 
+    $layers = New-Object System.Windows.Controls.Grid
+    $glow = New-Object System.Windows.Controls.Border
+    $glow.CornerRadius = 20
+    $glow.Background = New-LiquidGlowBrush
+    $glow.Opacity = 0.18
+    $glow.IsHitTestVisible = $false
+    $layers.Children.Add($glow) | Out-Null
+
+    $shine = New-Object System.Windows.Controls.Border
+    $shine.CornerRadius = 20
+    $shine.Background = New-LiquidShineBrush
+    $shine.Opacity = 0.28
+    $shine.IsHitTestVisible = $false
+    $layers.Children.Add($shine) | Out-Null
+
     $stack = New-Object System.Windows.Controls.StackPanel
+    $stack.Margin = New-Thickness "0"
     $top = New-Object System.Windows.Controls.DockPanel
 
     $dot = New-Object System.Windows.Shapes.Ellipse
@@ -534,7 +664,8 @@ function Refresh-StatusCards {
     $detail.ToolTip = $item.Result.Text
     $stack.Children.Add($detail) | Out-Null
 
-    $card.Child = $stack
+    $layers.Children.Add($stack) | Out-Null
+    $card.Child = $layers
     $StatusWrap.Children.Add($card) | Out-Null
   }
   $FooterText.Text = "状态已更新：" + (Get-Date).ToString("HH:mm:ss")
@@ -571,37 +702,101 @@ function New-ActionCard {
   $button.RenderTransform = $scale
 
   $card = New-Object System.Windows.Controls.Border
-  $card.CornerRadius = 20
-  $card.Padding = New-Thickness "18"
+  $card.CornerRadius = 24
+  $card.Padding = New-Thickness "0"
   $card.Background = New-LiquidBrush
-  $card.BorderBrush = New-Brush "#E5E5EA"
-  $card.BorderThickness = New-Thickness "1"
+  $card.BorderBrush = New-LiquidBorderBrush
+  $card.BorderThickness = New-Thickness "1.2"
   $card.Effect = New-Shadow
 
+  $layers = New-Object System.Windows.Controls.Grid
+
+  $glow = New-Object System.Windows.Controls.Border
+  $glow.CornerRadius = 24
+  $glow.Background = New-LiquidGlowBrush
+  $glow.Opacity = 0.2
+  $glow.IsHitTestVisible = $false
+  $layers.Children.Add($glow) | Out-Null
+
+  $shine = New-Object System.Windows.Controls.Border
+  $shine.CornerRadius = 24
+  $shine.Background = New-LiquidShineBrush
+  $shine.Opacity = 0.34
+  $shine.IsHitTestVisible = $false
+  $layers.Children.Add($shine) | Out-Null
+
+  $rim = New-Object System.Windows.Controls.Border
+  $rim.CornerRadius = 24
+  $rim.BorderThickness = New-Thickness "1.5"
+  $rim.BorderBrush = New-LiquidBorderBrush
+  $rim.Opacity = 0.34
+  $rim.IsHitTestVisible = $false
+  $layers.Children.Add($rim) | Out-Null
+
   $stack = New-Object System.Windows.Controls.StackPanel
+  $stack.Margin = New-Thickness "18"
   $stack.Children.Add((New-Text $Action.Label 15 "#1D1D1F" "SemiBold")) | Out-Null
   $hint = New-Text $Action.Hint 12 "#86868B" "Normal" "0,9,0,0"
   $hint.MaxHeight = 36
   $stack.Children.Add($hint) | Out-Null
 
-  $card.Child = $stack
+  $layers.Children.Add($stack) | Out-Null
+  $card.Child = $layers
   $button.Content = $card
   $button.Tag = [PSCustomObject]@{
     Card = $card
     Scale = $scale
+    Rim = $rim
+    Shine = $shine
+    Glow = $glow
   }
   $button.Add_MouseEnter({
     if ($script:SelectedActionButton -ne $button) {
-      $card.BorderBrush = New-Brush "#D1D1D6"
-      $card.Effect = New-Shadow -Opacity 0.12 -BlurRadius 28 -ShadowDepth 10
-      Animate-Scale -Scale $scale -Value 1.018 -Duration 150
+      $card.BorderBrush = New-LiquidBorderBrush -Selected
+      $card.Effect = New-Shadow -Opacity 0.14 -BlurRadius 34 -ShadowDepth 12
+      Animate-Opacity -Element $rim -Value 0.56 -Duration 140
+      Animate-Opacity -Element $shine -Value 0.48 -Duration 140
+      Animate-Opacity -Element $glow -Value 0.34 -Duration 140
+      Animate-Scale -Scale $scale -Value 1.026 -Duration 150
     }
+  }.GetNewClosure())
+  $button.Add_MouseMove({
+    param($sender, $eventArgs)
+    if ($script:SelectedActionButton -eq $button) {
+      return
+    }
+
+    if ($button.ActualWidth -le 0 -or $button.ActualHeight -le 0) {
+      return
+    }
+
+    $point = $eventArgs.GetPosition($button)
+    $nx = (($point.X / $button.ActualWidth) - 0.5) * 2
+    $ny = (($point.Y / $button.ActualHeight) - 0.5) * 2
+    $xScale = 1.024 + ([Math]::Abs($nx) * 0.018) - ([Math]::Abs($ny) * 0.008)
+    $yScale = 1.024 + ([Math]::Abs($ny) * 0.018) - ([Math]::Abs($nx) * 0.008)
+    Animate-ScaleXY -Scale $scale -X $xScale -Y $yScale -Duration 90
   }.GetNewClosure())
   $button.Add_MouseLeave({
     if ($script:SelectedActionButton -ne $button) {
-      $card.BorderBrush = New-Brush "#E5E5EA"
+      $card.BorderBrush = New-LiquidBorderBrush
       $card.Effect = New-Shadow
+      Animate-Opacity -Element $rim -Value 0.34 -Duration 140
+      Animate-Opacity -Element $shine -Value 0.34 -Duration 140
+      Animate-Opacity -Element $glow -Value 0.2 -Duration 140
       Animate-Scale -Scale $scale -Value 1.0 -Duration 150
+    }
+  }.GetNewClosure())
+  $button.Add_MouseDown({
+    Animate-Scale -Scale $scale -Value 0.965 -Duration 90
+    Animate-Opacity -Element $shine -Value 0.76 -Duration 90
+    Animate-Opacity -Element $glow -Value 0.62 -Duration 90
+  }.GetNewClosure())
+  $button.Add_MouseUp({
+    if ($script:SelectedActionButton -eq $button) {
+      Animate-Scale -Scale $scale -Value 1.065 -Duration 170
+    } else {
+      Animate-Scale -Scale $scale -Value 1.026 -Duration 150
     }
   }.GetNewClosure())
   $button.Add_Click({

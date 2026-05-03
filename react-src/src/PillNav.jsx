@@ -125,10 +125,17 @@ function PillNav({
     if (activeIndex < 0) return
 
     const activePill = pillRefs.current[activeIndex]
-    activePill?.scrollIntoView({
+    const scrollContainer = activePill?.closest('.pill-list')
+    if (!activePill || !scrollContainer) return
+
+    const pillRect = activePill.getBoundingClientRect()
+    const containerRect = scrollContainer.getBoundingClientRect()
+    const pillCenter = pillRect.left + pillRect.width / 2
+    const containerCenter = containerRect.left + containerRect.width / 2
+
+    scrollContainer.scrollTo({
+      left: scrollContainer.scrollLeft + pillCenter - containerCenter,
       behavior: 'smooth',
-      inline: 'center',
-      block: 'nearest',
     })
   }, [activeHref, items])
 

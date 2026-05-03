@@ -72,6 +72,105 @@ const feedTabKeywords = {
   心理: ['心理', '烦恼', '压力', '低压力'],
   搭子: ['搭子', '自习', '散步', '学习'],
 }
+const quizQuestions = [
+  {
+    key: 'energy',
+    eyebrow: '01 能量',
+    category: 'MBTI',
+    resultKey: 'mbti',
+    title: '刚认识一个同校的人，你更舒服的节奏是？',
+    options: [
+      { value: 'I', label: '先观察一会儿', note: '慢慢熟起来更自然', tag: '慢热' },
+      { value: 'E', label: '先聊两句试试', note: '有回应就会更放松', tag: '主动开场' },
+    ],
+  },
+  {
+    key: 'info',
+    eyebrow: '02 关注点',
+    category: 'MBTI',
+    resultKey: 'mbti',
+    title: '看一份资料时，你更容易被什么吸引？',
+    options: [
+      { value: 'N', label: '感觉和想象空间', note: '一句话里的气质和可能性', tag: '同频感' },
+      { value: 'S', label: '具体生活细节', note: '地点、习惯、真实日常', tag: '真实日常' },
+    ],
+  },
+  {
+    key: 'decision',
+    eyebrow: '03 回应方式',
+    category: 'MBTI',
+    resultKey: 'mbti',
+    title: '朋友倾诉时，你通常会先给什么？',
+    options: [
+      { value: 'F', label: '先接住情绪', note: '让对方知道自己被理解', tag: '共情回应' },
+      { value: 'T', label: '先理清问题', note: '帮对方找到下一步办法', tag: '理性分析' },
+    ],
+  },
+  {
+    key: 'pace',
+    eyebrow: '04 节奏',
+    category: 'MBTI',
+    resultKey: 'mbti',
+    title: '一段新关系开始时，你更喜欢？',
+    options: [
+      { value: 'J', label: '约定清楚一点', note: '时间、地点、边界都明确', tag: '稳定安排' },
+      { value: 'P', label: '自然发生一点', note: '不急着定义，舒服就继续', tag: '随性探索' },
+    ],
+  },
+  {
+    key: 'birthDate',
+    type: 'date',
+    eyebrow: '05 生辰',
+    category: '生辰',
+    title: '你的生日是哪一天？',
+    note: '只用于生成星座和生辰提示，之后也可以在资料页修改。',
+  },
+  {
+    key: 'goal',
+    eyebrow: '06 关系',
+    category: '合拍',
+    title: '你现在更想遇见哪种校园关系？',
+    options: [
+      { value: 'friend', label: '同校新朋友', note: '先轻松认识，不急着定义', tag: '同校新朋友', sceneTag: '低压力', relationshipGoal: '认识同校朋友' },
+      { value: 'romance', label: '认真了解的人', note: '可以慢慢往恋爱可能发展', tag: '认真了解', sceneTag: '缘分盘', relationshipGoal: '认真了解' },
+      { value: 'study', label: '学习/自习搭子', note: '一起打卡、互相监督', tag: '学习搭子', sceneTag: '图书馆', relationshipGoal: '找学习搭子' },
+    ],
+  },
+  {
+    key: 'scene',
+    eyebrow: '07 场景',
+    category: '合拍',
+    title: '第一次聊天，你更想从哪个场景开始？',
+    options: [
+      { value: 'library', label: '图书馆/自习', note: '安静、稳定、目标清楚', tag: '自习搭子', sceneTag: '图书馆' },
+      { value: 'walk', label: '散步/操场', note: '边走边聊，压力更低', tag: '散步聊天', sceneTag: '操场' },
+      { value: 'food', label: '奶茶/食堂', note: '有具体地点，比较好开口', tag: '探店吃饭', sceneTag: '食堂' },
+      { value: 'treehole', label: '树洞/倾诉', note: '先匿名表达，再慢慢认识', tag: '愿意倾听', sceneTag: '树洞' },
+    ],
+  },
+  {
+    key: 'reply',
+    eyebrow: '08 聊法',
+    category: '合拍',
+    title: '你希望对方怎么回应你？',
+    options: [
+      { value: 'warm', label: '先接住情绪', note: '别急着评判，认真听完', tag: '温柔回应', sceneTag: '倾诉' },
+      { value: 'fun', label: '轻松一点', note: '能开玩笑，也能认真聊', tag: '轻松聊天', sceneTag: '低压力' },
+      { value: 'clear', label: '直接一点', note: '表达清楚，少猜来猜去', tag: '直接沟通', sceneTag: '高效沟通' },
+    ],
+  },
+  {
+    key: 'boundary',
+    eyebrow: '09 边界',
+    category: '合拍',
+    title: '你更在意哪条安全感？',
+    options: [
+      { value: 'verified', label: '同校认证优先', note: '先确认是真实校内用户', tag: '同校认证', sceneTag: '安全感' },
+      { value: 'slow', label: '慢慢熟悉', note: '别太快推进线下见面', tag: '慢节奏', sceneTag: '低压力' },
+      { value: 'anonymous', label: '可以先匿名', note: '有些话想先轻轻放出来', tag: '匿名友好', sceneTag: '树洞' },
+    ],
+  },
+]
 
 const feedCards = [
   {
@@ -601,6 +700,105 @@ function buildFeedPages(items = feedCards) {
   })
 }
 
+function passVerticalWheelToPage(event) {
+  if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+  event.preventDefault()
+  window.scrollBy({ top: event.deltaY, left: 0, behavior: 'auto' })
+}
+
+function mbtiFromQuizAnswers(answers = {}) {
+  return quizQuestions
+    .filter((question) => question.resultKey === 'mbti')
+    .map((question) => answers[question.key])
+    .join('')
+}
+
+function selectedQuizOptions(answers = {}) {
+  return quizQuestions
+    .map((question) => question.options?.find((option) => option.value === answers[question.key]))
+    .filter(Boolean)
+}
+
+function quizTagsFromAnswers(answers = {}) {
+  return Array.from(new Set(selectedQuizOptions(answers).map((option) => option.tag).filter(Boolean)))
+}
+
+function quizSceneTagsFromAnswers(answers = {}) {
+  return Array.from(new Set(selectedQuizOptions(answers).map((option) => option.sceneTag).filter(Boolean)))
+}
+
+function quizRelationshipGoalFromAnswers(answers = {}) {
+  return selectedQuizOptions(answers).find((option) => option.relationshipGoal)?.relationshipGoal || ''
+}
+
+function quizBirthDateFromAnswers(answers = {}) {
+  const birthDate = answers.birthDate
+  return birthDate && birthDate !== 'skip' ? birthDate : ''
+}
+
+function isQuizQuestionAnswered(question, answers = {}) {
+  const answer = answers[question.key]
+  if (question.type === 'date') return Boolean(answer)
+  return Boolean(question.options?.some((option) => option.value === answer))
+}
+
+function quizFocusFromResult({ mbti = '', birthDate = '', sceneTags = [] } = {}) {
+  if (!mbti || mbti.length < 4) return '先完成小测试，生成更贴近你的开场方式'
+  const zodiac = zodiacFromBirthDate(birthDate)
+  const scene = sceneTags[0] || '同校话题'
+  if (mbti.startsWith('I')) {
+    return `从${scene}开始会更舒服，先给彼此一点慢慢熟悉的空间${zodiac ? `，${zodiac}的提示也已记下` : ''}`
+  }
+  return `可以主动发一个关于${scene}的轻松问题，让同校连接自然开始${zodiac ? `，${zodiac}会参与今日提示` : ''}`
+}
+
+function quizMoodFromMbti(mbti = '') {
+  if (!mbti || mbti.length < 4) return { moodLabel: '想聊天', moodScore: 76 }
+  const score = 70 + (mbti.startsWith('E') ? 8 : 2) + (mbti.includes('N') ? 4 : 1) + (mbti.endsWith('P') ? 3 : 0)
+  return {
+    moodLabel: mbti.startsWith('I') ? '轻松' : '想聊天',
+    moodScore: Math.max(58, Math.min(92, score)),
+  }
+}
+
+function quizPortraitFromResult({ mbti = '', birthDate = '', relationshipGoal = '', tags = [], sceneTags = [] } = {}) {
+  const zodiac = zodiacFromBirthDate(birthDate)
+  const energy = mbti.startsWith('I') ? '慢热观察型' : '主动开场型'
+  const info = mbti.includes('N') ? '看重感觉和想象空间' : '看重真实细节'
+  const reply = mbti.includes('F') ? '更吃温柔回应' : '更吃清楚直接'
+  const pace = mbti.endsWith('J') ? '喜欢稳定节奏' : '喜欢自然发生'
+  const scene = sceneTags[0] || tags[0] || '同校话题'
+  const title = `${mbti || '校园'} · ${energy}`
+  const subtitle = `${info}，${reply}，${pace}。适合从${scene}这样具体、低压力的入口开始认识。`
+  const opener = mbti.startsWith('I')
+    ? `开场可以轻一点：我也更喜欢慢慢熟悉，看到你也提到${scene}，想问问你平时会怎么安排这类时间？`
+    : `开场可以主动一点：看到你也对${scene}有兴趣，刚好想找个同校的人聊聊，你最近有类似的小计划吗？`
+
+  return {
+    title,
+    subtitle,
+    opener,
+    chips: [zodiac, relationshipGoal, ...tags, ...sceneTags].filter(Boolean),
+    tiles: [
+      {
+        label: '人格节奏',
+        value: mbti || '待生成',
+        text: `${energy}，${pace}。`,
+      },
+      {
+        label: '生辰提示',
+        value: zodiac || '可后补',
+        text: zodiac ? `${zodiac}会参与每日提示。` : '补上生日后，会生成星座和生辰提示。',
+      },
+      {
+        label: '合拍入口',
+        value: relationshipGoal || scene,
+        text: `先从${scene}开聊，更容易自然接上。`,
+      },
+    ],
+  }
+}
+
 function userToProfileForm(user = {}) {
   return {
     nickname: user.nickname || '',
@@ -1053,6 +1251,7 @@ function Feed({ items = feedCards }) {
       <div
         className="feed-swipe-track"
         ref={scrollerRef}
+        onWheel={passVerticalWheelToPage}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1092,10 +1291,318 @@ function Feed({ items = feedCards }) {
   )
 }
 
+function QuizPager({ onComplete, busy = '' }) {
+  const trackRef = useRef(null)
+  const dragRef = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false })
+  const [answers, setAnswers] = useState({})
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const completedCount = quizQuestions.filter((question) => isQuizQuestionAnswered(question, answers)).length
+  const completed = completedCount === quizQuestions.length
+  const mbti = mbtiFromQuizAnswers(answers)
+  const tags = quizTagsFromAnswers(answers)
+  const sceneTags = quizSceneTagsFromAnswers(answers)
+  const birthDate = quizBirthDateFromAnswers(answers)
+  const relationshipGoal = quizRelationshipGoalFromAnswers(answers)
+  const focus = quizFocusFromResult({ mbti, birthDate, sceneTags })
+  const resultMood = quizMoodFromMbti(mbti)
+  const resultPortrait = quizPortraitFromResult({ mbti, birthDate, relationshipGoal, tags, sceneTags })
+  const pageCount = quizQuestions.length + 1
+  const currentQuestion = quizQuestions[activeIndex]
+  const currentQuestionAnswered = currentQuestion ? isQuizQuestionAnswered(currentQuestion, answers) : true
+  const progressPercent = Math.round((completedCount / quizQuestions.length) * 100)
+
+  const scrollToPage = (index, behavior = 'smooth') => {
+    const track = trackRef.current
+    if (!track) return
+    const nextIndex = Math.max(0, Math.min(pageCount - 1, index))
+    track.scrollTo({ left: nextIndex * track.clientWidth, behavior })
+    setActiveIndex(nextIndex)
+  }
+
+  const handleScroll = (event) => {
+    const width = event.currentTarget.clientWidth || 1
+    setActiveIndex(Math.round(event.currentTarget.scrollLeft / width))
+  }
+
+  const snapToNearestPage = () => {
+    const track = trackRef.current
+    if (!track) return
+    const width = track.clientWidth || 1
+    scrollToPage(Math.round(track.scrollLeft / width))
+  }
+
+  const handleNextPage = () => {
+    if (activeIndex >= pageCount - 1) return
+    const question = quizQuestions[activeIndex]
+    if (question?.type === 'date' && !answers[question.key]) {
+      setAnswers((current) => ({ ...current, [question.key]: 'skip' }))
+      setSaved(false)
+      scrollToPage(activeIndex + 1)
+      return
+    }
+    if (question && !isQuizQuestionAnswered(question, answers)) return
+    scrollToPage(activeIndex + 1)
+  }
+
+  const selectOption = (question, option, questionIndex, event) => {
+    if (dragRef.current.moved) {
+      event.preventDefault()
+      return
+    }
+
+    setAnswers((current) => ({
+      ...current,
+      [question.key]: option.value,
+    }))
+    setSaved(false)
+
+    window.setTimeout(() => {
+      scrollToPage(questionIndex < quizQuestions.length - 1 ? questionIndex + 1 : quizQuestions.length)
+    }, 180)
+  }
+
+  const resetQuiz = () => {
+    setAnswers({})
+    setSaved(false)
+    scrollToPage(0)
+  }
+
+  const saveResult = async () => {
+    if (!completed || saving || busy === 'quiz') return
+    setSaving(true)
+    const ok = await onComplete?.({
+      answers,
+      mbti,
+      tags,
+      sceneTags,
+      birthDate,
+      relationshipGoal,
+      focus,
+      moodLabel: resultMood.moodLabel,
+      moodScore: resultMood.moodScore,
+    })
+    if (ok !== false) {
+      setSaved(true)
+    }
+    setSaving(false)
+  }
+
+  const startDrag = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    dragRef.current = {
+      active: true,
+      startX: event.clientX,
+      scrollLeft: event.currentTarget.scrollLeft,
+      moved: false,
+    }
+    setIsDragging(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const moveDrag = (event) => {
+    if (!dragRef.current.active) return
+    const delta = event.clientX - dragRef.current.startX
+    if (Math.abs(delta) > 6) {
+      dragRef.current.moved = true
+    }
+    event.currentTarget.scrollLeft = dragRef.current.scrollLeft - delta
+  }
+
+  const endDrag = (event) => {
+    if (!dragRef.current.active) return
+    dragRef.current.active = false
+    setIsDragging(false)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    snapToNearestPage()
+    window.setTimeout(() => {
+      dragRef.current.moved = false
+    }, 80)
+  }
+
+  const handleKeyDown = (event) => {
+    if (event.target?.tagName === 'INPUT') return
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      handleNextPage()
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      scrollToPage(activeIndex - 1)
+    }
+  }
+
+  return (
+    <section className="quiz-pager" aria-label="横向分页小测试">
+      <div className="quiz-pager-head">
+        <div className="quiz-pager-status">
+          <span>{currentQuestion?.category || '结果'}</span>
+          <strong>{activeIndex < quizQuestions.length ? `${activeIndex + 1}/${quizQuestions.length}` : '结果'}</strong>
+          <small>{completed ? '画像已生成' : `已完成 ${progressPercent}%`}</small>
+        </div>
+        <div className="quiz-pager-actions">
+          <button type="button" onClick={() => scrollToPage(activeIndex - 1)} disabled={activeIndex <= 0}>
+            上一题
+          </button>
+          <button
+            type="button"
+            onClick={handleNextPage}
+            disabled={activeIndex >= pageCount - 1 || (currentQuestion?.type !== 'date' && !currentQuestionAnswered)}
+          >
+            {currentQuestion?.type === 'date' && !answers[currentQuestion.key] ? '跳过' : '下一页'}
+          </button>
+        </div>
+      </div>
+      <div className="quiz-complete-meter" aria-hidden="true">
+        <span style={{ width: `${progressPercent}%` }} />
+      </div>
+      <div
+        className={`quiz-track${isDragging ? ' is-dragging' : ''}`}
+        ref={trackRef}
+        tabIndex={0}
+        onScroll={handleScroll}
+        onWheel={passVerticalWheelToPage}
+        onKeyDown={handleKeyDown}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
+      >
+        {quizQuestions.map((question, questionIndex) => (
+          <article className={`quiz-page${activeIndex === questionIndex ? ' active' : ''}`} key={question.key} aria-label={question.title}>
+            <span className="quiz-eyebrow">{question.eyebrow}</span>
+            <h3>{question.title}</h3>
+            {question.type === 'date' ? (
+              <div className="quiz-date-card">
+                <p>{question.note}</p>
+                <input
+                  type="date"
+                  value={answers.birthDate === 'skip' ? '' : answers.birthDate || ''}
+                  onChange={(event) => {
+                    setAnswers((current) => ({ ...current, birthDate: event.target.value }))
+                    setSaved(false)
+                  }}
+                />
+                <div className="quiz-date-actions">
+                  <button type="button" onClick={() => scrollToPage(questionIndex + 1)} disabled={!answers.birthDate || answers.birthDate === 'skip'}>
+                    继续
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAnswers((current) => ({ ...current, birthDate: 'skip' }))
+                      setSaved(false)
+                      scrollToPage(questionIndex + 1)
+                    }}
+                  >
+                    暂时跳过
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="quiz-option-grid">
+                {question.options.map((option) => (
+                  <button
+                    className={`quiz-option${answers[question.key] === option.value ? ' active' : ''}`}
+                    type="button"
+                    key={option.value}
+                    onClick={(event) => selectOption(question, option, questionIndex, event)}
+                  >
+                    <span>{option.label}</span>
+                    <small>{option.note}</small>
+                    {answers[question.key] === option.value && <i aria-hidden="true">已选</i>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </article>
+        ))}
+        <article className={`quiz-page quiz-result-page${completed ? ' is-ready' : ''}${activeIndex === quizQuestions.length ? ' active' : ''}`}>
+          {completed ? (
+            <div className="quiz-result-ceremony">
+              <div className="quiz-result-orbit" aria-hidden="true">
+                <span />
+                <span />
+              </div>
+              <span className="quiz-eyebrow">结果已生成</span>
+              <div className="quiz-result-hero">
+                <div>
+                  <small>你的校园合拍画像</small>
+                  <h3>{resultPortrait.title}</h3>
+                  <p>{resultPortrait.subtitle}</p>
+                </div>
+                <strong className="quiz-result-code">{mbti}</strong>
+              </div>
+              <div className="quiz-result-meter">
+                <strong>{resultMood.moodScore}</strong>
+                <div>
+                  <span>今日开场指数</span>
+                  <i style={{ width: `${resultMood.moodScore}%` }} />
+                </div>
+              </div>
+              <div className="quiz-result-tiles">
+                {resultPortrait.tiles.map((tile) => (
+                  <div className="quiz-result-tile" key={tile.label}>
+                    <span>{tile.label}</span>
+                    <strong>{tile.value}</strong>
+                    <p>{tile.text}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="quiz-starter-line">{resultPortrait.opener}</p>
+              <div className="quiz-tag-row">
+                {resultPortrait.chips.slice(0, 8).map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+              <div className="quiz-result-actions">
+                <button className="primary-action quiz-save-button" type="button" disabled={saving || busy === 'quiz'} onClick={saveResult}>
+                  {saving || busy === 'quiz' ? '正在保存' : '保存到我的画像'}
+                </button>
+                <button className="ghost-action quiz-reset-button" type="button" onClick={resetQuiz}>
+                  重新测一次
+                </button>
+              </div>
+              {saved && <p className="quiz-save-note">已同步到首页画像，推荐会参考这个结果。</p>}
+            </div>
+          ) : (
+            <>
+              <span className="quiz-eyebrow">结果预览</span>
+              <h3>{`还差 ${quizQuestions.length - completedCount} 题，就能生成完整画像。`}</h3>
+              <div className="quiz-result-code">{`${completedCount}/${quizQuestions.length}`}</div>
+              <div className="quiz-tag-row">
+                {['MBTI', '生辰', '合拍场景'].map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+              <button className="primary-action quiz-save-button" type="button" disabled>
+                保存到我的画像
+              </button>
+            </>
+          )}
+        </article>
+      </div>
+      <div className="quiz-progress" aria-hidden="true">
+        {Array.from({ length: pageCount }, (_, index) => (
+          <button className={activeIndex === index ? 'active' : ''} type="button" key={index} onClick={() => scrollToPage(index)}>
+            <span />
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function SelfInsightPanel({
   insight = insightFallback,
   treeholes = treeholeFallback,
   onMoodUpdate,
+  onQuizComplete,
   onTreeholeSubmit,
   busy = '',
   notice = '',
@@ -1153,6 +1660,7 @@ function SelfInsightPanel({
           <span>{insight.zodiac || '补生日'}</span>
           <span>{formatBirthDate(insight.birthDate) || '生辰待补'}</span>
         </div>
+        <QuizPager onComplete={onQuizComplete} busy={busy} />
         <div className="daily-card-grid">
           {insight.dailyCards.slice(0, 4).map((card) => (
             <article className="daily-card" key={card.title}>
@@ -2762,6 +3270,87 @@ function HomePage() {
     }
   }
 
+  const completeHomeQuiz = async ({ mbti, birthDate = '', relationshipGoal = '', tags = [], sceneTags = [], focus, moodLabel, moodScore }) => {
+    const insightBody = { moodLabel, moodScore, focus }
+    const buildUpdatedProfile = (profile = {}) => {
+      const nextTags = Array.from(new Set([...splitList(profile.tags), ...tags, '测一测'])).slice(0, 10)
+      const nextSceneTags = Array.from(new Set([...splitList(profile.sceneTags), ...sceneTags, '测一测'])).slice(0, 8)
+      return {
+        ...profile,
+        mbti,
+        birthDate: birthDate || profile.birthDate || '',
+        relationshipGoal: relationshipGoal || profile.relationshipGoal || '',
+        tags: nextTags,
+        sceneTags: nextSceneTags,
+      }
+    }
+
+    if (!hasAuthToken()) {
+      setHomeData((current) => {
+        const updatedProfile = buildUpdatedProfile(current.profile || profileFallback)
+        return {
+          ...current,
+          profile: updatedProfile,
+          insight: normalizeInsightPayload({
+            ...current.insight,
+            mbti,
+            birthDate: updatedProfile.birthDate,
+            tags: updatedProfile.tags,
+            moodScore,
+            selfInsight: {
+              ...(current.insight?.selfInsight || {}),
+              ...insightBody,
+            },
+          }, updatedProfile),
+        }
+      })
+      setInsightNotice('测试结果已更新到本地画像。登录后可以保存到账号里。')
+      return true
+    }
+
+    setInsightBusy('quiz')
+    setInsightNotice('')
+    try {
+      const profileDraft = buildUpdatedProfile(homeData.profile || profileFallback)
+      const profilePayload = await apiRequest('/users/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          mbti: profileDraft.mbti,
+          birthDate: profileDraft.birthDate,
+          relationshipGoal: profileDraft.relationshipGoal,
+          tags: profileDraft.tags,
+          sceneTags: profileDraft.sceneTags,
+        }),
+      })
+      const insightPayload = await apiRequest('/users/insights', {
+        method: 'POST',
+        body: JSON.stringify(insightBody),
+      })
+      const [recommendationResult, activityResult] = await Promise.allSettled([
+        apiRequest('/users/recommendations?limit=6'),
+        apiRequest('/users/activity'),
+      ])
+      const updatedProfile = profilePayload.data?.user || profileDraft
+      setHomeData((current) => ({
+        ...current,
+        profile: updatedProfile,
+        insight: normalizeInsightPayload(insightPayload.data, updatedProfile),
+        recommendations:
+          recommendationResult.status === 'fulfilled'
+            ? recommendationResult.value.data?.users || current.recommendations
+            : current.recommendations,
+        activity: activityResult.status === 'fulfilled' ? activityResult.value.data || current.activity : current.activity,
+      }))
+      setInsightNotice('测试结果已保存，推荐会参考你的新画像。')
+      return true
+    } catch (error) {
+      setInsightNotice(error.message || '测试结果保存失败，再试一次。')
+      return false
+    } finally {
+      setInsightBusy('')
+    }
+  }
+
   const submitTreehole = async (body) => {
     if (!hasAuthToken()) {
       const localPost = {
@@ -2859,6 +3448,7 @@ function HomePage() {
         insight={visibleInsight}
         treeholes={homeData.treeholes}
         onMoodUpdate={updateHomeInsight}
+        onQuizComplete={completeHomeQuiz}
         onTreeholeSubmit={submitTreehole}
         busy={insightBusy}
         notice={insightNotice}

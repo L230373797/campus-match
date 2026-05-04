@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AnimatedList from './AnimatedList'
 import PillNav from './PillNav'
@@ -6,6 +6,32 @@ import { AnimatePresence, motion } from 'motion/react'
 import ScrollReveal from './ScrollReveal'
 
 const FloatingLines = lazy(() => import('./FloatingLines'))
+
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+
+    return (
+      <main className="app-shell error-shell">
+        <Background />
+        <section className="app-error-panel">
+          <span className="section-label">页面遇到问题</span>
+          <h1>这里先停一下</h1>
+          <p>{this.state.error.message || '页面加载失败，请刷新再试。'}</p>
+        </section>
+      </main>
+    )
+  }
+}
 
 const discoveryTags = ['同校', 'MBTI', '生辰', '搭子', '树洞话题']
 
@@ -213,6 +239,10 @@ const matchProfiles = [
     meta: '同校认证 · 图书馆 · INFP',
     note: '喜欢安静自习、电影配乐和晚上的校园路灯。',
     tags: ['自习搭子', '慢热', '电影'],
+    detailChips: ['同校认证', 'INFP', '天秤座', '9月28日生'],
+    reasonList: ['都喜欢安静自习', '聊天节奏偏慢', '电影歌单能开场'],
+    identityLabel: '已认证',
+    schoolLine: '同校 · 文学类 · 大三',
     accent: 'cyan',
   },
   {
@@ -222,6 +252,10 @@ const matchProfiles = [
     meta: '同城校区 · 周末 · 低压力',
     note: '更喜欢边走边聊，不用一直找话题也舒服。',
     tags: ['散步', '歌单', '树洞'],
+    detailChips: ['同城校区', 'ENFP', '双鱼座', '散步局'],
+    reasonList: ['都接受低压力认识', '周末时间更合拍', '愿意从线下活动开始'],
+    identityLabel: '校园资料',
+    schoolLine: '同城校区 · 设计类 · 大二',
     accent: 'pink',
   },
   {
@@ -231,6 +265,10 @@ const matchProfiles = [
     meta: 'MBTI · 生辰 · 轻聊天',
     note: '回复不一定快，但每一句都会认真看。',
     tags: ['INFP', '星座', '慢节奏'],
+    detailChips: ['INFP', '巨蟹座', '7月10日生', '慢热聊天'],
+    reasonList: ['MBTI 节奏接近', '都偏认真回复', '适合先聊校园日常'],
+    identityLabel: '同频推荐',
+    schoolLine: '资料完善度较高',
     accent: 'violet',
   },
 ]
@@ -346,6 +384,7 @@ const profileFallback = {
   verificationStatus: 'none',
   verificationBadge: '未认证',
   avatar: '',
+  photos: [],
   stats: {
     matches: 12,
     likes: 6,
@@ -445,6 +484,56 @@ function formatRelativeTime(value) {
   return `${Math.max(2, Math.floor(diff / day))}天前`
 }
 
+function messageDayKey(value) {
+  const timestamp = Date.parse(value || '')
+  if (!Number.isFinite(timestamp)) return 'draft'
+
+  const date = new Date(timestamp)
+  date.setHours(0, 0, 0, 0)
+  return date.toISOString().slice(0, 10)
+}
+
+function formatMessageDay(value) {
+  const timestamp = Date.parse(value || '')
+  if (!Number.isFinite(timestamp)) return '今天'
+
+  const date = new Date(timestamp)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return '今天'
+  if (date.toDateString() === yesterday.toDateString()) return '昨天'
+
+  return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
+}
+
+function groupMessagesByDay(messages = []) {
+  const rows = []
+  let lastKey = ''
+
+  messages.forEach((message, index) => {
+    const dayKey = messageDayKey(message.createdAt)
+    if (dayKey !== lastKey) {
+      rows.push({
+        type: 'date',
+        key: `date-${dayKey}-${index}`,
+        label: formatMessageDay(message.createdAt),
+      })
+      lastKey = dayKey
+    }
+
+    rows.push({
+      type: 'message',
+      key: `message-${message.id || message.createdAt || index}`,
+      message,
+      index,
+    })
+  })
+
+  return rows
+}
+
 function formatBirthDate(value) {
   if (!value) return ''
   const parts = String(value).split('-').map((part) => Number(part))
@@ -495,22 +584,43 @@ function normalizeMatchProfile(user = {}, index = 0) {
   const tags = [...profileTags, ...reasonTags].filter(Boolean).slice(0, 3)
   const rawScore = Number(user.recommendation?.score ?? user.score ?? 72)
   const score = Math.max(40, Math.min(99, Math.round(Number.isFinite(rawScore) ? rawScore : 72)))
+  const verified = user.isVerified || user.verificationStatus === 'approved'
+  const photos = normalizeProfilePhotos(user.photos)
+  const primaryPhoto = photos[0] || user.avatar || ''
+  const birthLabel = formatBirthDate(user.birthDate)
+  const zodiac = zodiacFromBirthDate(user.birthDate)
   const meta = [
-    user.isVerified || user.verificationStatus === 'approved' ? '同校认证' : user.school,
+    verified ? '同校认证' : user.school,
     user.major,
     user.mbti,
   ]
     .filter(Boolean)
     .join(' · ')
+  const detailChips = [
+    verified ? '同校认证' : user.school,
+    user.mbti,
+    zodiac,
+    birthLabel ? `${birthLabel}生` : '',
+    user.relationshipGoal,
+  ]
+    .filter(Boolean)
+    .slice(0, 4)
+  const reasonList = (reasonTags.length ? reasonTags : profileTags).filter(Boolean).slice(0, 3)
 
   return {
     id,
     userId: id,
     name: user.nickname || user.name || '校园同学',
     score,
+    photo: primaryPhoto,
+    gallery: [primaryPhoto, ...photos.filter((photo) => photo !== primaryPhoto)].filter(Boolean).slice(0, 3),
     meta: meta || '校园资料 · 等你认识',
     note: user.bio || reasonTags.join('、') || '资料还在慢慢完善，先从一个轻松话题开始。',
     tags: tags.length ? tags : ['同校', '轻聊天', '合拍'],
+    detailChips: detailChips.length ? detailChips : ['同校推荐', '资料待补', '轻松开场'],
+    reasonList: reasonList.length ? reasonList : ['资料越完整，推荐越准'],
+    identityLabel: verified ? '已认证' : (user.school ? '校园资料' : '待完善'),
+    schoolLine: [user.school, user.major, user.grade].filter(Boolean).join(' · ') || '补充学校和专业后更准',
     accent: matchAccents[index % matchAccents.length],
     source: user,
   }
@@ -520,6 +630,19 @@ function normalizeMessageThread(match = {}, index = 0) {
   const user = match.user || {}
   const name = user.nickname || user.name || '校园同学'
   const school = [user.school, user.major || user.mbti || '轻聊天'].filter(Boolean).join(' · ')
+  const photos = normalizeProfilePhotos(user.photos)
+  const avatar = photos[0] || user.avatar || ''
+  const zodiac = zodiacFromBirthDate(user.birthDate)
+  const birthLabel = formatBirthDate(user.birthDate)
+  const detailChips = [
+    user.isVerified || user.verificationStatus === 'approved' ? '同校认证' : user.school,
+    user.mbti,
+    zodiac,
+    birthLabel ? `${birthLabel}生` : '',
+  ]
+    .filter(Boolean)
+    .slice(0, 4)
+  const preview = match.lastMessagePreview || '你们已经匹配，可以从一个轻松问题开始。'
 
   return {
     id: match.id || match._id || `match-${index}`,
@@ -529,7 +652,18 @@ function normalizeMessageThread(match = {}, index = 0) {
     unread: Number(match.unreadCount || 0),
     online: Boolean(match.typing?.activeUsers?.length),
     tone: matchAccents[index % matchAccents.length],
-    lastMessage: match.lastMessagePreview || '你们已经匹配，可以从一个轻松问题开始。',
+    lastMessage: preview,
+    avatar,
+    photos,
+    detailChips: detailChips.length ? detailChips : ['校园资料', '轻聊天'],
+    bio: user.bio || '',
+    mbti: user.mbti || '',
+    zodiac,
+    birthLabel,
+    isVerified: Boolean(user.isVerified || user.verificationStatus === 'approved'),
+    identityRevealed: Boolean(match.identityRevealed),
+    lastOwnMessageRead: Boolean(match.lastOwnMessageRead),
+    lastMessageSenderId: match.lastMessageSenderId || '',
     messages: [],
     sourceMatch: match,
   }
@@ -537,10 +671,19 @@ function normalizeMessageThread(match = {}, index = 0) {
 
 function normalizeChatMessage(message = {}, currentUserId = '') {
   const senderId = message.senderId || message.sender?.id || message.sender?._id || ''
+  const type = message.type || 'text'
+  const isRecalled = Boolean(message.recalledAt || message.recalled)
   return {
+    id: message.id || message._id || '',
+    senderId,
     from: senderId && senderId === currentUserId ? 'me' : 'other',
-    text: message.content || message.text || '',
+    text: isRecalled ? '消息已撤回' : message.content || message.text || '',
+    type,
+    imageUrl: !isRecalled && type === 'image' ? message.content || message.imageUrl || '' : '',
     createdAt: message.createdAt,
+    recalledAt: message.recalledAt || '',
+    isRecalled,
+    senderName: message.senderNickname || message.sender?.nickname || '',
   }
 }
 
@@ -815,6 +958,13 @@ function userToProfileForm(user = {}) {
     allowAnonymousMatch: user.allowAnonymousMatch ?? true,
     allowOfflineEvents: user.allowOfflineEvents ?? true,
   }
+}
+
+function normalizeProfilePhotos(value) {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))]
+    .filter((photo) => photo.startsWith('/api/uploads/profile-photos/') || photo.startsWith('blob:'))
+    .slice(0, 6)
 }
 
 function uploadPayloadFromFile(file) {
@@ -1105,7 +1255,7 @@ function MatchPreview() {
         </div>
         <AnimatePresence mode="wait">
           <motion.article
-            className={`match-card ${activeProfile.accent}`}
+            className={`match-card ${activeProfile.accent} has-media`}
             key={activeProfile.id}
             initial={{ opacity: 0, y: 24, rotate: -2, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
@@ -1115,6 +1265,21 @@ function MatchPreview() {
             <div className="match-orbit">
               <span />
             </div>
+            <div className="match-media" aria-hidden="true">
+              {activeProfile.photo ? (
+                <img src={activeProfile.photo} alt="" />
+              ) : (
+                <span className="match-avatar-fallback">{activeProfile.name.slice(0, 1)}</span>
+              )}
+              <span className="match-identity">{activeProfile.identityLabel || '校园资料'}</span>
+              <div className="match-mini-photos">
+                {(activeProfile.gallery || []).slice(1, 3).map((photo) => (
+                  <span key={photo}>
+                    <img src={photo} alt="" />
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="match-score">
               <strong>{activeProfile.score}</strong>
               <small>合拍分</small>
@@ -1122,8 +1287,19 @@ function MatchPreview() {
             <div className="match-person">
               <h3>{activeProfile.name}</h3>
               <p>{activeProfile.meta}</p>
+              {activeProfile.schoolLine && <small>{activeProfile.schoolLine}</small>}
+            </div>
+            <div className="match-signals">
+              {(activeProfile.detailChips || []).map((chip) => (
+                <span key={chip}>{chip}</span>
+              ))}
             </div>
             <p className="match-note">{activeProfile.note}</p>
+            <div className="match-reasons">
+              {(activeProfile.reasonList || []).map((reason) => (
+                <span key={reason}>{reason}</span>
+              ))}
+            </div>
             <div className="match-tags">
               {activeProfile.tags.map((tag) => (
                 <span key={tag}>{tag}</span>
@@ -1792,13 +1968,38 @@ function FeatureSheet({ shortcut, homeData, onClose }) {
   )
 }
 
-function MatchProfileSheet({ thread, onClose, onReveal }) {
+function MessageAvatar({ thread, className = '' }) {
+  const name = thread?.name || '同学'
+  const avatar =
+    thread?.avatar ||
+    normalizeProfilePhotos(thread?.sourceMatch?.user?.photos)[0] ||
+    thread?.sourceMatch?.user?.avatar ||
+    ''
+
+  return (
+    <span className={`message-avatar ${thread?.tone || 'cyan'} ${avatar ? 'has-image' : ''} ${className}`}>
+      {avatar ? <img src={avatar} alt="" /> : name.slice(0, 1)}
+    </span>
+  )
+}
+
+function MatchProfileSheet({ thread, onClose, onReveal, onMessage }) {
   const match = thread?.sourceMatch || {}
   const profile = match.user || {}
   if (!thread) return null
 
   const tags = [...splitList(profile.tags), ...splitList(profile.sceneTags)].slice(0, 6)
   const revealed = Boolean(match.identityRevealed)
+  const photos = thread.photos?.length ? thread.photos : normalizeProfilePhotos(profile.photos)
+  const birthLabel = formatBirthDate(profile.birthDate)
+  const chips = [
+    profile.isVerified || profile.verificationStatus === 'approved' ? '同校认证' : profile.school,
+    profile.mbti,
+    zodiacFromBirthDate(profile.birthDate),
+    birthLabel ? `${birthLabel}生` : '',
+  ]
+    .filter(Boolean)
+    .slice(0, 4)
 
   return (
     <div className="feature-sheet-backdrop" role="presentation" onClick={onClose}>
@@ -1816,9 +2017,29 @@ function MatchProfileSheet({ thread, onClose, onReveal }) {
         <button className="feature-sheet-close" type="button" onClick={onClose} aria-label="关闭">
           ×
         </button>
-        <span className={`message-avatar ${thread.tone}`}>{thread.name.slice(0, 1)}</span>
-        <strong>{profile.nickname || thread.name}</strong>
-        <p>{[profile.school, profile.grade, profile.major, profile.mbti].filter(Boolean).join(' · ') || thread.school}</p>
+        <div className="match-profile-hero">
+          <MessageAvatar thread={thread} className="profile-sheet-avatar" />
+          <div>
+            <strong>{profile.nickname || thread.name}</strong>
+            <p>{[profile.school, profile.grade, profile.major, profile.mbti].filter(Boolean).join(' · ') || thread.school}</p>
+            {chips.length > 0 && (
+              <div className="message-chip-row">
+                {chips.map((chip) => (
+                  <span key={chip}>{chip}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {photos.length > 1 && (
+          <div className="match-profile-gallery" aria-hidden="true">
+            {photos.slice(1, 4).map((photo) => (
+              <span key={photo}>
+                <img src={photo} alt="" />
+              </span>
+            ))}
+          </div>
+        )}
         <div className="wisdom-card-list">
           <span>{profile.bio || '对方还没有写太多介绍，可以先从一个轻松问题开始。'}</span>
           <span>{revealed ? '双方已确认公开身份，可以更放心地继续聊。' : '现在仍是低压力匹配状态，双方确认后再公开更多身份信息。'}</span>
@@ -1830,18 +2051,23 @@ function MatchProfileSheet({ thread, onClose, onReveal }) {
             ))}
           </div>
         )}
-        {match.id && (
-          <button className="primary-action" type="button" onClick={() => onReveal?.(match.id)}>
-            {revealed ? '已公开身份' : '申请公开身份'}
+        <div className="feature-sheet-actions">
+          <button className="primary-action" type="button" onClick={() => onMessage?.(match.id || thread.id)}>
+            回到聊天
           </button>
-        )}
+          {match.id && (
+            <button className="ghost-action" type="button" onClick={() => onReveal?.(match.id)}>
+              {revealed ? '已公开身份' : '申请公开身份'}
+            </button>
+          )}
+        </div>
       </motion.aside>
     </div>
   )
 }
 
-function BottomNav({ active = 'home' }) {
-  const [hidden, setHidden] = useState(false)
+function BottomNav({ active = 'home', hideAtTop = 180 }) {
+  const [hidden, setHidden] = useState(() => window.scrollY < hideAtTop)
   const items = [
     { key: 'home', icon: 'home', label: '首页', href: '/' },
     { key: 'chat', icon: 'chat', label: '消息', href: '/messages' },
@@ -1858,7 +2084,9 @@ function BottomNav({ active = 'home' }) {
       const scrollingDown = currentY > lastY + 8
       const scrollingUp = currentY < lastY - 8
 
-      if (currentY < 80 || scrollingUp) {
+      if (currentY < hideAtTop) {
+        setHidden(true)
+      } else if (scrollingUp) {
         setHidden(false)
       } else if (scrollingDown) {
         setHidden(true)
@@ -1867,9 +2095,10 @@ function BottomNav({ active = 'home' }) {
       lastY = currentY
     }
 
+    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  }, [hideAtTop])
 
   return (
     <nav className={`bottom-nav ${hidden ? 'hidden' : ''}`} aria-label="底部导航">
@@ -2207,6 +2436,7 @@ function AuthPage() {
 function ProfilePage() {
   const cameraInputRef = useRef(null)
   const albumInputRef = useRef(null)
+  const photoInputRef = useRef(null)
   const hasStoredToken = Boolean(localStorage.getItem('token'))
   const [user, setUser] = useState(profileFallback)
   const [form, setForm] = useState(() => userToProfileForm(profileFallback))
@@ -2224,6 +2454,7 @@ function ProfilePage() {
   const [treeholes, setTreeholes] = useState([])
   const [activityBusy, setActivityBusy] = useState('')
   const [membershipBusy, setMembershipBusy] = useState('')
+  const [photoBusy, setPhotoBusy] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -2285,9 +2516,12 @@ function ProfilePage() {
     }
   }, [])
 
+  const profilePhotos = useMemo(() => normalizeProfilePhotos(user.photos), [user.photos])
+
   const profileReadiness = useMemo(() => {
     const checks = [
       { label: '头像', done: Boolean(avatarPreview || user.avatar) },
+      { label: '照片', done: profilePhotos.length > 0 },
       { label: '学校', done: Boolean(form.school && form.school !== '你的学校') },
       { label: '专业', done: Boolean(form.major && form.major !== '还没填写专业') },
       { label: '自我介绍', done: form.bio.trim().length >= 8 },
@@ -2300,7 +2534,7 @@ function ProfilePage() {
       checks,
       percent: Math.round((doneCount / checks.length) * 100),
     }
-  }, [avatarPreview, form, user.avatar, user.verificationStatus])
+  }, [avatarPreview, form, profilePhotos.length, user.avatar, user.verificationStatus])
 
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -2480,6 +2714,92 @@ function ProfilePage() {
     }
   }
 
+  const handlePhotoFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter(Boolean)
+    if (!files.length) return
+
+    setError('')
+    setNotice('')
+    const availableSlots = Math.max(0, 6 - profilePhotos.length)
+    if (!availableSlots) {
+      setError('个人照片最多保留 6 张。')
+      return
+    }
+
+    const selectedFiles = files.slice(0, availableSlots)
+    const oversized = selectedFiles.find((file) => file.size > 3 * 1024 * 1024)
+    if (oversized) {
+      setError('单张照片不能超过 3MB。')
+      return
+    }
+
+    if (!isLoggedIn) {
+      const localPhotos = selectedFiles.map((file) => URL.createObjectURL(file))
+      setUser((current) => ({
+        ...current,
+        photos: normalizeProfilePhotos([...(current.photos || []), ...localPhotos]),
+      }))
+      setNotice('照片已加入本地预览。登录后可以保存到账号。')
+      return
+    }
+
+    setPhotoBusy('upload')
+    try {
+      let nextUser = user
+      for (const file of selectedFiles) {
+        const uploadBody = await uploadPayloadFromFile(file)
+        const payload = await apiRequest('/uploads/profile-photo', {
+          method: 'POST',
+          body: JSON.stringify(uploadBody),
+        })
+        nextUser = payload.data?.user || nextUser
+      }
+      setUser(nextUser)
+      setForm(userToProfileForm(nextUser))
+      setNotice(selectedFiles.length > 1 ? '照片已加入资料。' : '照片已加入资料。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPhotoBusy('')
+      if (photoInputRef.current) {
+        photoInputRef.current.value = ''
+      }
+    }
+  }
+
+  const removeProfilePhoto = async (photo) => {
+    if (!photo || photoBusy) return
+    setError('')
+    setNotice('')
+
+    if (!isLoggedIn || photo.startsWith('blob:')) {
+      setUser((current) => ({
+        ...current,
+        photos: normalizeProfilePhotos(current.photos).filter((item) => item !== photo),
+      }))
+      setNotice('照片已移除。')
+      return
+    }
+
+    setPhotoBusy(photo)
+    try {
+      const payload = await apiRequest('/uploads/profile-photo', {
+        method: 'DELETE',
+        body: JSON.stringify({ imageUrl: photo }),
+      })
+      const updatedUser = payload.data?.user
+      if (updatedUser) {
+        setUser(updatedUser)
+        setForm(userToProfileForm(updatedUser))
+      }
+      setNotice('照片已移除。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPhotoBusy('')
+    }
+  }
+
   const logout = () => {
     localStorage.removeItem('token')
     setIsLoggedIn(false)
@@ -2651,6 +2971,57 @@ function ProfilePage() {
             <textarea disabled={!editing} value={form.bio} onChange={(event) => updateForm('bio', event.target.value)} rows="4" />
           </label>
 
+          <div className="profile-photo-editor">
+            <div className="profile-photo-head">
+              <span>我的照片</span>
+              <button
+                className="ghost-action compact-action"
+                disabled={!editing || Boolean(photoBusy) || profilePhotos.length >= 6}
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <Icon name="plus" />
+                添加照片
+              </button>
+            </div>
+            <div className="profile-photo-grid">
+              {profilePhotos.map((photo, index) => (
+                <figure className="profile-photo-tile" key={photo}>
+                  <img src={photo} alt={`个人照片 ${index + 1}`} />
+                  {editing && (
+                    <button
+                      disabled={photoBusy === photo}
+                      type="button"
+                      onClick={() => removeProfilePhoto(photo)}
+                    >
+                      移除
+                    </button>
+                  )}
+                </figure>
+              ))}
+              {profilePhotos.length < 6 && (
+                <button
+                  className="profile-photo-add"
+                  disabled={!editing || Boolean(photoBusy)}
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  <Icon name="camera" />
+                  <span>{photoBusy === 'upload' ? '上传中' : '补一张近照'}</span>
+                </button>
+              )}
+            </div>
+            <small>照片会出现在你的资料卡里，建议放清楚、自然、能代表你生活状态的图片。</small>
+            <input
+              ref={photoInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => handlePhotoFiles(event.target.files)}
+            />
+          </div>
+
           <div className="profile-tags-editor">
             <span>兴趣标签</span>
             <div>
@@ -2790,7 +3161,7 @@ function ProfilePage() {
                   </div>
                   <div className="activity-actions">
                     {item.matchId && (
-                      <button type="button" onClick={() => navigateTo('/messages')}>
+                      <button type="button" onClick={() => navigateTo(`/messages?match=${encodeURIComponent(item.matchId)}&view=chat`)}>
                         去聊天
                       </button>
                     )}
@@ -2850,8 +3221,14 @@ function ProfilePage() {
 }
 
 function MessagesPage() {
+  const chatImageInputRef = useRef(null)
+  const chatBubblesRef = useRef(null)
+  const longPressTimerRef = useRef(null)
+  const swipeGestureRef = useRef({ id: '', startX: 0, startY: 0, swiping: false })
+  const typingTimerRef = useRef({ idle: 0, lastSentAt: 0, active: false })
+  const initialMessageParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const [threads, setThreads] = useState(messageThreads)
-  const [selectedId, setSelectedId] = useState(messageThreads[0]?.id)
+  const [selectedId, setSelectedId] = useState(initialMessageParams.get('match') || messageThreads[0]?.id)
   const [messagesByThread, setMessagesByThread] = useState(() =>
     Object.fromEntries(messageThreads.map((thread) => [thread.id, thread.messages])),
   )
@@ -2863,6 +3240,12 @@ function MessagesPage() {
   )
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [chatOpen, setChatOpen] = useState(() => window.location.hash === '#chat' || initialMessageParams.get('view') === 'chat')
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [activeMessageMenu, setActiveMessageMenu] = useState('')
+  const [swipeVisual, setSwipeVisual] = useState({ id: '', offset: 0, dragging: false })
+  const [typingByThread, setTypingByThread] = useState({})
+  const [lastMessageSyncAt, setLastMessageSyncAt] = useState('')
   const [profileSheetThread, setProfileSheetThread] = useState(null)
 
   useEffect(() => {
@@ -2889,6 +3272,10 @@ function MessagesPage() {
 
         const matches = matchesResult.value.data?.matches || []
         const nextThreads = matches.map(normalizeMessageThread)
+        setTypingByThread((current) => ({
+          ...current,
+          ...Object.fromEntries(matches.map((match) => [match.id || match._id, match.typing?.activeUsers || []])),
+        }))
 
         if (!nextThreads.length) {
           setMessageNotice('现在还没有真实匹配，喜欢互相通过后会自动出现在这里。')
@@ -2914,17 +3301,296 @@ function MessagesPage() {
 
   const selectedThread = threads.find((thread) => thread.id === selectedId) || threads[0]
   const selectedMessages = messagesByThread[selectedThread?.id] || selectedThread?.messages || []
+  const selectedMessageRows = useMemo(() => groupMessagesByDay(selectedMessages), [selectedMessages])
+  const selectedThreadHasSourceMatch = Boolean(selectedThread?.sourceMatch)
+  const isLoggedIn = hasAuthToken()
   const filteredThreads = useMemo(() => {
     if (filter === '未读') return threads.filter((thread) => thread.unread > 0)
     if (filter === '同校') return threads.filter((thread) => thread.school.includes('同校') || thread.sourceMatch?.user?.school)
     if (filter === '树洞') return threads.filter((thread) => `${thread.school}${thread.lastMessage}`.includes('树洞'))
     return threads
   }, [filter, threads])
-  const unreadTotal = threads.reduce((total, thread) => total + thread.unread, 0)
-  const onlineTotal = threads.filter((thread) => thread.online).length
+  const displayThreads = isLoggedIn ? filteredThreads : []
+  const effectiveChatOpen = isLoggedIn && chatOpen
+  const unreadTotal = isLoggedIn ? threads.reduce((total, thread) => total + thread.unread, 0) : 0
+  const onlineTotal = isLoggedIn ? threads.filter((thread) => thread.online).length : 0
+  const threadTotal = isLoggedIn ? threads.length : 0
+  const selectedProfile = selectedThread?.sourceMatch?.user || {}
+  const selectedScenes = splitList(selectedProfile.sceneTags)
+  const activeTypingUsers = typingByThread[selectedThread?.id] || []
+  const isPeerTyping = activeTypingUsers.length > 0
+  const threadTypingUsers = (threadId) => typingByThread[threadId] || []
+  const threadPreviewText = (thread) => {
+    if (threadTypingUsers(thread.id).length) return '正在输入...'
+    if (thread.lastMessageSenderId && thread.lastMessageSenderId === currentUserId) {
+      return `我：${thread.lastMessage}`
+    }
+    return thread.lastMessage
+  }
+  const threadEmptyTitle = !isLoggedIn ? '登录后查看消息' : (filter === '未读' ? '没有未读消息' : '这里暂时安静')
+  const threadEmptyText = !isLoggedIn
+    ? '注册或登录后，真实匹配、树洞回应和活动邀约会同步到这里。'
+    : (filter === '未读' ? '读过的消息会留在全部会话里。' : '新匹配、新消息和树洞回应都会自动出现在这里。')
+  const markThreadReadLocally = (threadId) => {
+    if (!threadId) return
+
+    setThreads((current) =>
+      current.map((thread) => {
+        if (thread.id !== threadId || !thread.unread) return thread
+
+        return {
+          ...thread,
+          unread: 0,
+          sourceMatch: {
+            ...(thread.sourceMatch || {}),
+            unreadCount: 0,
+            hasUnread: false,
+          },
+        }
+      }),
+    )
+  }
+  const openThread = (threadId, openChat = true) => {
+    if (!threadId) return
+
+    setSelectedId(threadId)
+    markThreadReadLocally(threadId)
+    setChatOpen(openChat)
+    const params = new URLSearchParams()
+    params.set('match', threadId)
+    if (openChat) params.set('view', 'chat')
+    window.history.replaceState({}, '', `/messages?${params.toString()}`)
+  }
+  const openingPrompts = [
+    selectedScenes[0] ? `我也挺喜欢${selectedScenes[0]}，你一般什么时候会去？` : '',
+    selectedProfile.mbti ? `看到你是 ${selectedProfile.mbti}，你会更喜欢慢慢熟悉还是直接一点？` : '',
+    selectedProfile.bio ? `你资料里那句「${selectedProfile.bio.slice(0, 18)}」挺有意思，可以展开说说吗？` : '',
+    '今天想先轻松聊一个校园里的小事吗？',
+  ].filter(Boolean).slice(0, 3)
+  const messageKeyFor = (message, index = 0) => message.id || `${message.createdAt || 'local'}-${index}`
+  const scrollChatToBottom = (behavior = 'smooth') => {
+    const chatBubbles = chatBubblesRef.current
+    if (!chatBubbles) return
+
+    window.requestAnimationFrame(() => {
+      chatBubbles.scrollTo({
+        top: chatBubbles.scrollHeight,
+        behavior,
+      })
+    })
+  }
+  const latestOwnMessageKey = useMemo(() => {
+    for (let index = selectedMessages.length - 1; index >= 0; index -= 1) {
+      const message = selectedMessages[index]
+      if (message?.from === 'me' && !message.isRecalled) {
+        return messageKeyFor(message, index)
+      }
+    }
+
+    return ''
+  }, [selectedMessages])
+
+  const syncThreadFromPayload = (matchId, payload) => {
+    const nextMatch = payload.data?.match
+    const nextTyping = payload.data?.typing?.activeUsers || nextMatch?.typing?.activeUsers || []
+
+    setTypingByThread((current) => ({
+      ...current,
+      [matchId]: nextTyping,
+    }))
+
+    if (!nextMatch) return
+
+    setThreads((current) =>
+      current.map((thread, index) =>
+        thread.id === matchId
+          ? {
+              ...normalizeMessageThread(nextMatch, index),
+              tone: thread.tone,
+              sourceMatch: nextMatch,
+            }
+          : thread,
+      ),
+    )
+  }
+
+  const updateThreadListFromMatches = (matches = []) => {
+    if (!Array.isArray(matches) || !matches.length) return
+
+    setThreads((current) => {
+      const toneById = Object.fromEntries(current.map((thread) => [thread.id, thread.tone]))
+      return matches.map((match, index) => {
+        const normalized = normalizeMessageThread(match, index)
+        return {
+          ...normalized,
+          tone: toneById[normalized.id] || normalized.tone,
+        }
+      })
+    })
+
+    setTypingByThread((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        matches.map((match) => [
+          match.id || match._id,
+          match.typing?.activeUsers || [],
+        ]),
+      ),
+    }))
+  }
+
+  const copyText = async (value) => {
+    const content = String(value || '')
+    if (!content) return false
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content)
+      return true
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = content
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return copied
+  }
+
+  const clearLongPressTimer = () => {
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
+  }
+
+  const resetSwipeGesture = () => {
+    swipeGestureRef.current = { id: '', startX: 0, startY: 0, swiping: false }
+    setSwipeVisual({ id: '', offset: 0, dragging: false })
+  }
+
+  const openMessageMenu = (messageId) => {
+    clearLongPressTimer()
+    setSwipeVisual({ id: '', offset: 0, dragging: false })
+    setActiveMessageMenu((current) => (current === messageId ? '' : messageId))
+  }
+
+  const startLongPressMessage = (messageId) => {
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      setActiveMessageMenu(messageId)
+    }, 420)
+  }
+
+  const beginMessageGesture = (event, messageId) => {
+    if (event.button && event.pointerType === 'mouse') return
+    startLongPressMessage(messageId)
+    setActiveMessageMenu('')
+    swipeGestureRef.current = {
+      id: messageId,
+      startX: event.clientX,
+      startY: event.clientY,
+      swiping: false,
+    }
+    setSwipeVisual({ id: messageId, offset: 0, dragging: false })
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const moveMessageGesture = (event, messageId) => {
+    const gesture = swipeGestureRef.current
+    if (gesture.id !== messageId) return
+
+    const deltaX = event.clientX - gesture.startX
+    const deltaY = event.clientY - gesture.startY
+
+    if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
+      clearLongPressTimer()
+    }
+
+    if (!gesture.swiping && Math.abs(deltaY) > Math.abs(deltaX) + 8) {
+      return
+    }
+
+    if (deltaX < -8 || gesture.swiping) {
+      event.preventDefault()
+      gesture.swiping = true
+      const offset = Math.max(-96, Math.min(0, deltaX))
+      setSwipeVisual({ id: messageId, offset, dragging: true })
+    }
+  }
+
+  const endMessageGesture = (message, messageId) => {
+    clearLongPressTimer()
+    const gesture = swipeGestureRef.current
+    const offset = swipeVisual.id === messageId ? swipeVisual.offset : 0
+
+    if (gesture.id === messageId && gesture.swiping && offset <= -72) {
+      setSwipeVisual({ id: messageId, offset: -96, dragging: false })
+      window.setTimeout(() => {
+        handleDeleteMessage(message).finally(resetSwipeGesture)
+      }, 110)
+      return
+    }
+
+    resetSwipeGesture()
+  }
 
   useEffect(() => {
-    if (!hasAuthToken() || !selectedThread?.sourceMatch || !currentUserId) return undefined
+    if (!chatOpen || window.innerWidth > 860) return
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    })
+  }, [chatOpen, selectedId])
+
+  useEffect(() => {
+    if (!selectedThread?.id) return
+    scrollChatToBottom(chatOpen ? 'auto' : 'smooth')
+  }, [chatOpen, selectedThread?.id, selectedMessageRows.length, isPeerTyping, messagesLoading])
+
+  useEffect(() => {
+    if (!chatOpen) {
+      document.documentElement.style.removeProperty('--chat-vh')
+      return undefined
+    }
+
+    const updateChatViewport = () => {
+      const viewport = window.visualViewport
+      const height = Math.round(viewport?.height || window.innerHeight || 0)
+      if (height > 0) {
+        document.documentElement.style.setProperty('--chat-vh', `${height}px`)
+      }
+      scrollChatToBottom('auto')
+    }
+
+    updateChatViewport()
+    window.visualViewport?.addEventListener('resize', updateChatViewport)
+    window.visualViewport?.addEventListener('scroll', updateChatViewport)
+    window.addEventListener('orientationchange', updateChatViewport)
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateChatViewport)
+      window.visualViewport?.removeEventListener('scroll', updateChatViewport)
+      window.removeEventListener('orientationchange', updateChatViewport)
+      document.documentElement.style.removeProperty('--chat-vh')
+    }
+  }, [chatOpen, selectedThread?.id])
+
+  useEffect(() => {
+    if (!selectedThread?.id) return
+    if (chatOpen || window.innerWidth > 860) {
+      markThreadReadLocally(selectedThread.id)
+    }
+  }, [chatOpen, selectedThread?.id])
+
+  useEffect(() => {
+    setActiveMessageMenu('')
+    resetSwipeGesture()
+    return clearLongPressTimer
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!hasAuthToken() || !selectedThreadHasSourceMatch || !currentUserId) return undefined
 
     let mounted = true
     Promise.resolve().then(() => {
@@ -2942,6 +3608,11 @@ function MessagesPage() {
           ...current,
           [selectedThread.id]: nextMessages,
         }))
+        setTypingByThread((current) => ({
+          ...current,
+          [selectedThread.id]: payload.data?.typing?.activeUsers || nextMatch?.typing?.activeUsers || [],
+        }))
+        setLastMessageSyncAt(new Date().toISOString())
 
         if (nextMatch) {
           setThreads((current) =>
@@ -2963,30 +3634,137 @@ function MessagesPage() {
     return () => {
       mounted = false
     }
-  }, [currentUserId, selectedThread?.id, selectedThread?.sourceMatch])
+  }, [currentUserId, selectedThread?.id, selectedThreadHasSourceMatch])
 
-  const handleSendMessage = async () => {
-    const content = composer.trim()
-    if (!content || sending) return
+  useEffect(() => {
+    if (!hasAuthToken() || !selectedThreadHasSourceMatch || !currentUserId || !chatOpen) return undefined
+
+    let mounted = true
+    const syncMessages = async () => {
+      try {
+        const payload = await apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}?limit=40`)
+        if (!mounted) return
+
+        const nextMessages = (payload.data?.messages || []).map((message) => normalizeChatMessage(message, currentUserId))
+        setMessagesByThread((current) => ({
+          ...current,
+          [selectedThread.id]: nextMessages,
+        }))
+        syncThreadFromPayload(selectedThread.id, payload)
+        setLastMessageSyncAt(new Date().toISOString())
+      } catch (error) {
+        if (mounted) {
+          setTypingByThread((current) => ({
+            ...current,
+            [selectedThread.id]: [],
+          }))
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(syncMessages, 5200)
+    return () => {
+      mounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [chatOpen, currentUserId, selectedThread?.id, selectedThreadHasSourceMatch])
+
+  useEffect(() => {
+    if (!hasAuthToken() || !currentUserId) return undefined
+
+    let mounted = true
+    const syncThreads = async () => {
+      try {
+        const payload = await apiRequest('/matches')
+        if (!mounted) return
+        updateThreadListFromMatches(payload.data?.matches || [])
+      } catch (error) {
+        // 静默轮询，失败时保留当前会话列表。
+      }
+    }
+
+    const intervalId = window.setInterval(syncThreads, 12000)
+    return () => {
+      mounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [currentUserId])
+
+  const sendTypingSignal = (active) => {
+    if (!hasAuthToken() || !selectedThreadHasSourceMatch) return
+
+    const now = Date.now()
+    if (active && typingTimerRef.current.active && now - typingTimerRef.current.lastSentAt < 2400) {
+      return
+    }
+
+    typingTimerRef.current.active = active
+    typingTimerRef.current.lastSentAt = now
+    apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}/typing`, {
+      method: 'POST',
+      body: JSON.stringify({ active }),
+    }).catch(() => {})
+  }
+
+  const scheduleTypingIdle = () => {
+    window.clearTimeout(typingTimerRef.current.idle)
+    typingTimerRef.current.idle = window.setTimeout(() => {
+      sendTypingSignal(false)
+    }, 1600)
+  }
+
+  const handleComposerChange = (event) => {
+    const nextValue = event.target.value
+    setComposer(nextValue)
+
+    if (!nextValue.trim()) {
+      window.clearTimeout(typingTimerRef.current.idle)
+      sendTypingSignal(false)
+      return
+    }
+
+    sendTypingSignal(true)
+    scheduleTypingIdle()
+  }
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(typingTimerRef.current.idle)
+      if (typingTimerRef.current.active && selectedThreadHasSourceMatch) {
+        apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}/typing`, {
+          method: 'POST',
+          body: JSON.stringify({ active: false }),
+        }).catch(() => {})
+      }
+      typingTimerRef.current.active = false
+    }
+  }, [selectedThread?.id, selectedThreadHasSourceMatch])
+
+  const sendMessageContent = async ({ content, type = 'text', clearComposer = false }) => {
+    const normalizedContent = String(content || '').trim()
+    if (!normalizedContent || sending) return false
 
     if (!hasAuthToken()) {
       navigateTo('/login')
-      return
+      return false
     }
 
     if (!selectedThread?.sourceMatch) {
       setMessageNotice('这是预览会话。互相喜欢形成真实匹配后，就能发送到后端保存。')
-      return
+      return false
     }
 
     setSending(true)
     try {
       const payload = await apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}`, {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: normalizedContent, type }),
       })
       const nextMessage = { ...normalizeChatMessage(payload.data?.message, currentUserId), from: 'me' }
       const nextMatch = payload.data?.match
+      const preview = type === 'image' ? '发来一张图片' : normalizedContent
+      window.clearTimeout(typingTimerRef.current.idle)
+      sendTypingSignal(false)
 
       setMessagesByThread((current) => ({
         ...current,
@@ -2996,21 +3774,142 @@ function MessagesPage() {
         current.map((thread) =>
           thread.id === selectedThread.id
             ? {
-                ...thread,
-                lastMessage: content,
+                ...normalizeMessageThread(nextMatch || thread.sourceMatch || {}, current.indexOf(thread)),
+                tone: thread.tone,
+                lastMessage: preview,
                 time: '刚刚',
                 unread: 0,
                 sourceMatch: nextMatch || thread.sourceMatch,
               }
-            : thread,
+          : thread,
         ),
       )
-      setComposer('')
-      setMessageNotice('消息已发送。')
+      if (clearComposer) setComposer('')
+      setEmojiOpen(false)
+      setMessageNotice(type === 'image' ? '图片已发送。' : '消息已发送。')
+      return true
     } catch (error) {
       setMessageNotice(error.message || '发送失败，请稍后再试。')
+      return false
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleSendMessage = () => {
+    sendMessageContent({ content: composer, type: 'text', clearComposer: true })
+  }
+
+  const handlePickImage = () => {
+    if (!hasAuthToken()) {
+      navigateTo('/login')
+      return
+    }
+    if (!selectedThread?.sourceMatch) {
+      setMessageNotice('预览会话还不能发图片。互相喜欢后，图片会保存到真实聊天里。')
+      return
+    }
+    chatImageInputRef.current?.click()
+  }
+
+  const handleChatImageChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || sending) return
+
+    setSending(true)
+    try {
+      const uploadBody = await uploadPayloadFromFile(file)
+      const uploadPayload = await apiRequest('/uploads/chat-image', {
+        method: 'POST',
+        body: JSON.stringify(uploadBody),
+      })
+      const imageUrl = uploadPayload.data?.imageUrl
+      if (!imageUrl) throw new Error('图片上传成功但没有返回地址。')
+      setSending(false)
+      await sendMessageContent({ content: imageUrl, type: 'image' })
+    } catch (error) {
+      setMessageNotice(error.message || '图片发送失败，请换一张再试。')
+      setSending(false)
+    }
+  }
+
+  const appendEmoji = (emoji) => {
+    setComposer((current) => `${current}${emoji}`)
+  }
+
+  const handleVoicePlaceholder = () => {
+    if (!hasAuthToken()) {
+      navigateTo('/login')
+      return
+    }
+    setMessageNotice('语音消息入口已经放好，下一步可以接录音权限和音频存储。')
+  }
+
+  const handleRefreshConversations = async () => {
+    if (!hasAuthToken()) {
+      navigateTo('/login')
+      return
+    }
+
+    setMessagesLoading(true)
+    try {
+      const payload = await apiRequest('/matches')
+      const matches = payload.data?.matches || []
+      updateThreadListFromMatches(matches)
+      setLastMessageSyncAt(new Date().toISOString())
+      setMessageNotice(matches.length ? '会话已更新。' : '还没有真实匹配，互相喜欢后会出现在这里。')
+    } catch (error) {
+      setMessageNotice(error.message || '会话同步失败，请稍后再试。')
+    } finally {
+      setMessagesLoading(false)
+    }
+  }
+
+  const handleCopyMessage = async (message) => {
+    try {
+      const content = message.type === 'image' && message.imageUrl ? message.imageUrl : message.text
+      const copied = await copyText(content)
+      setMessageNotice(copied ? '已复制这条消息。' : '复制没有成功，可以再试一次。')
+    } catch (error) {
+      setMessageNotice('复制没有成功，可以再试一次。')
+    } finally {
+      setActiveMessageMenu('')
+    }
+  }
+
+  const handleDeleteMessage = async (message, { recall = false } = {}) => {
+    const messageId = message.id
+    if (!messageId) {
+      setMessagesByThread((current) => ({
+        ...current,
+        [selectedThread.id]: (current[selectedThread.id] || []).filter((item) => item !== message),
+      }))
+      setActiveMessageMenu('')
+      setMessageNotice('这条预览消息已从本地移除。')
+      return
+    }
+
+    if (!selectedThread?.sourceMatch) {
+      setMessageNotice('预览会话只能本地删除，真实匹配后会同步到后端。')
+      return
+    }
+
+    try {
+      const endpoint = `/messages/${encodeURIComponent(selectedThread.id)}/${encodeURIComponent(messageId)}${recall ? '?scope=all' : ''}`
+      const payload = await apiRequest(endpoint, { method: 'DELETE' })
+      const nextMessages = (payload.data?.messages || []).map((item) => normalizeChatMessage(item, currentUserId))
+
+      setMessagesByThread((current) => ({
+        ...current,
+        [selectedThread.id]: nextMessages,
+      }))
+      syncThreadFromPayload(selectedThread.id, payload)
+      setMessageNotice(payload.message || (recall ? '消息已撤回。' : '消息已从你的聊天里删除。'))
+    } catch (error) {
+      setMessageNotice(error.message || (recall ? '撤回失败，请稍后再试。' : '删除失败，请稍后再试。'))
+    } finally {
+      setActiveMessageMenu('')
     }
   }
 
@@ -3051,7 +3950,7 @@ function MessagesPage() {
   }
 
   return (
-    <main className="app-shell messages-shell">
+    <main className={`app-shell messages-shell ${effectiveChatOpen ? 'chat-open' : ''}`}>
       <Background />
       <Header />
 
@@ -3068,13 +3967,26 @@ function MessagesPage() {
         <div className="messages-hero-stats">
           <span><strong>{unreadTotal}</strong>新消息</span>
           <span><strong>{onlineTotal}</strong>在线</span>
-          <span><strong>{threads.length}</strong>会话</span>
+          <span><strong>{threadTotal}</strong>会话</span>
         </div>
       </section>
 
-      <section className="messages-layout" aria-label="消息中心">
+      <section className={`messages-layout ${effectiveChatOpen ? 'is-chat-open' : ''}`} aria-label="消息中心">
         <aside className="messages-panel thread-panel">
           {messageNotice && <p className="message-notice">{messageNotice}</p>}
+          <div className="inbox-summary" aria-label="消息状态">
+            <div>
+              <span>收件箱</span>
+              <strong>{unreadTotal > 0 ? `${unreadTotal} 条未读` : '没有未读'}</strong>
+            </div>
+            <div>
+              <span>在线</span>
+              <strong>{onlineTotal} 人活跃</strong>
+            </div>
+            <button type="button" onClick={handleRefreshConversations} disabled={messagesLoading}>
+              {!isLoggedIn ? '登录' : (messagesLoading ? '同步中' : '同步')}
+            </button>
+          </div>
           <div className="message-filter" aria-label="消息筛选">
             {['全部', '未读', '同校', '树洞'].map((item) => (
               <button className={filter === item ? 'active' : ''} type="button" key={item} onClick={() => setFilter(item)}>
@@ -3082,58 +3994,248 @@ function MessagesPage() {
               </button>
             ))}
           </div>
+          {displayThreads.length > 0 ? (
           <AnimatedList
             className="message-thread-list"
-            items={filteredThreads}
+            items={displayThreads}
             getItemKey={(thread) => thread.id}
             initialSelectedIndex={0}
-            onItemSelect={(thread) => setSelectedId(thread.id)}
-            renderItem={(thread, _index, selected) => (
-              <article className={`message-thread ${selected || thread.id === selectedId ? 'active' : ''}`}>
-                <div className={`message-avatar ${thread.tone}`}>{thread.name.slice(0, 1)}</div>
-                <div>
-                  <div className="message-thread-head">
-                    <strong>{thread.name}</strong>
-                    <small>{thread.time}</small>
+            onItemSelect={(thread) => {
+              openThread(thread.id, true)
+            }}
+            renderItem={(thread, _index, selected) => {
+              const isActive = selected || thread.id === selectedId
+              const typing = threadTypingUsers(thread.id).length > 0
+              const unread = thread.unread > 0
+              const preview = threadPreviewText(thread)
+              const detailChips = thread.detailChips || []
+
+              return (
+                <article className={`message-thread ${isActive ? 'active' : ''} ${unread ? 'unread' : ''} ${typing ? 'typing' : ''}`}>
+                  <MessageAvatar thread={thread} />
+                  <div>
+                    <div className="message-thread-head">
+                      <strong>{thread.name}</strong>
+                      <small>{thread.time}</small>
+                    </div>
+                    <p>{preview}</p>
+                    <span>{thread.school}</span>
+                    <div className="message-chip-row">
+                      {(typing ? ['正在输入', ...detailChips] : detailChips).slice(0, 3).map((chip) => (
+                        <span key={chip}>{chip}</span>
+                      ))}
+                    </div>
                   </div>
-                  <p>{thread.lastMessage}</p>
-                  <span>{thread.school}</span>
-                </div>
-                {thread.unread > 0 && <i aria-label={`${thread.unread} 条未读`}>{thread.unread}</i>}
-                <em className={thread.online ? 'online' : ''} aria-label={thread.online ? '在线' : '离线'} />
-              </article>
-            )}
+                  <div className="thread-state">
+                    {unread ? <i aria-label={`${thread.unread} 条未读`}>{thread.unread}</i> : <small>{typing ? '输入中' : '已同步'}</small>}
+                    <em className={thread.online || typing ? 'online' : ''} aria-label={thread.online || typing ? '在线' : '离线'} />
+                  </div>
+                </article>
+              )
+            }}
           />
+          ) : (
+            <div className="message-thread-empty" role="status">
+              <strong>{threadEmptyTitle}</strong>
+              <p>{threadEmptyText}</p>
+              {!isLoggedIn && (
+                <button type="button" onClick={() => navigateTo('/login')}>
+                  去登录
+                </button>
+              )}
+            </div>
+          )}
         </aside>
 
-        {selectedThread && (
-        <section className="messages-panel chat-panel" aria-label="聊天预览">
+        <AnimatePresence mode="wait">
+          {isLoggedIn && selectedThread && (
+        <motion.section
+          className="messages-panel chat-panel"
+          aria-label="聊天预览"
+          key={selectedThread.id}
+          initial={{ opacity: 0, x: 18, filter: 'blur(8px)' }}
+          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, x: -18, filter: 'blur(8px)' }}
+          transition={{ duration: 0.28, ease: [0.2, 0.82, 0.2, 1] }}
+        >
           <div className="chat-head">
-            <div className={`message-avatar ${selectedThread.tone}`}>{selectedThread.name.slice(0, 1)}</div>
+            <button className="chat-back" type="button" onClick={() => openThread(selectedThread.id, false)} aria-label="返回会话列表">
+              ‹
+            </button>
+            <MessageAvatar thread={selectedThread} />
             <div>
               <strong>{selectedThread.name}</strong>
-              <span>{selectedThread.school}</span>
+              <span>{isPeerTyping ? '正在输入...' : selectedThread.school}</span>
+              <div className="message-chip-row">
+                {(selectedThread.detailChips || []).slice(0, 4).map((chip) => (
+                  <span key={chip}>{chip}</span>
+                ))}
+              </div>
             </div>
             <button className="ghost-action" type="button" onClick={() => setProfileSheetThread(selectedThread)}>查看资料</button>
           </div>
 
-          <div className="chat-bubbles">
+          <div className="chat-bubbles" ref={chatBubblesRef}>
             {messagesLoading && selectedThread.sourceMatch && <p>正在同步聊天记录...</p>}
             {!messagesLoading && selectedMessages.length === 0 && (
               <p>你们已经匹配了，先发一句轻松的开场吧。</p>
             )}
-            {selectedMessages.map((message, index) => (
-              <p className={message.from === 'me' ? 'me' : ''} key={`${selectedThread.id}-${index}`}>
-                {message.text}
-              </p>
-            ))}
+            {selectedMessageRows.map((row) => {
+              if (row.type === 'date') {
+                return (
+                  <div className="message-date-divider" key={row.key}>
+                    <span>{row.label}</span>
+                  </div>
+                )
+              }
+
+              const { message, index } = row
+              const messageId = messageKeyFor(message, index)
+              const menuOpen = activeMessageMenu === messageId
+              const swipeOffset = swipeVisual.id === messageId ? swipeVisual.offset : 0
+              const isSwiping = swipeVisual.id === messageId && swipeOffset < 0
+              const canRecall = message.from === 'me' && !message.isRecalled
+              const isLatestOwnMessage = message.from === 'me' && messageId === latestOwnMessageKey
+              const deliveryLabel = isLatestOwnMessage ? (selectedThread.lastOwnMessageRead ? '对方已读' : '已送达') : ''
+
+              return (
+                <div
+                  className={`chat-message ${message.from === 'me' ? 'me' : ''} ${menuOpen ? 'menu-open' : ''} ${isSwiping ? 'is-swiping' : ''} ${swipeVisual.dragging && swipeVisual.id === messageId ? 'is-dragging' : ''}`}
+                  key={`${selectedThread.id}-${row.key}-${messageId}`}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    openMessageMenu(messageId)
+                  }}
+                  onPointerDown={(event) => beginMessageGesture(event, messageId)}
+                  onPointerMove={(event) => moveMessageGesture(event, messageId)}
+                  onPointerUp={() => endMessageGesture(message, messageId)}
+                  onPointerCancel={resetSwipeGesture}
+                  onPointerLeave={() => {
+                    if (swipeGestureRef.current.id === messageId && swipeGestureRef.current.swiping) {
+                      endMessageGesture(message, messageId)
+                    } else {
+                      clearLongPressTimer()
+                    }
+                  }}
+                >
+                  <div className="message-swipe-shell">
+                    <button
+                      className="swipe-delete-hint"
+                      type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => handleDeleteMessage(message).finally(resetSwipeGesture)}
+                    >
+                      删除
+                    </button>
+                    <div className="message-swipe-content" style={{ '--swipe-x': `${swipeOffset}px` }}>
+                      <button
+                        className="message-more"
+                        type="button"
+                        aria-label="消息操作"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openMessageMenu(messageId)
+                        }}
+                      >
+                        ···
+                      </button>
+                      {message.isRecalled ? (
+                        <p className="message-recalled">消息已撤回</p>
+                      ) : message.type === 'image' && message.imageUrl ? (
+                        <img src={message.imageUrl} alt="聊天图片" />
+                      ) : (
+                        <p>{message.text}</p>
+                      )}
+                      {(message.createdAt || deliveryLabel || message.isRecalled) && (
+                        <small className={`message-meta ${deliveryLabel ? 'with-status' : ''} ${message.isRecalled ? 'recalled' : ''}`}>
+                          {message.createdAt && <span>{formatRelativeTime(message.createdAt)}</span>}
+                          {deliveryLabel && <span>{deliveryLabel}</span>}
+                          {message.isRecalled && <span>已撤回</span>}
+                        </small>
+                      )}
+                      {menuOpen && (
+                        <div className="message-action-popover" role="menu" onPointerDown={(event) => event.stopPropagation()}>
+                          {!message.isRecalled && (
+                            <button type="button" role="menuitem" onClick={() => handleCopyMessage(message)}>
+                              复制
+                            </button>
+                          )}
+                          <button type="button" role="menuitem" onClick={() => handleDeleteMessage(message)}>
+                            删除
+                          </button>
+                          {canRecall && (
+                            <button type="button" role="menuitem" onClick={() => handleDeleteMessage(message, { recall: true })}>
+                              撤回
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {isPeerTyping && (
+              <div className="chat-message typing-indicator" aria-live="polite">
+                <p>
+                  <span />
+                  <span />
+                  <span />
+                </p>
+                <small>{selectedThread.name} 正在输入</small>
+              </div>
+            )}
+            {!messagesLoading && selectedMessages.length === 0 && selectedThread.sourceMatch && (
+              <div className="chat-prompts" aria-label="开场建议">
+                {openingPrompts.map((prompt) => (
+                  <button type="button" key={prompt} onClick={() => setComposer(prompt)}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="chat-footnote">
+            <span>{selectedThread.identityRevealed ? '身份已公开' : '低压力匹配中'}</span>
+            {selectedThread.lastMessageSenderId === currentUserId && (
+              <span>{selectedThread.lastOwnMessageRead ? '对方已读' : '已送达'}</span>
+            )}
+            <span>{lastMessageSyncAt ? `${formatRelativeTime(lastMessageSyncAt)}同步` : '自动同步中'}</span>
           </div>
 
           <div className="message-composer" aria-label="发送消息">
             <input
+              ref={chatImageInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleChatImageChange}
+              tabIndex={-1}
+            />
+            <div className="chat-tools" aria-label="聊天工具">
+              <button type="button" onClick={handlePickImage} disabled={sending}>图片</button>
+              <button type="button" onClick={() => setEmojiOpen((current) => !current)}>表情</button>
+              <button type="button" onClick={handleVoicePlaceholder}>语音</button>
+            </div>
+            {emojiOpen && (
+              <div className="emoji-tray" aria-label="选择表情">
+                {['🙂', '✨', '👌', '哈哈', '收到', '慢慢聊'].map((emoji) => (
+                  <button type="button" key={emoji} onClick={() => appendEmoji(emoji)}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
               placeholder="写一句轻松的开场..."
               value={composer}
-              onChange={(event) => setComposer(event.target.value)}
+              onChange={handleComposerChange}
+              onFocus={() => {
+                window.setTimeout(() => scrollChatToBottom('smooth'), 80)
+                window.setTimeout(() => scrollChatToBottom('smooth'), 320)
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
@@ -3145,8 +4247,9 @@ function MessagesPage() {
               {sending ? '发送中' : '发送'}
             </button>
           </div>
-        </section>
-        )}
+        </motion.section>
+          )}
+        </AnimatePresence>
       </section>
       <AnimatePresence>
         {profileSheetThread && (
@@ -3154,6 +4257,10 @@ function MessagesPage() {
             thread={profileSheetThread}
             onClose={() => setProfileSheetThread(null)}
             onReveal={handleRevealIdentity}
+            onMessage={(threadId) => {
+              setProfileSheetThread(null)
+              openThread(threadId, true)
+            }}
           />
         )}
       </AnimatePresence>
@@ -3490,18 +4597,18 @@ function App() {
   const path = window.location.pathname
 
   if (path === '/login') {
-    return <AuthPage />
+    return <AppErrorBoundary><AuthPage /></AppErrorBoundary>
   }
 
   if (path === '/profile') {
-    return <ProfilePage />
+    return <AppErrorBoundary><ProfilePage /></AppErrorBoundary>
   }
 
   if (path === '/messages') {
-    return <MessagesPage />
+    return <AppErrorBoundary><MessagesPage /></AppErrorBoundary>
   }
 
-  return <HomePage />
+  return <AppErrorBoundary><HomePage /></AppErrorBoundary>
 }
 
 export default App

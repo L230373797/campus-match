@@ -164,6 +164,29 @@ await check("avatar upload and profile persistence", async () => {
   assert(imageResponse.headers.get("content-type") === "image/png", "avatar image should keep image content type");
 });
 
+await check("profile photo upload and removal", async () => {
+  const uploaded = await call("/uploads/profile-photo", {
+    method: "POST",
+    token: state.user.token,
+    body: {
+      contentType: "image/png",
+      data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+    },
+  });
+  assert(uploaded.data?.imageUrl?.startsWith("/api/uploads/profile-photos/"), "profile photo upload should return image URL");
+  assert(uploaded.data?.user?.photos?.includes(uploaded.data.imageUrl), "profile photo should be written to returned user");
+
+  const imageResponse = await apiHandler(new Request(`http://launch.local${uploaded.data.imageUrl}`), { blobStore });
+  assert(imageResponse.ok, "profile photo image should be readable");
+
+  const removed = await call("/uploads/profile-photo", {
+    method: "DELETE",
+    token: state.user.token,
+    body: { imageUrl: uploaded.data.imageUrl },
+  });
+  assert(!removed.data?.user?.photos?.includes(uploaded.data.imageUrl), "profile photo should be removed from user");
+});
+
 await check("operator reviews campus verification", async () => {
   const pending = await call("/users/verification/pending", { token: state.operator.token });
   assert(
@@ -205,15 +228,96 @@ await check("chat and identity reveal flow", async () => {
     body: { content: "Launch smoke hello" },
   });
   assert(sent.data?.message?.content === "Launch smoke hello", "message should be saved");
+  state.firstMessageId = sent.data.message.id;
 
   const messages = await call(`/messages/${state.matchId}`, { token: state.peer.token });
   assert(messages.data?.messages?.some((message) => message.content === "Launch smoke hello"), "message list should include sent message");
+
+  const imageUpload = await call("/uploads/chat-image", {
+    method: "POST",
+    token: state.peer.token,
+    body: {
+      contentType: "image/png",
+      data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGOSHzRgAAAAABJRU5ErkJggg==",
+    },
+  });
+  assert(imageUpload.data?.imageUrl?.startsWith("/api/uploads/chat-images/"), "chat image upload should return an image URL");
+
+  const imageMessage = await call(`/messages/${state.matchId}`, {
+    method: "POST",
+    token: state.peer.token,
+    body: { type: "image", content: imageUpload.data.imageUrl },
+  });
+  assert(imageMessage.data?.message?.type === "image", "image message should be saved with image type");
+
+  const typingOn = await call(`/messages/${state.matchId}/typing`, {
+    method: "POST",
+    token: state.peer.token,
+    body: { active: true },
+  });
+  assert(typingOn.data?.typing?.activeUsers?.length === 0, "sender should not see their own typing state");
+
+  const typingSeen = await call(`/messages/${state.matchId}/typing`, { token: state.user.token });
+  assert(
+    typingSeen.data?.typing?.activeUsers?.some((entry) => entry.userId === state.peer.user.id),
+    "other user should see active typing state",
+  );
+
+  const typingOff = await call(`/messages/${state.matchId}/typing`, {
+    method: "POST",
+    token: state.peer.token,
+    body: { active: false },
+  });
+  assert(typingOff.data?.typing?.activeUsers?.length === 0, "typing state should clear");
+
+  const hidden = await call(`/messages/${state.matchId}/${state.firstMessageId}`, {
+    method: "DELETE",
+    token: state.peer.token,
+  });
+  assert(
+    !hidden.data?.messages?.some((message) => message.id === state.firstMessageId),
+    "deleted message should be hidden for current user",
+  );
+
+  const stillVisible = await call(`/messages/${state.matchId}`, { token: state.user.token });
+  assert(
+    stillVisible.data?.messages?.some((message) => message.id === state.firstMessageId),
+    "locally deleted message should stay visible to the other user",
+  );
+
+  const recalled = await call(`/messages/${state.matchId}/${imageMessage.data.message.id}?scope=all`, {
+    method: "DELETE",
+    token: state.peer.token,
+  });
+  assert(recalled.data?.message?.recalledAt, "own message should be recallable");
+
+  const recalledList = await call(`/messages/${state.matchId}`, { token: state.user.token });
+  assert(
+    recalledList.data?.messages?.some((message) => message.id === imageMessage.data.message.id && message.recalledAt),
+    "recalled message should be marked for the other user",
+  );
 
   const reveal = await call(`/matches/${state.matchId}/reveal`, {
     method: "POST",
     token: state.peer.token,
   });
   assert(typeof reveal.data?.bothRevealed === "boolean", "reveal request should return state");
+});
+
+await check("admin user and match data are unified", async () => {
+  const overview = await call("/admin/overview", { token: state.operator.token });
+  assert(overview.data?.counts?.matches >= 1, "admin overview should count matches");
+  assert(Number.isFinite(overview.data?.counts?.unreadMessages), "admin overview should expose unread message count");
+
+  const users = await call("/admin/users", { token: state.operator.token });
+  const launchUser = users.data?.users?.find((user) => user.id === state.user.user.id);
+  assert(launchUser?.mbti === "INFP", "admin users should expose user-facing profile fields");
+  assert(Number.isFinite(launchUser?.readiness?.score), "admin users should expose profile readiness");
+
+  const matches = await call("/admin/matches", { token: state.operator.token });
+  const match = matches.data?.matches?.find((item) => item.id === state.matchId);
+  assert(match?.participants?.length === 2, "admin matches should include both participant summaries");
+  assert(match.messageCount >= 1, "admin matches should include message counts");
 });
 
 await check("privacy request submit, cancel, and operator reject", async () => {

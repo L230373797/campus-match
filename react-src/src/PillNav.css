@@ -266,16 +266,34 @@
   .pill-nav {
     min-height: 54px;
     padding: 5px;
+    justify-content: space-between;
   }
 
   .desktop-only {
-    display: block;
+    display: none;
   }
 
   .mobile-only,
-  .mobile-menu-button.mobile-only,
+  .mobile-menu-button.mobile-only {
+    display: grid !important;
+  }
+
   .mobile-menu-popover.mobile-only {
-    display: none;
+    display: block !important;
+  }
+
+  .mobile-menu-button.mobile-only {
+    margin-left: auto;
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    color: #07111f;
+    background: linear-gradient(180deg, #ffffff, #dbeaff 62%, #ffd8e7);
+    box-shadow: 0 12px 30px rgba(120, 224, 255, 0.2);
+  }
+
+  .mobile-menu-button.mobile-only .hamburger-line {
+    background: #07111f;
   }
 
   .pill-logo strong {

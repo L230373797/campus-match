@@ -128,15 +128,21 @@ function PillNav({
     const scrollContainer = activePill?.closest('.pill-list')
     if (!activePill || !scrollContainer) return
 
-    const pillRect = activePill.getBoundingClientRect()
-    const containerRect = scrollContainer.getBoundingClientRect()
-    const pillCenter = pillRect.left + pillRect.width / 2
-    const containerCenter = containerRect.left + containerRect.width / 2
+    const centerActivePill = (behavior = 'smooth') => {
+      const pillRect = activePill.getBoundingClientRect()
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const pillCenter = pillRect.left + pillRect.width / 2
+      const containerCenter = containerRect.left + containerRect.width / 2
 
-    scrollContainer.scrollTo({
-      left: scrollContainer.scrollLeft + pillCenter - containerCenter,
-      behavior: 'smooth',
-    })
+      scrollContainer.scrollTo({
+        left: scrollContainer.scrollLeft + pillCenter - containerCenter,
+        behavior,
+      })
+    }
+
+    centerActivePill('auto')
+    const timer = window.setTimeout(() => centerActivePill('smooth'), 650)
+    return () => window.clearTimeout(timer)
   }, [activeHref, items])
 
   const handleEnter = (index) => {

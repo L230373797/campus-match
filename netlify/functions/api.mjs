@@ -215,6 +215,7 @@ async function handleAuth(req, store, segments) {
       allowOfflineEvents: body.allowOfflineEvents !== false,
       campusCardImage: text(body.campusCardImage),
       avatar: text(body.avatar),
+      photos: normalizeProfilePhotos(body.photos),
       isVerified: false,
       verificationStatus: body.campusCardImage ? "pending" : "unverified",
       verificationBadge: body.campusCardImage ? `${school} 认证审核中` : "",
@@ -281,6 +282,19 @@ async function handleAdmin(req, store, segments, url) {
     return json({
       success: true,
       data: buildAdminUsersPayload(users, url),
+    });
+  }
+
+  if (segments[1] === "matches" && req.method === "GET") {
+    const [users, matches, messages] = await Promise.all([
+      listUsers(store),
+      listMatches(store),
+      listAllMessages(store),
+    ]);
+
+    return json({
+      success: true,
+      data: buildAdminMatchesPayload(users, matches, messages, url),
     });
   }
 
@@ -408,6 +422,7 @@ async function handleUsers(req, store, segments, url) {
       "allowAnonymousMatch",
       "allowOfflineEvents",
       "avatar",
+      "photos",
     ];
 
     const updatedUser = { ...user };
@@ -417,6 +432,8 @@ async function handleUsers(req, store, segments, url) {
           updatedUser[field] = normalizeMbti(body[field]);
         } else if (field === "birthDate") {
           updatedUser[field] = normalizeBirthDate(body[field]);
+        } else if (field === "photos") {
+          updatedUser[field] = normalizeProfilePhotos(body[field]);
         } else {
           updatedUser[field] = Array.isArray(body[field]) ? arrayOfText(body[field]) : body[field];
         }
@@ -714,7 +731,7 @@ async function handleUsers(req, store, segments, url) {
 async function handleUploads(req, store, segments) {
   if (req.method === "GET" && segments.length >= 2) {
     const key = segments.slice(1).join("/");
-    if (!["campus-cards/", "avatars/", "chat-images/"].some((prefix) => key.startsWith(prefix))) {
+    if (!["campus-cards/", "avatars/", "profile-photos/", "chat-images/"].some((prefix) => key.startsWith(prefix))) {
       throw httpError("文件不存在", 404);
     }
 
@@ -780,6 +797,58 @@ async function handleUploads(req, store, segments) {
       message: "头像已更新",
       data: { imageUrl: avatar, user: publicUser(updatedUser) },
     }, 201);
+  }
+
+  if (segments[1] === "profile-photo" && req.method === "POST") {
+    const user = await requireUser(req, store);
+    const currentPhotos = normalizeProfilePhotos(user.photos);
+    if (currentPhotos.length >= 6) {
+      throw httpError("最多保留 6 张个人照片", 400);
+    }
+
+    const body = await readBody(req);
+    const { buffer, extension } = parseImageUpload(body);
+    const fileId = makeId("photo");
+    const key = `uploads/profile-photos/${user.id}/${fileId}.${extension}`;
+    await store.set(key, buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+
+    const imageUrl = `/api/uploads/profile-photos/${user.id}/${fileId}.${extension}`;
+    const updatedUser = {
+      ...user,
+      photos: [...currentPhotos, imageUrl].slice(0, 6),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "照片已加入资料",
+      data: { imageUrl, user: publicUser(updatedUser) },
+    }, 201);
+  }
+
+  if (segments[1] === "profile-photo" && req.method === "DELETE") {
+    const user = await requireUser(req, store);
+    const body = await readBody(req);
+    const imageUrl = text(body.imageUrl);
+    const currentPhotos = normalizeProfilePhotos(user.photos);
+    if (!currentPhotos.includes(imageUrl)) {
+      throw httpError("照片不存在", 404);
+    }
+
+    await deleteStoredProfilePhoto(store, imageUrl);
+    const updatedUser = {
+      ...user,
+      photos: currentPhotos.filter((photo) => photo !== imageUrl),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "照片已移除",
+      data: { user: publicUser(updatedUser) },
+    });
   }
 
   if (segments[1] === "chat-image" && req.method === "POST") {
@@ -938,12 +1007,17 @@ async function handleMessages(req, store, segments, url) {
     return handleMessageTyping(req, store, match, user);
   }
 
+  if (segments[2]) {
+    return handleSingleMessage(req, store, match, user, decodePathSegment(segments[2]), url);
+  }
+
   if (req.method === "GET") {
     const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
     const limit = clampNumber(url.searchParams.get("limit"), 1, 100, 20);
     const messages = await getMessages(store, matchId);
-    const start = Math.max(messages.length - page * limit, 0);
-    const end = messages.length - (page - 1) * limit;
+    const visibleMessages = visibleMessagesForUser(messages, user.id);
+    const start = Math.max(visibleMessages.length - page * limit, 0);
+    const end = visibleMessages.length - (page - 1) * limit;
     const updatedMatch = markMatchRead(match, user.id);
     await saveMatch(store, updatedMatch);
     const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
@@ -951,10 +1025,10 @@ async function handleMessages(req, store, segments, url) {
     return json({
       success: true,
       data: {
-        messages: messages.slice(start, end),
+        messages: visibleMessages.slice(start, end),
         match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
         typing: serializeTyping(updatedMatch, user.id),
-        pagination: { page, limit, total: messages.length },
+        pagination: { page, limit, total: visibleMessages.length },
       },
     });
   }
@@ -1011,6 +1085,69 @@ async function handleMessages(req, store, segments, url) {
   return json({ success: false, message: "接口不存在" }, 404);
 }
 
+async function handleSingleMessage(req, store, match, user, messageId, url) {
+  if (req.method !== "DELETE") {
+    return json({ success: false, message: "接口不存在" }, 404);
+  }
+
+  const messages = await getMessages(store, match.id);
+  const index = messages.findIndex((message) => messageIdForMessage(message) === messageId);
+  if (index < 0) {
+    throw httpError("消息不存在", 404);
+  }
+
+  const now = new Date().toISOString();
+  const message = messages[index];
+  const senderId = senderIdForMessage(message);
+  const scope = text(url.searchParams.get("scope") || url.searchParams.get("mode") || "me").toLowerCase();
+
+  if (["all", "everyone", "recall"].includes(scope)) {
+    if (senderId !== user.id) {
+      throw httpError("只能撤回自己发送的消息", 403);
+    }
+
+    messages[index] = {
+      ...message,
+      originalContent: message.originalContent || message.content || "",
+      originalType: message.originalType || message.type || "text",
+      content: "",
+      type: "text",
+      recalledAt: message.recalledAt || now,
+      recalledBy: user.id,
+      updatedAt: now,
+    };
+  } else {
+    const hiddenFor = new Set(Array.isArray(message.hiddenFor) ? message.hiddenFor : []);
+    hiddenFor.add(user.id);
+    messages[index] = {
+      ...message,
+      hiddenFor: [...hiddenFor],
+      deletedAtByUser: {
+        ...(message.deletedAtByUser || {}),
+        [user.id]: now,
+      },
+      updatedAt: now,
+    };
+  }
+
+  await store.setJSON(`messages/${match.id}`, messages);
+
+  const updatedMatch = refreshMatchMessageSummary(markMatchRead(match, user.id, now), messages, now);
+  await saveMatch(store, updatedMatch);
+  const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
+
+  return json({
+    success: true,
+    message: ["all", "everyone", "recall"].includes(scope) ? "消息已撤回" : "消息已删除",
+    data: {
+      message: messages[index],
+      messages: visibleMessagesForUser(messages, user.id),
+      match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+      typing: serializeTyping(updatedMatch, user.id),
+    },
+  });
+}
+
 async function handleMessageTyping(req, store, match, user) {
   if (req.method === "GET") {
     const messages = await getMessages(store, match.id);
@@ -1065,7 +1202,10 @@ function validateMessageContent(type, content) {
   }
 }
 
-function messagePreviewForType(type, content) {
+function messagePreviewForType(type, content, message = {}) {
+  if (isMessageRecalled(message)) {
+    return "撤回了一条消息";
+  }
   if (type === "image") {
     return "发来一张图片";
   }
@@ -1550,6 +1690,7 @@ function publicActivityProfile(profile) {
     grade: text(profile.grade),
     bio: text(profile.bio),
     avatar: text(profile.avatar),
+    photos: normalizeProfilePhotos(profile.photos).slice(0, 3),
     isVerified: Boolean(profile.isVerified),
     verificationStatus: text(profile.verificationStatus),
     verificationBadge: text(profile.verificationBadge),
@@ -1825,6 +1966,7 @@ function profileCompletenessScore(user) {
     Boolean(user.major),
     Boolean(user.grade),
     Boolean(user.avatar),
+    Boolean((user.photos || []).length),
     Boolean((user.tags || []).length || (user.sceneTags || []).length || (user.matchModes || []).length),
     Boolean(user.mbti && user.birthDate),
   ];
@@ -1861,6 +2003,7 @@ async function saveUser(store, user) {
     tags: arrayOfText(user.tags),
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
+    photos: normalizeProfilePhotos(user.photos),
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
@@ -1978,14 +2121,18 @@ async function getMessages(store, matchId) {
 }
 
 function serializeMatch(match, viewerId, otherProfile, messages = []) {
-  const lastMessage = [...messages].reverse().find(Boolean);
+  const visibleMessages = visibleMessagesForUser(messages, viewerId);
+  const hasMessages = messages.some(Boolean);
+  const lastMessage = [...visibleMessages].reverse().find(Boolean);
   const unreadCount = calculateUnreadCount(match, viewerId, messages);
-  const lastMessageAt = match.lastMessageAt || lastMessage?.createdAt || match.matchedAt;
-  const lastMessagePreview = text(match.lastMessagePreview) || text(lastMessage?.content);
-  const lastMessageSenderId = text(match.lastMessageSenderId) || senderIdForMessage(lastMessage || {});
+  const lastMessageAt = lastMessage?.createdAt || (hasMessages ? match.matchedAt : match.lastMessageAt) || match.matchedAt;
+  const lastMessagePreview = lastMessage
+    ? messagePreviewForType(lastMessage.type, lastMessage.content, lastMessage)
+    : (hasMessages ? "" : text(match.lastMessagePreview));
+  const lastMessageSenderId = senderIdForMessage(lastMessage || {}) || text(match.lastMessageSenderId);
   const otherId = (match.participants || []).find((participant) => participant !== viewerId) || "";
   const otherReadAt = match.readAtByUser?.[otherId] || null;
-  const lastOwnMessage = [...messages].reverse().find((message) => senderIdForMessage(message) === viewerId);
+  const lastOwnMessage = [...visibleMessages].reverse().find((message) => senderIdForMessage(message) === viewerId);
   return {
     id: match.id,
     _id: match.id,
@@ -2050,6 +2197,10 @@ function calculateUnreadCount(match, viewerId, messages = []) {
 
   const readAt = Date.parse(match.readAtByUser?.[viewerId] || match.matchedAt || match.createdAt || 0);
   return messages.filter((message) => {
+    if (!messageVisibleToUser(message, viewerId)) {
+      return false;
+    }
+
     if (senderIdForMessage(message) === viewerId) {
       return false;
     }
@@ -2061,6 +2212,31 @@ function calculateUnreadCount(match, viewerId, messages = []) {
 
 function senderIdForMessage(message) {
   return text(message.senderId || message.sender?.id || message.sender?._id || message.sender);
+}
+
+function messageIdForMessage(message) {
+  return text(message.id || message._id);
+}
+
+function messageVisibleToUser(message, userId) {
+  const hiddenFor = Array.isArray(message?.hiddenFor) ? message.hiddenFor : [];
+  return !hiddenFor.includes(userId);
+}
+
+function visibleMessagesForUser(messages = [], userId) {
+  return messages.filter((message) => message && messageVisibleToUser(message, userId));
+}
+
+function messageVisibleToAnyParticipant(message, participants = []) {
+  if (!message) return false;
+  if (isMessageRecalled(message)) return true;
+  const hiddenFor = new Set(Array.isArray(message.hiddenFor) ? message.hiddenFor : []);
+  if (!participants.length) return true;
+  return participants.some((participant) => !hiddenFor.has(participant));
+}
+
+function isMessageRecalled(message) {
+  return Boolean(message?.recalledAt || message?.recalled);
 }
 
 function markMatchRead(match, userId, now = new Date().toISOString()) {
@@ -2097,6 +2273,20 @@ function applyOutgoingMessageState(match, senderId, content, now = new Date().to
     lastMessageSenderId: senderId,
     readAtByUser,
     unreadByUser,
+    updatedAt: now,
+  };
+}
+
+function refreshMatchMessageSummary(match, messages = [], now = new Date().toISOString()) {
+  const lastMessage = [...messages]
+    .reverse()
+    .find((message) => messageVisibleToAnyParticipant(message, match.participants || []));
+
+  return {
+    ...match,
+    lastMessageAt: lastMessage?.createdAt || "",
+    lastMessagePreview: lastMessage ? messagePreviewForType(lastMessage.type, lastMessage.content, lastMessage) : "",
+    lastMessageSenderId: lastMessage ? senderIdForMessage(lastMessage) : "",
     updatedAt: now,
   };
 }
@@ -2210,6 +2400,7 @@ async function applyPrivacyRequestCompletion(store, user, request, now) {
   await redactUserMessagesAndMatches(store, user, now);
   await deleteStoredCampusCard(store, user.campusCardImage);
   await deleteStoredAvatar(store, user.avatar);
+  await deleteStoredProfilePhotos(store, user.photos);
 
   if (request.type === "delete_account") {
     return {
@@ -2254,6 +2445,7 @@ function anonymizeUserProfile(user, now, deleted) {
     allowOfflineEvents: false,
     campusCardImage: "",
     avatar: "",
+    photos: [],
     isVerified: false,
     verificationStatus: "unverified",
     verificationBadge: "",
@@ -2272,6 +2464,14 @@ async function deleteStoredCampusCard(store, campusCardImage) {
 
 async function deleteStoredAvatar(store, avatar) {
   await deleteStoredUpload(store, avatar, "avatars/");
+}
+
+async function deleteStoredProfilePhoto(store, photo) {
+  await deleteStoredUpload(store, photo, "profile-photos/");
+}
+
+async function deleteStoredProfilePhotos(store, photos) {
+  await Promise.all(normalizeProfilePhotos(photos).map((photo) => deleteStoredProfilePhoto(store, photo)));
 }
 
 async function deleteStoredUpload(store, uploadUrl, allowedPrefix) {
@@ -2406,6 +2606,13 @@ function buildAdminOverview(users, matches, messages) {
       matches: matches.length,
       messages: messages.length,
       messagesToday: countSince(messages, "createdAt", startOfLocalDay(now)),
+      treeholes: activeUsers.reduce((total, user) => total + normalizeTreeholePosts(user.treeholePosts).length, 0),
+      activeProfiles: activeUsers.filter((user) => calculateProfileReadiness(user).score >= 60).length,
+      unreadMessages: matches.reduce(
+        (total, match) =>
+          total + Object.values(match?.unreadByUser || {}).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0),
+        0,
+      ),
     },
     recentUsers: activeUsers
       .slice()
@@ -2507,7 +2714,17 @@ function adminUserSummary(user) {
     grade: user.grade,
     major: user.major,
     college: user.college,
+    dormArea: user.dormArea,
+    campusZone: user.campusZone,
     avatar: user.avatar,
+    photos: normalizeProfilePhotos(user.photos).slice(0, 6),
+    bio: user.bio,
+    mbti: user.mbti,
+    birthDate: user.birthDate,
+    relationshipGoal: user.relationshipGoal,
+    tags: arrayOfText(user.tags).slice(0, 12),
+    sceneTags: arrayOfText(user.sceneTags).slice(0, 12),
+    matchModes: arrayOfText(user.matchModes).slice(0, 12),
     isAdmin: hasAdminAccess(user),
     isVerified: Boolean(user.isVerified || user.verificationStatus === "approved"),
     verificationStatus: text(user.verificationStatus || "unverified"),
@@ -2521,6 +2738,11 @@ function adminUserSummary(user) {
     },
     stats: normalizeUserStats(user.stats),
     readiness,
+    activity: {
+      treeholes: normalizeTreeholePosts(user.treeholePosts).length,
+      privacyRequests: privacyRequests.length,
+      hasSelfInsight: Boolean(user.selfInsight),
+    },
     latestPrivacyRequest: latestPrivacyRequest ? {
       type: latestPrivacyRequest.type,
       status: latestPrivacyRequest.status,
@@ -2528,6 +2750,110 @@ function adminUserSummary(user) {
     } : null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+  };
+}
+
+function buildAdminMatchesPayload(users, matches, messages, url) {
+  const query = text(url.searchParams.get("q")).toLowerCase();
+  const userById = new Map(users.map((user) => {
+    const normalizedUser = normalizeUserRecord(user);
+    return [normalizedUser.id, normalizedUser];
+  }));
+  const messagesByMatch = new Map();
+
+  for (const message of messages) {
+    const matchId = text(message.matchId);
+    if (!matchId) continue;
+    if (!messagesByMatch.has(matchId)) {
+      messagesByMatch.set(matchId, []);
+    }
+    messagesByMatch.get(matchId).push(message);
+  }
+
+  let rows = matches.map((match) => adminMatchSummary(match, userById, messagesByMatch.get(match.id) || []));
+
+  if (query) {
+    rows = rows.filter((match) => {
+      const haystack = [
+        match.id,
+        match.lastMessagePreview,
+        ...match.participants.flatMap((participant) => [
+          participant.nickname,
+          participant.email,
+          participant.school,
+          participant.major,
+          participant.mbti,
+        ]),
+      ].map((item) => text(item).toLowerCase()).join(" ");
+      return haystack.includes(query);
+    });
+  }
+
+  rows = rows
+    .sort((a, b) => String(b.lastMessageAt || b.matchedAt || "").localeCompare(String(a.lastMessageAt || a.matchedAt || "")))
+    .slice(0, 80);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    query,
+    counts: {
+      all: matches.length,
+      filtered: rows.length,
+      withMessages: matches.filter((match) => (messagesByMatch.get(match.id) || []).length > 0).length,
+      identityRevealed: matches.filter((match) => match.identityRevealed).length,
+      unreadMessages: rows.reduce((total, match) => total + match.unreadTotal, 0),
+    },
+    matches: rows,
+  };
+}
+
+function adminMatchSummary(match, userById, messages = []) {
+  const participants = (match.participants || []).map((userId) => {
+    const liveUser = userById.get(userId);
+    const snapshot = match.userSnapshots?.[userId] || {};
+    const profile = normalizeUserRecord(liveUser || snapshot);
+    const membership = normalizeMembershipRecord(profile.membership, profile.createdAt);
+
+    return {
+      id: profile.id || userId,
+      nickname: profile.nickname,
+      email: profile.email,
+      avatar: profile.avatar,
+      school: profile.school,
+      grade: profile.grade,
+      major: profile.major,
+      mbti: profile.mbti,
+      isVerified: Boolean(profile.isVerified || profile.verificationStatus === "approved"),
+      verificationStatus: text(profile.verificationStatus || "unverified"),
+      membership: {
+        planId: membership.planId,
+        title: membership.title,
+        status: membership.status,
+      },
+      readiness: calculateProfileReadiness(profile),
+    };
+  });
+  const visibleMessages = messages.filter((message) => message && !message.recalledAt);
+  const lastMessage = visibleMessages
+    .slice()
+    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")))
+    .at(-1) || null;
+  const unreadTotal = Object.values(match?.unreadByUser || {})
+    .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+
+  return {
+    id: match.id,
+    participants,
+    participantIds: match.participants || [],
+    messageCount: visibleMessages.length,
+    unreadTotal,
+    lastMessagePreview: messagePreviewForType(lastMessage?.type || "text", lastMessage?.content || match.lastMessagePreview || "", lastMessage || {}),
+    lastMessageSenderId: lastMessage?.senderId || match.lastMessageSenderId || "",
+    identityRevealed: Boolean(match.identityRevealed),
+    revealRequestCount: Array.isArray(match.revealRequests) ? match.revealRequests.length : 0,
+    matchedAt: match.matchedAt,
+    lastMessageAt: lastMessage?.createdAt || match.lastMessageAt,
+    updatedAt: match.updatedAt,
   };
 }
 
@@ -2717,6 +3043,7 @@ function normalizeUserRecord(user) {
     tags: arrayOfText(user.tags),
     sceneTags: arrayOfText(user.sceneTags),
     matchModes: arrayOfText(user.matchModes),
+    photos: normalizeProfilePhotos(user.photos),
     mbti: normalizeMbti(user.mbti),
     birthDate: normalizeBirthDate(user.birthDate || user.birthday),
     skippedIds: Array.isArray(user.skippedIds) ? user.skippedIds.map(text).filter(Boolean) : [],
@@ -2727,6 +3054,12 @@ function normalizeUserRecord(user) {
     privacyRequestStatus: text(user.privacyRequestStatus) || "none",
     accountStatus: text(user.accountStatus) || "active",
   };
+}
+
+function normalizeProfilePhotos(value) {
+  return uniqueTextValues(arrayOfText(value))
+    .filter((photo) => photo.startsWith("/api/uploads/profile-photos/"))
+    .slice(0, 6);
 }
 
 function normalizeUserStats(stats) {
@@ -3094,6 +3427,7 @@ function publicUserFromDatabase(row) {
     sceneTags: row.scene_tags || [],
     matchModes: row.match_modes || [],
     avatar: null,
+    photos: [],
     updatedAt: row.updated_at,
     stats: { matches: 0, likes: 0, views: 0 },
   };
@@ -3335,6 +3669,10 @@ function arrayOfText(value) {
 }
 
 function clampNumber(value, min, max, fallback) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
   const number = Number(value);
   if (!Number.isFinite(number)) {
     return fallback;

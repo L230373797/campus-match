@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { motion, useInView } from 'motion/react'
+import { motion } from 'motion/react'
 
 import './AnimatedList.css'
 
 function AnimatedItem({ children, delay = 0, index, onMouseEnter, onClick, selected }) {
   const ref = useRef(null)
-  const inView = useInView(ref, { amount: 0.42, once: false })
 
   return (
     <motion.div
@@ -15,7 +14,7 @@ function AnimatedItem({ children, delay = 0, index, onMouseEnter, onClick, selec
       onMouseEnter={onMouseEnter}
       onClick={onClick}
       initial={{ scale: 0.96, opacity: 0, y: 22, filter: 'blur(10px)' }}
-      animate={inView ? { scale: 1, opacity: 1, y: 0, filter: 'blur(0px)' } : { scale: 0.96, opacity: 0, y: 22, filter: 'blur(10px)' }}
+      animate={{ scale: 1, opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.46, delay, ease: [0.2, 0.78, 0.2, 1] }}
     >
       {children}

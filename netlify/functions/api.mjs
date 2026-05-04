@@ -257,6 +257,32 @@ async function handleAuth(req, store, segments) {
     return json({ success: true, data: { user: publicUser(user) } });
   }
 
+  if (segments[1] === "change-password" && req.method === "POST") {
+    const user = await requireUser(req, store);
+    const body = await readBody(req);
+    const currentPassword = String(body.currentPassword || "");
+    const newPassword = String(body.newPassword || "");
+
+    if (!verifyPassword(currentPassword, user)) {
+      throw httpError("当前密码不正确", 401);
+    }
+
+    assertPasswordPolicy(newPassword);
+
+    const updatedUser = {
+      ...user,
+      ...hashPassword(newPassword),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "密码已更新",
+      data: { user: publicUser(updatedUser) },
+    });
+  }
+
   return json({ success: false, message: "接口不存在" }, 404);
 }
 
@@ -282,6 +308,54 @@ async function handleAdmin(req, store, segments, url) {
     return json({
       success: true,
       data: buildAdminUsersPayload(users, url),
+    });
+  }
+
+  if (segments[1] === "accounts" && req.method === "GET") {
+    const users = await listUsers(store);
+    return json({
+      success: true,
+      data: buildAdminAccountsPayload(users, user),
+    });
+  }
+
+  if (segments[1] === "accounts" && segments.length === 2 && req.method === "POST") {
+    const body = await readBody(req);
+    const account = await createOrUpdateAdminAccount(store, body, user);
+    return json({
+      success: true,
+      message: "管理员账号已保存",
+      data: { account: adminAccountSummary(account) },
+    });
+  }
+
+  if (segments[1] === "accounts" && segments[2] === "reset-password" && req.method === "POST") {
+    const body = await readBody(req);
+    const targetUser = await resolveAdminTargetUser(store, body);
+    if (!targetUser) {
+      throw httpError("管理员账号不存在", 404);
+    }
+    if (!hasAdminAccess(targetUser)) {
+      throw httpError("只能重置管理员账号密码", 400);
+    }
+
+    const newPassword = String(body.newPassword || body.password || "");
+    assertPasswordPolicy(newPassword);
+    const updatedUser = {
+      ...targetUser,
+      ...hashPassword(newPassword),
+      isAdmin: true,
+      accountStatus: "active",
+      updatedAt: new Date().toISOString(),
+      passwordResetBy: user.email,
+      passwordResetAt: new Date().toISOString(),
+    };
+    await saveUser(store, updatedUser);
+
+    return json({
+      success: true,
+      message: "管理员密码已重置",
+      data: { account: adminAccountSummary(updatedUser) },
     });
   }
 
@@ -2582,6 +2656,126 @@ function adminExportUser(user) {
   };
 }
 
+function buildAdminAccountsPayload(users, currentUser) {
+  const accounts = users
+    .map(normalizeUserRecord)
+    .filter(Boolean)
+    .filter(hasAdminAccess)
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))
+    .map(adminAccountSummary);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    currentUser: adminAccountSummary(currentUser),
+    accounts,
+    counts: {
+      admins: accounts.length,
+    },
+  };
+}
+
+function adminAccountSummary(user) {
+  const normalizedUser = normalizeUserRecord(user);
+  return {
+    id: normalizedUser?.id || "",
+    email: normalizedUser?.email || "",
+    nickname: normalizedUser?.nickname || "",
+    avatar: normalizedUser?.avatar || "",
+    school: normalizedUser?.school || "",
+    isAdmin: hasAdminAccess(normalizedUser),
+    accountStatus: normalizedUser?.accountStatus || "active",
+    createdAt: normalizedUser?.createdAt || "",
+    updatedAt: normalizedUser?.updatedAt || "",
+    passwordResetAt: normalizedUser?.passwordResetAt || "",
+    passwordResetBy: normalizedUser?.passwordResetBy || "",
+  };
+}
+
+async function createOrUpdateAdminAccount(store, body, actor) {
+  const email = normalizeEmail(body.email);
+  const password = String(body.password || body.newPassword || "");
+  if (!email) {
+    throw httpError("请填写管理员邮箱", 400);
+  }
+  assertPasswordPolicy(password);
+
+  const now = new Date().toISOString();
+  const existing = await findUserByEmail(store, email);
+  const passwordRecord = hashPassword(password);
+  const nextUser = existing ? {
+    ...existing,
+    nickname: text(body.nickname) || existing.nickname || email.split("@")[0],
+    isAdmin: true,
+    accountStatus: "active",
+    updatedAt: now,
+    passwordResetBy: actor.email,
+    passwordResetAt: now,
+    ...passwordRecord,
+  } : {
+    id: makeId("user"),
+    email,
+    studentId: "",
+    nickname: text(body.nickname) || email.split("@")[0],
+    school: text(body.school) || "运营后台",
+    grade: "",
+    major: "管理员",
+    college: "",
+    campusZone: "",
+    dormArea: "",
+    bio: "校园匹配管理员账号",
+    tags: [],
+    sceneTags: [],
+    matchModes: [],
+    mbti: "",
+    birthDate: "",
+    schedule: "",
+    idealScene: "",
+    relationshipGoal: "",
+    allowAnonymousMatch: true,
+    allowOfflineEvents: false,
+    campusCardImage: "",
+    avatar: "",
+    photos: [],
+    isVerified: true,
+    verificationStatus: "approved",
+    verificationBadge: "管理员",
+    verificationRequestedAt: null,
+    verificationNotes: "",
+    membership: createDefaultMembership(now),
+    stats: { matches: 0, likes: 0, views: 0 },
+    skippedIds: [],
+    dismissedLikedIds: [],
+    dismissedRecommendationSignals: [],
+    activityLog: [],
+    privacyRequests: [],
+    privacyRequestStatus: "none",
+    accountStatus: "active",
+    isAdmin: true,
+    createdAt: now,
+    updatedAt: now,
+    passwordResetBy: actor.email,
+    passwordResetAt: now,
+    ...passwordRecord,
+  };
+
+  await saveUser(store, nextUser);
+  return nextUser;
+}
+
+async function resolveAdminTargetUser(store, body) {
+  const userId = text(body.userId || body.id);
+  if (userId) {
+    return getUser(store, userId);
+  }
+
+  const email = normalizeEmail(body.email);
+  if (email) {
+    return findUserByEmail(store, email);
+  }
+
+  return null;
+}
+
 function buildAdminOverview(users, matches, messages) {
   const activeUsers = users.map(normalizeUserRecord).filter(isActiveUser);
   const pendingPrivacyRequests = activeUsers
@@ -3603,6 +3797,12 @@ function hashPassword(password) {
   const passwordSalt = crypto.randomBytes(16).toString("hex");
   const passwordHash = crypto.scryptSync(password, passwordSalt, 64).toString("hex");
   return { passwordHash, passwordSalt };
+}
+
+function assertPasswordPolicy(password) {
+  if (!password || String(password).length < 8) {
+    throw httpError("新密码至少需要 8 位", 400);
+  }
 }
 
 function verifyPassword(password, user) {

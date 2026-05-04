@@ -8,7 +8,8 @@
     userStatus: "all",
     pendingUsers: [],
     privacyRequests: [],
-    activeTab: "overview",
+    adminAccounts: [],
+    activeTab: window.location.hash === "#accounts" ? "accounts" : "overview",
     busyUserId: "",
   };
 
@@ -28,6 +29,7 @@
   const usersTab = document.querySelector("#tab-users");
   const verificationTab = document.querySelector("#tab-verification");
   const privacyTab = document.querySelector("#tab-privacy");
+  const accountsTab = document.querySelector("#tab-accounts");
 
   loginForm.addEventListener("submit", handleLogin);
   refreshButton.addEventListener("click", () => loadCurrentQueue());
@@ -36,6 +38,7 @@
   usersTab.addEventListener("click", () => switchTab("users"));
   verificationTab.addEventListener("click", () => switchTab("verification"));
   privacyTab.addEventListener("click", () => switchTab("privacy"));
+  accountsTab?.addEventListener("click", () => switchTab("accounts"));
 
   boot().catch((error) => {
     showLogin(error.message || "运营后台暂时无法打开");
@@ -104,10 +107,7 @@
     }
 
     state.activeTab = tab;
-    overviewTab.classList.toggle("active", tab === "overview");
-    usersTab.classList.toggle("active", tab === "users");
-    verificationTab.classList.toggle("active", tab === "verification");
-    privacyTab.classList.toggle("active", tab === "privacy");
+    syncTabState();
     if (adminTitle) {
       adminTitle.textContent = tabTitle(tab);
     }
@@ -121,6 +121,9 @@
     }
     if (state.activeTab === "users") {
       return loadUsers();
+    }
+    if (state.activeTab === "accounts") {
+      return loadAdminAccounts();
     }
     return state.activeTab === "privacy" ? loadPrivacyRequests() : loadPendingUsers();
   }
@@ -174,6 +177,167 @@
     } finally {
       refreshButton.disabled = false;
       refreshButton.textContent = "刷新用户";
+    }
+  }
+
+  async function loadAdminAccounts() {
+    setNotice("");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "正在刷新...";
+    queue.innerHTML = `<div class="loading glass">正在读取管理员账号...</div>`;
+
+    try {
+      const payload = await requestApi("/admin/accounts");
+      state.adminAccounts = payload.data?.accounts || [];
+      pendingCount.textContent = `管理员 ${state.adminAccounts.length}`;
+      lastRefresh.textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+      renderAdminAccounts(payload.data || {});
+    } catch (error) {
+      queue.innerHTML = "";
+      setNotice(error.message || "管理员账号读取失败");
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "刷新管理员";
+    }
+  }
+
+  function renderAdminAccounts(payload) {
+    const currentUser = payload.currentUser || state.user || {};
+    const accounts = state.adminAccounts || [];
+    queue.innerHTML = `
+      <section class="admin-account-grid">
+        <article class="admin-account-card glass">
+          <div>
+            <h2>修改当前管理员密码</h2>
+            <p>用于你自己登录后台和桌面管理器入口。改完后，下次登录使用新密码。</p>
+          </div>
+          <form id="current-password-form" class="admin-account-form">
+            <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" required /></label>
+            <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <label>确认新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <button class="button" type="submit">保存新密码</button>
+          </form>
+        </article>
+
+        <article class="admin-account-card glass">
+          <div>
+            <h2>新增备用管理员</h2>
+            <p>建议至少保留一个备用管理员账号，避免主账号忘记密码时进不来后台。</p>
+          </div>
+          <form id="create-admin-form" class="admin-account-form">
+            <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="例如 123456@qq.com" /></label>
+            <label>昵称<input name="nickname" type="text" autocomplete="name" placeholder="备用管理员" /></label>
+            <label>初始密码<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <button class="button" type="submit">创建管理员</button>
+          </form>
+        </article>
+
+        <article class="admin-account-card glass" style="grid-column: 1 / -1;">
+          <div>
+            <h2>已有管理员</h2>
+            <p>当前登录：${escapeHtml(currentUser.email || "未知账号")}</p>
+          </div>
+          <div class="admin-list">
+            ${accounts.length ? accounts.map(renderAdminAccountRow).join("") : `<div class="empty">还没有管理员账号。</div>`}
+          </div>
+        </article>
+      </section>
+    `;
+
+    queue.querySelector("#current-password-form")?.addEventListener("submit", handleCurrentPasswordChange);
+    queue.querySelector("#create-admin-form")?.addEventListener("submit", handleCreateAdminAccount);
+    queue.querySelectorAll("[data-admin-reset]").forEach((form) => {
+      form.addEventListener("submit", handleResetAdminPassword);
+    });
+  }
+
+  function renderAdminAccountRow(account) {
+    const updated = account.passwordResetAt || account.updatedAt || account.createdAt;
+    return `
+      <div class="admin-row">
+        <div class="admin-row-main">
+          <div>
+            <strong>${escapeHtml(account.nickname || account.email || "管理员")}</strong>
+            <span class="meta">${escapeHtml(account.email || "未填写邮箱")}</span>
+          </div>
+          <span class="user-badge good">管理员</span>
+        </div>
+        <p class="meta">最近更新：${escapeHtml(formatTime(updated))}</p>
+        <form class="admin-reset-form" data-admin-reset="${escapeAttr(account.id)}">
+          <input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="输入新密码后重置" required />
+          <button class="button secondary" type="submit">重置密码</button>
+        </form>
+      </div>
+    `;
+  }
+
+  async function handleCurrentPasswordChange(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const currentPassword = form.currentPassword.value;
+    const newPassword = form.newPassword.value;
+    const confirmPassword = form.confirmPassword.value;
+    if (newPassword !== confirmPassword) {
+      setNotice("两次输入的新密码不一致");
+      return;
+    }
+
+    await submitAdminForm(form, async () => {
+      const payload = await requestApi("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      setNotice(payload.message || "密码已更新");
+      form.reset();
+    });
+  }
+
+  async function handleCreateAdminAccount(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    await submitAdminForm(form, async () => {
+      const payload = await requestApi("/admin/accounts", {
+        method: "POST",
+        body: JSON.stringify({
+          email: form.email.value,
+          nickname: form.nickname.value,
+          password: form.password.value,
+        }),
+      });
+      setNotice(payload.message || "管理员账号已保存");
+      form.reset();
+      await loadAdminAccounts();
+    });
+  }
+
+  async function handleResetAdminPassword(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const userId = form.dataset.adminReset;
+    await submitAdminForm(form, async () => {
+      const payload = await requestApi("/admin/accounts/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ userId, newPassword: form.password.value }),
+      });
+      setNotice(payload.message || "管理员密码已重置");
+      form.reset();
+      await loadAdminAccounts();
+    });
+  }
+
+  async function submitAdminForm(form, task) {
+    const buttons = Array.from(form.querySelectorAll("button"));
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
+    try {
+      await task();
+    } catch (error) {
+      setNotice(error.message || "操作没有成功");
+    } finally {
+      buttons.forEach((button) => {
+        button.disabled = false;
+      });
     }
   }
 
@@ -585,10 +749,19 @@
   function showAdmin() {
     loginView.classList.add("hidden");
     adminView.classList.remove("hidden");
+    syncTabState();
     if (adminTitle) {
       adminTitle.textContent = tabTitle(state.activeTab);
     }
     adminSubtitle.textContent = `${state.user?.nickname || state.user?.email || "运营账号"} · 运营后台`;
+  }
+
+  function syncTabState() {
+    overviewTab.classList.toggle("active", state.activeTab === "overview");
+    usersTab.classList.toggle("active", state.activeTab === "users");
+    verificationTab.classList.toggle("active", state.activeTab === "verification");
+    privacyTab.classList.toggle("active", state.activeTab === "privacy");
+    accountsTab?.classList.toggle("active", state.activeTab === "accounts");
   }
 
   function logout(message = "") {
@@ -609,6 +782,7 @@
       users: "用户管理",
       verification: "认证队列",
       privacy: "账号资料请求",
+      accounts: "管理员账号",
     }[tab] || "运营后台";
   }
 

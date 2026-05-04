@@ -248,6 +248,7 @@ function Get-HealthSummaries {
 $Actions = @(
   @{ Group = "网站入口"; Label = "线上用户端"; Hint = "$OnlineBase/login"; Run = { Open-Url "$OnlineBase/login" } },
   @{ Group = "网站入口"; Label = "线上管理端"; Hint = "$OnlineBase/admin.html"; Run = { Open-Url "$OnlineBase/admin.html" } },
+  @{ Group = "网站入口"; Label = "管理员账号管理"; Hint = "$OnlineBase/admin.html#accounts"; Run = { Open-Url "$OnlineBase/admin.html#accounts" } },
   @{ Group = "网站入口"; Label = "本地用户端"; Hint = "$LocalBase/login"; Run = { Open-Url "$LocalBase/login" } },
   @{ Group = "网站入口"; Label = "本地管理端"; Hint = "$LocalBase/admin.html"; Run = { Open-Url "$LocalBase/admin.html" } },
   @{ Group = "本地服务"; Label = "启动本地网站"; Hint = "启动 Vite + 本地 API"; Run = { Start-ProjectScript "scripts\windows\start-local-mysql-site.ps1" } },

@@ -2455,6 +2455,12 @@ function ProfilePage() {
   const [activityBusy, setActivityBusy] = useState('')
   const [membershipBusy, setMembershipBusy] = useState('')
   const [photoBusy, setPhotoBusy] = useState('')
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [passwordBusy, setPasswordBusy] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -2800,6 +2806,45 @@ function ProfilePage() {
     }
   }
 
+  const updatePasswordField = (key, value) => {
+    setPasswordForm((current) => ({ ...current, [key]: value }))
+    setError('')
+    setNotice('')
+  }
+
+  const changePassword = async (event) => {
+    event.preventDefault()
+    if (!isLoggedIn || passwordBusy) return
+
+    if (passwordForm.newPassword.length < 8) {
+      setError('新密码至少需要 8 位。')
+      return
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError('两次输入的新密码不一致。')
+      return
+    }
+
+    setPasswordBusy(true)
+    setError('')
+    try {
+      const payload = await apiRequest('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setNotice(payload.message || '密码已更新。')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPasswordBusy(false)
+    }
+  }
+
   const logout = () => {
     localStorage.removeItem('token')
     setIsLoggedIn(false)
@@ -3083,6 +3128,50 @@ function ProfilePage() {
               onChange={(event) => updateForm('allowOfflineEvents', event.target.checked)}
             />
           </label>
+          <form className="account-security" onSubmit={changePassword}>
+            <div>
+              <strong>账号安全</strong>
+              <small>定期换一个只有你知道的密码，管理员也可以在后台重置。</small>
+            </div>
+            <label>
+              当前密码
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={passwordForm.currentPassword}
+                onChange={(event) => updatePasswordField('currentPassword', event.target.value)}
+                disabled={!isLoggedIn || passwordBusy}
+                required
+              />
+            </label>
+            <label>
+              新密码
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={passwordForm.newPassword}
+                onChange={(event) => updatePasswordField('newPassword', event.target.value)}
+                disabled={!isLoggedIn || passwordBusy}
+                required
+              />
+            </label>
+            <label>
+              确认新密码
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={passwordForm.confirmPassword}
+                onChange={(event) => updatePasswordField('confirmPassword', event.target.value)}
+                disabled={!isLoggedIn || passwordBusy}
+                required
+              />
+            </label>
+            <button className="ghost-action" type="submit" disabled={!isLoggedIn || passwordBusy}>
+              {passwordBusy ? '更新中' : '修改密码'}
+            </button>
+          </form>
           <button className="danger-action" type="button" onClick={logout}>
             <Icon name="logout" />
             退出登录

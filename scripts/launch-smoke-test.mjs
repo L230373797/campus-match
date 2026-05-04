@@ -72,6 +72,37 @@ await check("login with registered account", async () => {
   state.user.token = payload.data.token;
 });
 
+await check("change password flow", async () => {
+  const newPassword = "LaunchUser456!";
+  const changed = await call("/auth/change-password", {
+    method: "POST",
+    token: state.user.token,
+    body: {
+      currentPassword: passwordFor("user"),
+      newPassword,
+    },
+  });
+  assert(changed.data?.user?.email === state.user.email, "changed password should return current user");
+
+  let oldPasswordRejected = false;
+  try {
+    await call("/auth/login", {
+      method: "POST",
+      body: { email: state.user.email, password: passwordFor("user") },
+    });
+  } catch {
+    oldPasswordRejected = true;
+  }
+  assert(oldPasswordRejected, "old password should stop working");
+
+  const login = await call("/auth/login", {
+    method: "POST",
+    body: { email: state.user.email, password: newPassword },
+  });
+  assert(login.data?.token, "new password should log in");
+  state.user.token = login.data.token;
+});
+
 await check("profile read and update", async () => {
   const profile = await call("/users/profile", { token: state.user.token });
   assert(profile.data?.user?.email === state.user.email, "profile email should match");
@@ -318,6 +349,42 @@ await check("admin user and match data are unified", async () => {
   const match = matches.data?.matches?.find((item) => item.id === state.matchId);
   assert(match?.participants?.length === 2, "admin matches should include both participant summaries");
   assert(match.messageCount >= 1, "admin matches should include message counts");
+});
+
+await check("admin account management", async () => {
+  const accounts = await call("/admin/accounts", { token: state.operator.token });
+  assert(
+    accounts.data?.accounts?.some((account) => account.email === state.operator.email && account.isAdmin),
+    "admin account list should include current operator",
+  );
+
+  const adminEmail = `launch-admin-${stamp}@qq.com`;
+  const created = await call("/admin/accounts", {
+    method: "POST",
+    token: state.operator.token,
+    body: {
+      email: adminEmail,
+      nickname: "Launch Backup Admin",
+      password: "LaunchAdmin123!",
+    },
+  });
+  assert(created.data?.account?.isAdmin, "created account should be admin");
+
+  const reset = await call("/admin/accounts/reset-password", {
+    method: "POST",
+    token: state.operator.token,
+    body: {
+      userId: created.data.account.id,
+      newPassword: "LaunchAdmin456!",
+    },
+  });
+  assert(reset.data?.account?.id === created.data.account.id, "reset should return target admin");
+
+  const login = await call("/auth/login", {
+    method: "POST",
+    body: { email: adminEmail, password: "LaunchAdmin456!" },
+  });
+  assert(login.data?.user?.isAdmin, "reset password should log in admin");
 });
 
 await check("privacy request submit, cancel, and operator reject", async () => {

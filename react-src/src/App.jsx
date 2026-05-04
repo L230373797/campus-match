@@ -4427,6 +4427,8 @@ function HomePage() {
     () => normalizeInsightPayload(homeData.insight, homeData.profile || profileFallback),
     [homeData.insight, homeData.profile],
   )
+  const isHomeLoggedIn = hasAuthToken()
+  const heroDisplayName = homeData.profile?.nickname || '同学'
 
   const updateHomeInsight = async (body) => {
     if (!hasAuthToken()) {
@@ -4619,14 +4621,25 @@ function HomePage() {
           <div className="hero-copy">
             <span className="section-label">Campus Match</span>
             <ScrollReveal as="h1" {...revealTitleProps}>
-              校园里的真实连接，从一条低压力消息开始
+              {isHomeLoggedIn ? `${heroDisplayName}，今天看看新的同校推荐` : '校园里的真实连接，从一条低压力消息开始'}
             </ScrollReveal>
             <ScrollReveal as="p" {...revealBodyProps}>
-              基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。
+              {isHomeLoggedIn
+                ? '账号已经创建成功，推荐、画像和聊天都会保存到你的主页里。'
+                : '基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。'}
             </ScrollReveal>
             <div className="hero-actions">
-              <a className="primary-action" href="/login">立即开始</a>
-              <a className="ghost-action" href="#discover">先看看内容</a>
+              {isHomeLoggedIn ? (
+                <>
+                  <button className="primary-action" type="button" onClick={() => navigateTo('/#match')}>看今日推荐</button>
+                  <button className="ghost-action" type="button" onClick={() => navigateTo('/profile')}>完善资料</button>
+                </>
+              ) : (
+                <>
+                  <a className="primary-action" href="/login">立即开始</a>
+                  <a className="ghost-action" href="#discover">先看看内容</a>
+                </>
+              )}
             </div>
           </div>
           <MatchPreview />

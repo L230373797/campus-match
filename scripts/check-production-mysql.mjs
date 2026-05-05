@@ -9,7 +9,17 @@ import { loadDotEnv } from "./lib/export-data.mjs";
 const args = parseArgs(process.argv.slice(2));
 const envFile = path.resolve(args.env || ".env.production-mysql");
 
-loadDotEnv(path.resolve(".env.local"));
+if (args.allowLocal) {
+  loadDotEnv(path.resolve(".env.local"));
+}
+
+if (!fs.existsSync(envFile) && !args.allowLocal) {
+  console.error(`Missing production MySQL env file: ${path.relative(process.cwd(), envFile)}`);
+  console.error("Copy deploy/netlify-mysql.env.example to .env.production-mysql and fill in the real cloud database settings.");
+  console.error("For a local-only smoke check, rerun with --allow-local.");
+  process.exit(1);
+}
+
 loadDotEnvOverride(envFile);
 
 const required = ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"];
@@ -29,6 +39,12 @@ if (placeholders.length) {
 
 const env = (name) => process.env[name] || "";
 const config = mysqlConfigFromEnv(env);
+if (!args.allowLocal && isLocalHost(config.host)) {
+  console.error(`Production MySQL host points to a local address: ${config.host}`);
+  console.error("Use a cloud database host in .env.production-mysql, or pass --allow-local for local-only checks.");
+  process.exit(1);
+}
+
 let connection;
 
 try {
@@ -164,11 +180,16 @@ function quoteIdentifier(value) {
 }
 
 function parseArgs(rawArgs) {
-  const parsed = { writeTest: false, env: "" };
+  const parsed = { writeTest: false, env: "", allowLocal: false };
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (arg === "--write-test") {
       parsed.writeTest = true;
+      continue;
+    }
+
+    if (arg === "--allow-local") {
+      parsed.allowLocal = true;
       continue;
     }
 
@@ -189,6 +210,11 @@ function parseArgs(rawArgs) {
 function isPlaceholder(value) {
   const text = String(value || "").toLowerCase();
   return text.includes("replace-with") || text.includes("your-rds-host") || text.includes("example.com");
+}
+
+function isLocalHost(value) {
+  const host = String(value || "").trim().toLowerCase();
+  return ["127.0.0.1", "localhost", "::1", "0.0.0.0"].includes(host);
 }
 
 function loadDotEnvOverride(filePath) {

@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-05-05T07:47:52.804Z",
+  "ok": true,
+  "results": [
+    {
+      "name": "health endpoint",
+      "ok": true
+    },
+    {
+      "name": "register user, peer, and operator",
+      "ok": true
+    },
+    {
+      "name": "login with registered account",
+      "ok": true
+    },
+    {
+      "name": "change password flow",
+      "ok": true
+    },
+    {
+      "name": "profile read and update",
+      "ok": true
+    },
+    {
+      "name": "self insight and treehole flow",
+      "ok": true
+    },
+    {
+      "name": "test discussion community and moderation flow",
+      "ok": true
+    },
+    {
+      "name": "membership read and subscribe",
+      "ok": true
+    },
+    {
+      "name": "campus card upload",
+      "ok": true
+    },
+    {
+      "name": "avatar upload and profile persistence",
+      "ok": true
+    },
+    {
+      "name": "profile photo upload and removal",
+      "ok": true
+    },
+    {
+      "name": "operator reviews campus verification",
+      "ok": true
+    },
+    {
+      "name": "recommendation and match flow",
+      "ok": true
+    },
+    {
+      "name": "chat and identity reveal flow",
+      "ok": true
+    },
+    {
+      "name": "admin user and match data are unified",
+      "ok": true
+    },
+    {
+      "name": "admin account management",
+      "ok": true
+    },
+    {
+      "name": "privacy request submit, cancel, and operator reject",
+      "ok": true
+    }
+  ]
+}

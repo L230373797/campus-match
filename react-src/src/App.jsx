@@ -43,12 +43,16 @@ const moodMetrics = [
 ]
 
 const shortcuts = [
-  { title: 'MBTI', note: '性格名片', tone: 'yellow' },
-  { title: '星座', note: '节奏偏好', tone: 'blue' },
-  { title: '生辰', note: '合拍参考', tone: 'orange' },
-  { title: '缘分盘', note: '今日推荐', tone: 'pink' },
+  { title: 'ISFP', note: '校园人格', tone: 'yellow' },
+  { title: '星座', note: '轻量破冰', tone: 'blue' },
+  { title: '报告', note: '深度画像', tone: 'cyan' },
+  { title: '生辰', note: '生日节奏', tone: 'orange' },
+  { title: '推荐对比', note: '合拍提示', tone: 'pink' },
+  { title: '陪伴小星', note: '同频搭子', tone: 'yellow' },
   { title: '倾诉', note: '匿名树洞', tone: 'peach' },
   { title: '智慧卡', note: '破冰问题', tone: 'violet' },
+  { title: '报告库', note: '测试历史', tone: 'blue' },
+  { title: '更多', note: '全部工具', tone: 'cyan' },
 ]
 
 const insightFallback = {
@@ -98,105 +102,104 @@ const feedTabKeywords = {
   心理: ['心理', '烦恼', '压力', '低压力'],
   搭子: ['搭子', '自习', '散步', '学习'],
 }
-const quizQuestions = [
-  {
-    key: 'energy',
-    eyebrow: '01 能量',
-    category: 'MBTI',
-    resultKey: 'mbti',
-    title: '刚认识一个同校的人，你更舒服的节奏是？',
-    options: [
-      { value: 'I', label: '先观察一会儿', note: '慢慢熟起来更自然', tag: '慢热' },
-      { value: 'E', label: '先聊两句试试', note: '有回应就会更放松', tag: '主动开场' },
-    ],
-  },
-  {
-    key: 'info',
-    eyebrow: '02 关注点',
-    category: 'MBTI',
-    resultKey: 'mbti',
-    title: '看一份资料时，你更容易被什么吸引？',
-    options: [
-      { value: 'N', label: '感觉和想象空间', note: '一句话里的气质和可能性', tag: '同频感' },
-      { value: 'S', label: '具体生活细节', note: '地点、习惯、真实日常', tag: '真实日常' },
-    ],
-  },
-  {
-    key: 'decision',
-    eyebrow: '03 回应方式',
-    category: 'MBTI',
-    resultKey: 'mbti',
-    title: '朋友倾诉时，你通常会先给什么？',
-    options: [
-      { value: 'F', label: '先接住情绪', note: '让对方知道自己被理解', tag: '共情回应' },
-      { value: 'T', label: '先理清问题', note: '帮对方找到下一步办法', tag: '理性分析' },
-    ],
-  },
-  {
-    key: 'pace',
-    eyebrow: '04 节奏',
-    category: 'MBTI',
-    resultKey: 'mbti',
-    title: '一段新关系开始时，你更喜欢？',
-    options: [
-      { value: 'J', label: '约定清楚一点', note: '时间、地点、边界都明确', tag: '稳定安排' },
-      { value: 'P', label: '自然发生一点', note: '不急着定义，舒服就继续', tag: '随性探索' },
-    ],
-  },
-  {
-    key: 'birthDate',
-    type: 'date',
-    eyebrow: '05 生辰',
-    category: '生辰',
-    title: '你的生日是哪一天？',
-    note: '只用于生成星座和生辰提示，之后也可以在资料页修改。',
-  },
-  {
-    key: 'goal',
-    eyebrow: '06 关系',
-    category: '合拍',
-    title: '你现在更想遇见哪种校园关系？',
-    options: [
-      { value: 'friend', label: '同校新朋友', note: '先轻松认识，不急着定义', tag: '同校新朋友', sceneTag: '低压力', relationshipGoal: '认识同校朋友' },
-      { value: 'romance', label: '认真了解的人', note: '可以慢慢往恋爱可能发展', tag: '认真了解', sceneTag: '缘分盘', relationshipGoal: '认真了解' },
-      { value: 'study', label: '学习/自习搭子', note: '一起打卡、互相监督', tag: '学习搭子', sceneTag: '图书馆', relationshipGoal: '找学习搭子' },
-    ],
-  },
-  {
-    key: 'scene',
-    eyebrow: '07 场景',
-    category: '合拍',
-    title: '第一次聊天，你更想从哪个场景开始？',
-    options: [
-      { value: 'library', label: '图书馆/自习', note: '安静、稳定、目标清楚', tag: '自习搭子', sceneTag: '图书馆' },
-      { value: 'walk', label: '散步/操场', note: '边走边聊，压力更低', tag: '散步聊天', sceneTag: '操场' },
-      { value: 'food', label: '奶茶/食堂', note: '有具体地点，比较好开口', tag: '探店吃饭', sceneTag: '食堂' },
-      { value: 'treehole', label: '树洞/倾诉', note: '先匿名表达，再慢慢认识', tag: '愿意倾听', sceneTag: '树洞' },
-    ],
-  },
-  {
-    key: 'reply',
-    eyebrow: '08 聊法',
-    category: '合拍',
-    title: '你希望对方怎么回应你？',
-    options: [
-      { value: 'warm', label: '先接住情绪', note: '别急着评判，认真听完', tag: '温柔回应', sceneTag: '倾诉' },
-      { value: 'fun', label: '轻松一点', note: '能开玩笑，也能认真聊', tag: '轻松聊天', sceneTag: '低压力' },
-      { value: 'clear', label: '直接一点', note: '表达清楚，少猜来猜去', tag: '直接沟通', sceneTag: '高效沟通' },
-    ],
-  },
-  {
-    key: 'boundary',
-    eyebrow: '09 边界',
-    category: '合拍',
-    title: '你更在意哪条安全感？',
-    options: [
-      { value: 'verified', label: '同校认证优先', note: '先确认是真实校内用户', tag: '同校认证', sceneTag: '安全感' },
-      { value: 'slow', label: '慢慢熟悉', note: '别太快推进线下见面', tag: '慢节奏', sceneTag: '低压力' },
-      { value: 'anonymous', label: '可以先匿名', note: '有些话想先轻轻放出来', tag: '匿名友好', sceneTag: '树洞' },
-    ],
-  },
+const quizPackSpecs = [
+  ['campus-personality', '校园人格', '人格', '测出你的校园认识节奏', ['慢热', '真实日常'], ['同校'], '认识同校朋友'],
+  ['relationship-radar', '关系雷达', '关系', '看清你更舒服的关系推进方式', ['认真了解', '边界感'], ['低压力'], '认真了解'],
+  ['communication-style', '沟通偏好', '沟通', '找到更适合你的回复和表达方式', ['温柔回应', '直接沟通'], ['高效沟通'], '认识同校朋友'],
+  ['campus-scenes', '校园场景', '场景', '判断你最容易自然开场的校园地点', ['散步聊天', '探店吃饭'], ['操场', '食堂'], '找校园搭子'],
+  ['study-energy', '学习能量', '学习', '看看你适合哪种学习搭子', ['学习搭子', '稳定安排'], ['图书馆', '自习'], '找学习搭子'],
+  ['dorm-roommate', '寝室相处', '生活', '测出你的宿舍边界和相处节奏', ['边界清楚', '生活节奏'], ['宿舍'], '找生活搭子'],
+  ['social-battery', '社交电量', '社交', '判断你今天适合主动认识还是慢慢观察', ['社交电量', '慢节奏'], ['低压力'], '认识同校朋友'],
+  ['mood-weather', '情绪天气', '心理', '看见此刻情绪需要怎样被回应', ['情绪觉察', '愿意倾听'], ['树洞'], '找倾诉搭子'],
+  ['crush-signal', '暗恋信号', '关系', '用轻松方式观察好感表达', ['轻松聊天', '认真了解'], ['校园日常'], '认真了解'],
+  ['partner-fit', '搭子适配', '搭子', '找到更合拍的学习、吃饭或活动搭子', ['搭子适配', '同频感'], ['活动', '食堂'], '找校园搭子'],
+  ['conflict-repair', '冲突修复', '沟通', '看看你更适合怎样把话说开', ['冲突修复', '共情回应'], ['高效沟通'], '认识同校朋友'],
+  ['boundary-sense', '边界感', '安全', '把舒服和不舒服说清楚', ['边界感', '安全感'], ['低压力'], '认识同校朋友'],
+  ['secure-attachment', '安全感', '关系', '识别你在新关系里的安心来源', ['安全感', '慢慢熟悉'], ['同校认证'], '认真了解'],
+  ['club-events', '活动社团', '活动', '适配你的社团和活动开场方式', ['活动搭子', '主动开场'], ['活动', '社团'], '找活动搭子'],
+  ['stress-recovery', '压力恢复', '心理', '找到适合你的恢复节奏', ['压力恢复', '愿意倾听'], ['树洞', '操场'], '找倾诉搭子'],
+  ['friend-circle-role', '朋友圈角色', '社交', '看你在小圈子里更像哪种角色', ['朋友圈角色', '真实日常'], ['同校'], '认识同校朋友'],
+  ['same-frequency', '同频指数', '匹配', '提炼近期最适合推荐的同频标签', ['同频感', '推荐对比'], ['同校'], '认识同校朋友'],
+  ['icebreaker-style', '破冰方式', '沟通', '生成更自然的第一句话', ['破冰问题', '轻松聊天'], ['校园日常'], '认识同校朋友'],
+  ['zodiac-social', '星座相处', '轻娱乐', '用星座做轻松破冰参考', ['星座破冰', '轻娱乐'], ['生日节奏'], '认识同校朋友'],
+  ['birthday-rhythm', '生日节奏', '轻娱乐', '用生日节奏整理今日开场提示', ['生日节奏', '轻娱乐'], ['校园日常'], '认识同校朋友'],
 ]
+
+function makeCampusTestPack([id, title, category, description, tags, sceneTags, relationshipGoal], index) {
+  const tone = ['cyan', 'pink', 'violet', 'blue', 'peach', 'yellow'][index % 6]
+  const scene = sceneTags[0] || '校园日常'
+  const tag = tags[0] || title
+  return {
+    id,
+    title,
+    category,
+    description,
+    tone,
+    tags,
+    sceneTags,
+    relationshipGoal,
+    questions: [
+      {
+        key: `${id}-energy`,
+        eyebrow: '01 能量',
+        category,
+        resultKey: 'mbti',
+        title: `做「${title}」时，你更舒服的开始方式是？`,
+        options: [
+          { value: 'I', label: '先观察一下', note: '确认安全感后再投入', tag: '慢热观察', sceneTag: scene },
+          { value: 'E', label: '先试着互动', note: '有回应就能更快进入状态', tag: '主动开场', sceneTag: scene },
+        ],
+      },
+      {
+        key: `${id}-info`,
+        eyebrow: '02 关注点',
+        category,
+        resultKey: 'mbti',
+        title: `判断${title}是否合拍时，你更相信什么？`,
+        options: [
+          { value: 'N', label: '整体感觉', note: '气质、默契和想象空间', tag: '同频感', sceneTag: scene },
+          { value: 'S', label: '具体细节', note: '时间、地点和真实习惯', tag: '真实日常', sceneTag: scene },
+        ],
+      },
+      {
+        key: `${id}-decision`,
+        eyebrow: '03 回应',
+        category,
+        resultKey: 'mbti',
+        title: `遇到${title}里的小分歧，你通常先做什么？`,
+        options: [
+          { value: 'F', label: '先照顾感受', note: '让对方知道自己被认真对待', tag: '共情回应', sceneTag: '低压力' },
+          { value: 'T', label: '先说清问题', note: '把原因、边界和下一步讲明白', tag: '清楚表达', sceneTag: '高效沟通' },
+        ],
+      },
+      {
+        key: `${id}-pace`,
+        eyebrow: '04 节奏',
+        category,
+        resultKey: 'mbti',
+        title: `你希望${title}更像哪种节奏？`,
+        options: [
+          { value: 'J', label: '稳定安排', note: '约好时间和边界会更安心', tag: '稳定安排', sceneTag: scene },
+          { value: 'P', label: '自然发生', note: '先轻松相处，不急着定规则', tag: '随性探索', sceneTag: '低压力' },
+        ],
+      },
+      {
+        key: `${id}-goal`,
+        eyebrow: '05 场景',
+        category,
+        title: `完成这个短测后，你最想优先匹配哪类人？`,
+        options: [
+          { value: 'primary', label: `${tag}的人`, note: `能围绕${scene}自然开场`, tag, sceneTag: scene, relationshipGoal },
+          { value: 'steady', label: '边界舒服的人', note: '节奏稳定，不强行推进', tag: tags[1] || '边界感', sceneTag: '安全感', relationshipGoal },
+          { value: 'campus', label: '同校真实的人', note: '资料可靠，先从校园小事聊起', tag: '同校认证', sceneTag: '同校', relationshipGoal: '认识同校朋友' },
+        ],
+      },
+    ],
+  }
+}
+
+const campusTestPacks = quizPackSpecs.map(makeCampusTestPack)
+const quizQuestions = campusTestPacks[0].questions
 
 const feedCards = [
   {
@@ -567,12 +570,6 @@ function formatShortDate(value) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
 }
 
-function formatPlanPrice(plan = {}, cycle = 'monthly') {
-  const price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice
-  if (!price) return '免费'
-  return `¥${price}/${cycle === 'yearly' ? '年' : '月'}`
-}
-
 function profileId(profile = {}) {
   return profile.id || profile._id || profile.userId || ''
 }
@@ -699,25 +696,39 @@ function buildShortcutCards(homeData = {}, loading = false) {
   const zodiac = zodiacFromBirthDate(profile.birthDate)
 
   const statusByTitle = {
+    ISFP: profile.mbti || (loading ? '正在读取资料' : '先测人格'),
     MBTI: profile.mbti || (loading ? '正在读取资料' : '去资料页补充'),
     星座: zodiac || (loading ? '正在读取生日' : '填生日生成'),
+    报告: homeData.insight?.latestReport?.resultTitle || '完成短测后生成',
     生辰: formatBirthDate(profile.birthDate) || (loading ? '正在读取生辰' : '去资料页补充'),
     缘分盘: recommendations.length
       ? `${recommendations.length} 个新推荐`
       : `${counts.matches || matches.length || 0} 个匹配`,
+    缘分合盘: recommendations.length
+      ? `${recommendations.length} 个可对比`
+      : `${counts.matches || matches.length || 0} 个同频`,
+    陪伴小星: sceneTags[0] ? `${sceneTags[0]}搭子` : '同校陪伴',
     倾诉: sceneTags.includes('树洞') ? '已加入树洞偏好' : (activity.insights?.[0] || '树洞话题已接入推荐'),
     智慧卡: recommendations[0]?.nickname
       ? `给 ${recommendations[0].nickname} 的开场`
       : (tags[0] ? `${tags[0]} 开场` : membership.title || '登录后生成'),
+    报告库: homeData.insight?.testReports?.length ? `${homeData.insight.testReports.length} 份报告` : '完成短测后生成',
+    更多: '测试库与社区',
   }
 
   const actionByTitle = {
+    ISFP: 'profile',
     MBTI: 'profile',
     星座: 'profile',
+    报告: 'profile',
     生辰: 'profile',
     缘分盘: 'match',
+    推荐对比: 'match',
+    陪伴小星: 'match',
     倾诉: 'discover',
     智慧卡: 'wisdom',
+    报告库: 'profile',
+    更多: 'discover',
   }
 
   return shortcuts.map((item) => ({
@@ -849,29 +860,29 @@ function passVerticalWheelToPage(event) {
   window.scrollBy({ top: event.deltaY, left: 0, behavior: 'auto' })
 }
 
-function mbtiFromQuizAnswers(answers = {}) {
-  return quizQuestions
+function mbtiFromQuizAnswers(answers = {}, questions = quizQuestions) {
+  return questions
     .filter((question) => question.resultKey === 'mbti')
     .map((question) => answers[question.key])
     .join('')
 }
 
-function selectedQuizOptions(answers = {}) {
-  return quizQuestions
+function selectedQuizOptions(answers = {}, questions = quizQuestions) {
+  return questions
     .map((question) => question.options?.find((option) => option.value === answers[question.key]))
     .filter(Boolean)
 }
 
-function quizTagsFromAnswers(answers = {}) {
-  return Array.from(new Set(selectedQuizOptions(answers).map((option) => option.tag).filter(Boolean)))
+function quizTagsFromAnswers(answers = {}, questions = quizQuestions) {
+  return Array.from(new Set(selectedQuizOptions(answers, questions).map((option) => option.tag).filter(Boolean)))
 }
 
-function quizSceneTagsFromAnswers(answers = {}) {
-  return Array.from(new Set(selectedQuizOptions(answers).map((option) => option.sceneTag).filter(Boolean)))
+function quizSceneTagsFromAnswers(answers = {}, questions = quizQuestions) {
+  return Array.from(new Set(selectedQuizOptions(answers, questions).map((option) => option.sceneTag).filter(Boolean)))
 }
 
-function quizRelationshipGoalFromAnswers(answers = {}) {
-  return selectedQuizOptions(answers).find((option) => option.relationshipGoal)?.relationshipGoal || ''
+function quizRelationshipGoalFromAnswers(answers = {}, questions = quizQuestions) {
+  return selectedQuizOptions(answers, questions).find((option) => option.relationshipGoal)?.relationshipGoal || ''
 }
 
 function quizBirthDateFromAnswers(answers = {}) {
@@ -939,6 +950,83 @@ function quizPortraitFromResult({ mbti = '', birthDate = '', relationshipGoal = 
         text: `先从${scene}开聊，更容易自然接上。`,
       },
     ],
+  }
+}
+
+function todayPackId(packs = campusTestPacks) {
+  const dayKey = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+  const dayNumber = Number(dayKey)
+  return packs[Number.isFinite(dayNumber) ? dayNumber % packs.length : 0]?.id || packs[0]?.id
+}
+
+function reportByPack(reports = []) {
+  return new Map((Array.isArray(reports) ? reports : []).filter(Boolean).map((report) => [report.packId || report.title, report]))
+}
+
+function createDeepQuizReport({ pack, answers, mbti, birthDate, relationshipGoal, tags, sceneTags, resultMood, resultPortrait }) {
+  const completedAt = new Date().toISOString()
+  const answerLabels = Object.fromEntries(
+    pack.questions.map((question) => {
+      const option = question.options?.find((item) => item.value === answers[question.key])
+      return [question.key, option?.label || answers[question.key] || '']
+    }),
+  )
+  const primaryTag = tags[0] || pack.tags[0] || '校园合拍'
+  const primaryScene = sceneTags[0] || pack.sceneTags[0] || '校园日常'
+  const resultTitle = `${pack.title} · ${resultPortrait.title}`
+  const openingLines = [
+    resultPortrait.opener,
+    `我刚做了「${pack.title}」，发现自己更适合从${primaryScene}开始认识人。你平时也会关注这个吗？`,
+    `看到你也提到${primaryTag}，想问问你最近一次觉得舒服的校园瞬间是什么？`,
+  ].filter(Boolean)
+
+  return {
+    id: `${pack.id}-${Date.now()}`,
+    type: 'campus-fit',
+    title: pack.title,
+    packId: pack.id,
+    packTitle: pack.title,
+    category: pack.category,
+    version: 'inner-beta-2026-05',
+    completedAt,
+    answers: answerLabels,
+    dimensions: [
+      { label: '人格节奏', value: mbti || '校园画像', text: resultPortrait.tiles[0]?.text || resultPortrait.subtitle },
+      { label: '场景入口', value: primaryScene, text: `更适合从${primaryScene}这样具体、低压力的入口开始。` },
+      { label: '关系目标', value: relationshipGoal || pack.relationshipGoal, text: '推荐会优先参考这个关系目标。' },
+      { label: '开场指数', value: String(resultMood.moodScore), text: `${resultMood.moodLabel}状态下，先用短句开场更自然。` },
+      { label: '轻娱乐提示', value: zodiacFromBirthDate(birthDate) || '可后补', text: '星座和生日只作为破冰参考，不做绝对预测。' },
+    ],
+    resultTitle,
+    resultSummary: resultPortrait.subtitle,
+    tags: Array.from(new Set([primaryTag, ...pack.tags, ...tags, mbti].filter(Boolean))).slice(0, 10),
+    sceneTags: Array.from(new Set([primaryScene, ...pack.sceneTags, ...sceneTags].filter(Boolean))).slice(0, 10),
+    relationshipGoal: relationshipGoal || pack.relationshipGoal,
+    opener: openingLines[0],
+    recommendedPeople: `适合能围绕${primaryScene}自然互动、尊重边界、愿意慢慢熟悉的人。`,
+    riskReminder: '校园匹配要保留节奏感，线下见面前先确认身份和公共场景。',
+    deepSections: [
+      { title: '核心画像', summary: resultPortrait.subtitle, items: resultPortrait.tiles.map((tile) => `${tile.label}：${tile.text}`) },
+      { title: '合拍建议', summary: `先从${primaryScene}开启，再根据回应决定是否深入。`, items: ['用具体问题代替泛泛打招呼', '优先选择同校认证用户', '不急着交换敏感联系方式'] },
+      { title: '校园场景', summary: `${pack.title}最适合落在真实校园场景里。`, items: [`推荐场景：${primaryScene}`, `关键词：${[primaryTag, ...sceneTags].filter(Boolean).slice(0, 3).join('、')}`, '如果对方节奏不同，先退回低压力聊天'] },
+    ],
+    matchAdvice: {
+      suitable: `适合${primaryTag}明显、愿意从${primaryScene}慢慢熟悉的人。`,
+      unsuitable: '不太适合一上来强推线下、催回复或忽视边界的人。',
+    },
+    openingLines,
+    compareHints: {
+      shared: [primaryTag, primaryScene].filter(Boolean),
+      complement: ['同校认证', '节奏互补'],
+      opener: openingLines[1] || openingLines[0],
+    },
+    shareCard: {
+      title: `${pack.title}深度报告`,
+      resultTitle,
+      tags: [primaryTag, primaryScene, mbti].filter(Boolean).slice(0, 3),
+      quote: openingLines[0],
+      text: `${pack.title}深度报告\n${resultTitle}\n关键词：${[primaryTag, primaryScene, mbti].filter(Boolean).slice(0, 3).join('、')}\n开场：${openingLines[0]}`,
+    },
   }
 }
 
@@ -1150,6 +1238,115 @@ function ShortcutGrid({ items = shortcuts, onSelect }) {
   )
 }
 
+function HomeTopDock({ profile = profileFallback, insight = insightFallback }) {
+  const photos = normalizeProfilePhotos(profile.photos)
+  const avatar = profile.avatar || photos[0] || ''
+  const score = insight.moodScore || 70
+  const name = profile.nickname || '校园同学'
+
+  return (
+    <section className="cece-home-dock" aria-label="首页快捷区">
+      <div className="cece-search-row">
+        <button className="cece-search-pill" type="button" onClick={() => navigateTo('/#discover')}>
+          <Icon name="search" />
+          <span>搜索测试、树洞、同校搭子</span>
+        </button>
+        <button className="cece-icon-button" type="button" onClick={() => navigateTo('/profile')} aria-label="完善资料">
+          <Icon name="plus" />
+        </button>
+      </div>
+
+      <div className="cece-avatar-row">
+        <button className={`cece-avatar ${avatar ? 'has-image' : ''}`} type="button" onClick={() => navigateTo('/profile')}>
+          {avatar ? <img src={avatar} alt="" /> : name.slice(0, 1)}
+        </button>
+        <button className="cece-score-bubble" type="button" onClick={() => navigateTo('/#tests')}>
+          <small>今日</small>
+          <strong>{score}</strong>
+        </button>
+        <button className="cece-birthday-tip" type="button" onClick={() => navigateTo('/profile')}>
+          输入生日，更加了解TA
+        </button>
+        <button className="cece-menu-button" type="button" onClick={() => navigateTo('/#discover')} aria-label="打开内容分区">
+          <span />
+          <span />
+          <span />
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function PromoBanner({ label = '今日校园短测', action = '去完成' }) {
+  return (
+    <section className="cece-promo-banner" aria-label={label}>
+      <div className="cece-promo-icon" aria-hidden="true">5</div>
+      <strong>{label}</strong>
+      <button type="button" onClick={() => navigateTo('/#tests')}>{action}</button>
+    </section>
+  )
+}
+
+function ProfileUtilityDeck({ currentMembership = {}, displayStats = {}, onEditProfile }) {
+  const wealthItems = [
+    { title: '收到喜欢', value: displayStats.likes || 0, tone: 'yellow' },
+    { title: '合拍关系', value: displayStats.matches || 0, tone: 'orange' },
+    { title: '报告与测试', value: '档案', tone: 'peach' },
+    { title: '内测反馈', value: '入口', tone: 'pink' },
+  ]
+  const recordItems = [
+    { title: '档案', action: onEditProfile, tone: 'peach' },
+    { title: '我的发布', action: () => navigateTo('/#discover'), tone: 'orange' },
+    { title: '赞与收藏', action: () => navigateTo('/#match'), tone: 'pink' },
+    { title: '浏览记录', action: () => navigateTo('/profile'), tone: 'yellow' },
+    { title: '测友讨论', action: () => navigateTo('/#tests'), tone: 'green' },
+    { title: '心情日记', action: () => navigateTo('/#tests'), tone: 'cyan' },
+  ]
+
+  return (
+    <section className="cece-profile-utilities" aria-label="我的功能">
+      <div className="cece-vip-card">
+        <div>
+          <strong>内测权益</strong>
+          <p>{currentMembership.title || '内测阶段优先开放报告、推荐与社区增强能力'}</p>
+        </div>
+        <button type="button" onClick={() => navigateTo('/#tests')}>去测一测</button>
+        <div className="cece-vip-perks">
+          <span>深度报告</span>
+          <span>每日心情</span>
+          <span>推荐对比</span>
+        </div>
+      </div>
+
+      <div className="cece-tool-section">
+        <h2>财富</h2>
+        <div className="cece-tool-grid four">
+          {wealthItems.map((item) => (
+            <button type="button" key={item.title} onClick={() => navigateTo('/#tests')}>
+              <span className={item.tone}>{item.value}</span>
+              <strong>{item.title}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <PromoBanner />
+
+      <div className="cece-tool-section">
+        <h2>记录</h2>
+        <div className="cece-tool-grid records">
+          {recordItems.map((item) => (
+            <button type="button" key={item.title} onClick={item.action}>
+              <span className={item.tone}>{item.title.slice(0, 1)}</span>
+              <strong>{item.title}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function MatchPreview() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [profiles, setProfiles] = useState(matchProfiles)
@@ -1190,10 +1387,10 @@ function MatchPreview() {
           return
         }
 
-        setMatchNotice('暂时没有新的真实推荐，先看看预览卡片。')
+        setMatchNotice('暂时没有新的真实推荐，先看看示范卡片。')
       } catch (error) {
         if (mounted) {
-          setMatchNotice(error.message || '推荐接口暂时不可用，先看看预览卡片。')
+          setMatchNotice(error.message || '推荐接口暂时不可用，先看看示范卡片。')
         }
       } finally {
         if (mounted) {
@@ -1216,7 +1413,7 @@ function MatchPreview() {
     showNextProfile()
 
     if (!localStorage.getItem('token') || !currentProfile.source) {
-      setMatchNotice(type === 'like' ? '预览里先记下喜欢，登录后会真正匹配。' : '已切到下一张推荐卡。')
+      setMatchNotice(type === 'like' ? '登录后可以把喜欢同步到真实匹配。' : '已切到下一张推荐卡。')
       return
     }
 
@@ -1467,28 +1664,57 @@ function Feed({ items = feedCards }) {
   )
 }
 
-function QuizPager({ onComplete, busy = '' }) {
+function QuizPager({ onComplete, busy = '', insight = insightFallback }) {
   const trackRef = useRef(null)
   const dragRef = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false })
+  const [activePackId, setActivePackId] = useState(() => todayPackId())
   const [answers, setAnswers] = useState({})
   const [activeIndex, setActiveIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
-  const completedCount = quizQuestions.filter((question) => isQuizQuestionAnswered(question, answers)).length
-  const completed = completedCount === quizQuestions.length
-  const mbti = mbtiFromQuizAnswers(answers)
-  const tags = quizTagsFromAnswers(answers)
-  const sceneTags = quizSceneTagsFromAnswers(answers)
+  const [selectedReportId, setSelectedReportId] = useState('')
+  const selectedPack = campusTestPacks.find((pack) => pack.id === activePackId) || campusTestPacks[0]
+  const questions = selectedPack.questions
+  const reports = Array.isArray(insight.testReports) ? insight.testReports : []
+  const reportMap = reportByPack(reports)
+  const latestPackReport = reportMap.get(selectedPack.id) || null
+  const selectedReport = reports.find((report) => report.id === selectedReportId) || null
+  const completedCount = questions.filter((question) => isQuizQuestionAnswered(question, answers)).length
+  const completed = completedCount === questions.length
+  const mbti = mbtiFromQuizAnswers(answers, questions)
+  const tags = Array.from(new Set([...selectedPack.tags, ...quizTagsFromAnswers(answers, questions)])).slice(0, 10)
+  const sceneTags = Array.from(new Set([...selectedPack.sceneTags, ...quizSceneTagsFromAnswers(answers, questions)])).slice(0, 10)
   const birthDate = quizBirthDateFromAnswers(answers)
-  const relationshipGoal = quizRelationshipGoalFromAnswers(answers)
+  const relationshipGoal = quizRelationshipGoalFromAnswers(answers, questions) || selectedPack.relationshipGoal
   const focus = quizFocusFromResult({ mbti, birthDate, sceneTags })
   const resultMood = quizMoodFromMbti(mbti)
   const resultPortrait = quizPortraitFromResult({ mbti, birthDate, relationshipGoal, tags, sceneTags })
-  const pageCount = quizQuestions.length + 1
-  const currentQuestion = quizQuestions[activeIndex]
+  const draftReport = createDeepQuizReport({
+    pack: selectedPack,
+    answers,
+    mbti,
+    birthDate,
+    relationshipGoal,
+    tags,
+    sceneTags,
+    resultMood,
+    resultPortrait,
+  })
+  const visibleReport = selectedReport || (completed ? draftReport : latestPackReport)
+  const pageCount = questions.length + 1
+  const currentQuestion = questions[activeIndex]
   const currentQuestionAnswered = currentQuestion ? isQuizQuestionAnswered(currentQuestion, answers) : true
-  const progressPercent = Math.round((completedCount / quizQuestions.length) * 100)
+  const progressPercent = Math.round((completedCount / questions.length) * 100)
+
+  const selectPack = (packId) => {
+    if (packId === activePackId) return
+    setActivePackId(packId)
+    setAnswers({})
+    setSaved(false)
+    setSelectedReportId('')
+    window.setTimeout(() => scrollToPage(0, 'auto'), 0)
+  }
 
   const scrollToPage = (index, behavior = 'smooth') => {
     const track = trackRef.current
@@ -1512,7 +1738,7 @@ function QuizPager({ onComplete, busy = '' }) {
 
   const handleNextPage = () => {
     if (activeIndex >= pageCount - 1) return
-    const question = quizQuestions[activeIndex]
+    const question = questions[activeIndex]
     if (question?.type === 'date' && !answers[question.key]) {
       setAnswers((current) => ({ ...current, [question.key]: 'skip' }))
       setSaved(false)
@@ -1536,7 +1762,7 @@ function QuizPager({ onComplete, busy = '' }) {
     setSaved(false)
 
     window.setTimeout(() => {
-      scrollToPage(questionIndex < quizQuestions.length - 1 ? questionIndex + 1 : quizQuestions.length)
+      scrollToPage(questionIndex < questions.length - 1 ? questionIndex + 1 : questions.length)
     }, 180)
   }
 
@@ -1551,6 +1777,8 @@ function QuizPager({ onComplete, busy = '' }) {
     setSaving(true)
     const ok = await onComplete?.({
       answers,
+      pack: selectedPack,
+      report: draftReport,
       mbti,
       tags,
       sceneTags,
@@ -1614,10 +1842,44 @@ function QuizPager({ onComplete, busy = '' }) {
 
   return (
     <section className="quiz-pager" aria-label="横向分页小测试">
+      <div className="test-center-head">
+        <article className={`daily-test-card ${selectedPack.tone}`}>
+          <span>今日测试</span>
+          <strong>{campusTestPacks.find((pack) => pack.id === todayPackId())?.title || selectedPack.title}</strong>
+          <p>{campusTestPacks.find((pack) => pack.id === todayPackId())?.description || selectedPack.description}</p>
+          <button type="button" onClick={() => selectPack(todayPackId())}>
+            开始今日 5 题
+          </button>
+        </article>
+        <div className="test-library-summary">
+          <span>{campusTestPacks.length} 个短测</span>
+          <strong>{reports.length} 份历史报告</strong>
+          <p>每次只做一个 5 题短测，报告会沉淀到推荐标签里。</p>
+        </div>
+      </div>
+
+      <div className="test-pack-grid" aria-label="测试库">
+        {campusTestPacks.map((pack) => {
+          const report = reportMap.get(pack.id)
+          return (
+            <button
+              className={`test-pack-card ${pack.tone} ${pack.id === selectedPack.id ? 'active' : ''}`}
+              type="button"
+              key={pack.id}
+              onClick={() => selectPack(pack.id)}
+            >
+              <span>{pack.category}</span>
+              <strong>{pack.title}</strong>
+              <small>{report ? `已测 · ${report.resultTitle || report.title}` : '5 题 · 未完成'}</small>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="quiz-pager-head">
         <div className="quiz-pager-status">
-          <span>{currentQuestion?.category || '结果'}</span>
-          <strong>{activeIndex < quizQuestions.length ? `${activeIndex + 1}/${quizQuestions.length}` : '结果'}</strong>
+          <span>{selectedPack.title}</span>
+          <strong>{activeIndex < questions.length ? `${activeIndex + 1}/${questions.length}` : '结果'}</strong>
           <small>{completed ? '画像已生成' : `已完成 ${progressPercent}%`}</small>
         </div>
         <div className="quiz-pager-actions">
@@ -1649,7 +1911,7 @@ function QuizPager({ onComplete, busy = '' }) {
         onPointerCancel={endDrag}
         onPointerLeave={endDrag}
       >
-        {quizQuestions.map((question, questionIndex) => (
+        {questions.map((question, questionIndex) => (
           <article className={`quiz-page${activeIndex === questionIndex ? ' active' : ''}`} key={question.key} aria-label={question.title}>
             <span className="quiz-eyebrow">{question.eyebrow}</span>
             <h3>{question.title}</h3>
@@ -1698,7 +1960,7 @@ function QuizPager({ onComplete, busy = '' }) {
             )}
           </article>
         ))}
-        <article className={`quiz-page quiz-result-page${completed ? ' is-ready' : ''}${activeIndex === quizQuestions.length ? ' active' : ''}`}>
+        <article className={`quiz-page quiz-result-page${completed ? ' is-ready' : ''}${activeIndex === questions.length ? ' active' : ''}`}>
           {completed ? (
             <div className="quiz-result-ceremony">
               <div className="quiz-result-orbit" aria-hidden="true">
@@ -1708,7 +1970,7 @@ function QuizPager({ onComplete, busy = '' }) {
               <span className="quiz-eyebrow">结果已生成</span>
               <div className="quiz-result-hero">
                 <div>
-                  <small>你的校园合拍画像</small>
+                  <small>{selectedPack.title}深度报告</small>
                   <h3>{resultPortrait.title}</h3>
                   <p>{resultPortrait.subtitle}</p>
                 </div>
@@ -1731,6 +1993,7 @@ function QuizPager({ onComplete, busy = '' }) {
                 ))}
               </div>
               <p className="quiz-starter-line">{resultPortrait.opener}</p>
+              <DeepReportPreview report={draftReport} />
               <div className="quiz-tag-row">
                 {resultPortrait.chips.slice(0, 8).map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -1748,11 +2011,12 @@ function QuizPager({ onComplete, busy = '' }) {
             </div>
           ) : (
             <>
-              <span className="quiz-eyebrow">结果预览</span>
-              <h3>{`还差 ${quizQuestions.length - completedCount} 题，就能生成完整画像。`}</h3>
-              <div className="quiz-result-code">{`${completedCount}/${quizQuestions.length}`}</div>
+              <span className="quiz-eyebrow">{latestPackReport ? '最近报告' : '结果准备中'}</span>
+              <h3>{latestPackReport?.resultTitle || `还差 ${questions.length - completedCount} 题，就能生成完整画像。`}</h3>
+              <div className="quiz-result-code">{`${completedCount}/${questions.length}`}</div>
+              {latestPackReport && <DeepReportPreview report={latestPackReport} compact />}
               <div className="quiz-tag-row">
-                {['MBTI', '生辰', '合拍场景'].map((tag) => (
+                {[selectedPack.category, '深度报告', '测友讨论'].map((tag) => (
                   <span key={tag}>{tag}</span>
                 ))}
               </div>
@@ -1769,6 +2033,284 @@ function QuizPager({ onComplete, busy = '' }) {
             <span />
           </button>
         ))}
+      </div>
+      <ReportHistory reports={reports} onOpen={(report) => setSelectedReportId(report.id)} selectedReport={visibleReport} />
+      <TestDiscussionPanel pack={selectedPack} latestReport={visibleReport} />
+    </section>
+  )
+}
+
+function DeepReportPreview({ report, compact = false }) {
+  if (!report) return null
+  const sections = Array.isArray(report.deepSections) ? report.deepSections : []
+  const openingLines = Array.isArray(report.openingLines) && report.openingLines.length ? report.openingLines : [report.opener].filter(Boolean)
+  const copyShareText = async () => {
+    const text = report.shareCard?.text || `${report.title}\n${report.resultTitle}\n${report.opener || ''}`
+    try {
+      await navigator.clipboard?.writeText(text)
+    } catch {
+      window.prompt('复制这段分享文案', text)
+    }
+  }
+
+  return (
+    <div className={`deep-report-preview${compact ? ' compact' : ''}`}>
+      <div className="deep-report-cover">
+        <span>{report.category || '报告'}</span>
+        <strong>{report.resultTitle}</strong>
+        <p>{report.resultSummary}</p>
+      </div>
+      {!compact && (
+        <>
+          <div className="deep-report-sections">
+            {sections.slice(0, 3).map((section) => (
+              <article key={section.title}>
+                <strong>{section.title}</strong>
+                <p>{section.summary}</p>
+                <ul>
+                  {(section.items || []).slice(0, 3).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          <div className="match-advice-grid">
+            <article>
+              <span>适合匹配的人</span>
+              <p>{report.matchAdvice?.suitable || report.recommendedPeople}</p>
+            </article>
+            <article>
+              <span>边界提醒</span>
+              <p>{report.riskReminder || report.matchAdvice?.unsuitable}</p>
+            </article>
+          </div>
+          <div className="opening-line-list">
+            {openingLines.slice(0, 3).map((line) => (
+              <button type="button" key={line} onClick={() => navigator.clipboard?.writeText(line)}>
+                {line}
+              </button>
+            ))}
+          </div>
+          <div className="share-card-preview">
+            <span>分享卡</span>
+            <strong>{report.shareCard?.resultTitle || report.resultTitle}</strong>
+            <p>{report.shareCard?.quote || report.opener}</p>
+            <button type="button" onClick={copyShareText}>复制分享文案</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ReportHistory({ reports = [], onOpen, selectedReport }) {
+  const visibleReports = reports.slice(0, 8)
+  return (
+    <section className="report-history-panel" aria-label="测试报告历史">
+      <div className="report-history-head">
+        <div>
+          <span className="section-label">报告历史</span>
+          <h3>最近 3 份会合成我的综合画像</h3>
+        </div>
+        <strong>{reports.length} 份</strong>
+      </div>
+      {selectedReport && (
+        <article className="report-history-detail">
+          <DeepReportPreview report={selectedReport} />
+        </article>
+      )}
+      <div className="report-history-list">
+        {visibleReports.length ? visibleReports.map((report) => (
+          <button type="button" key={report.id} onClick={() => onOpen?.(report)}>
+            <span>{report.packTitle || report.title}</span>
+            <strong>{report.resultTitle}</strong>
+            <small>{report.completedAt ? formatRelativeTime(report.completedAt) : '刚刚'}</small>
+          </button>
+        )) : (
+          <p>完成任意 5 题短测后，这里会保存完整报告。</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function TestDiscussionPanel({ pack, latestReport }) {
+  const [posts, setPosts] = useState([])
+  const [content, setContent] = useState('')
+  const [replyText, setReplyText] = useState({})
+  const [notice, setNotice] = useState('')
+  const [loading, setLoading] = useState(false)
+  const loggedIn = hasAuthToken()
+
+  const loadDiscussions = async () => {
+    if (!loggedIn || !pack?.id) return
+    setLoading(true)
+    try {
+      const payload = await apiRequest(`/tests/discussions?packId=${encodeURIComponent(pack.id)}&scope=same-school&limit=8`)
+      setPosts(payload.data?.discussions || [])
+      setNotice('')
+    } catch (error) {
+      setNotice(error.message || '测友讨论读取失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!loggedIn || !pack?.id) return undefined
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) setLoading(true)
+    })
+    apiRequest(`/tests/discussions?packId=${encodeURIComponent(pack.id)}&scope=same-school&limit=8`)
+      .then((payload) => {
+        if (cancelled) return
+        setPosts(payload.data?.discussions || [])
+        setNotice('')
+      })
+      .catch((error) => {
+        if (!cancelled) setNotice(error.message || '测友讨论读取失败')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [loggedIn, pack?.id])
+
+  const submitDiscussion = async (event) => {
+    event.preventDefault()
+    const body = content.trim()
+    if (!loggedIn) {
+      navigateTo('/login')
+      return
+    }
+    if (body.length < 6) return
+    setLoading(true)
+    try {
+      const payload = await apiRequest('/tests/discussions', {
+        method: 'POST',
+        body: JSON.stringify({
+          packId: pack.id,
+          packTitle: pack.title,
+          reportId: latestReport?.id,
+          content: body,
+          anonymous: true,
+          tags: latestReport?.tags || pack.tags,
+        }),
+      })
+      setPosts((current) => [payload.data?.discussion, ...current].filter(Boolean))
+      setContent('')
+      setNotice(payload.message || '已发布到测友讨论')
+    } catch (error) {
+      setNotice(error.message || '发布失败，请换一种表达')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const reactToPost = async (postId, type) => {
+    if (!loggedIn) return navigateTo('/login')
+    try {
+      const payload = await apiRequest(`/tests/discussions/${encodeURIComponent(postId)}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ type }),
+      })
+      setPosts((current) => current.map((post) => (post.id === postId ? payload.data?.discussion || post : post)))
+    } catch (error) {
+      setNotice(error.message || '互动失败')
+    }
+  }
+
+  const reportPost = async (postId) => {
+    if (!loggedIn) return navigateTo('/login')
+    try {
+      await apiRequest(`/tests/discussions/${encodeURIComponent(postId)}/reports`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: '不适合公开讨论' }),
+      })
+      setPosts((current) => current.filter((post) => post.id !== postId))
+      setNotice('举报已提交，运营会复核这条内容。')
+    } catch (error) {
+      setNotice(error.message || '举报失败')
+    }
+  }
+
+  const submitReply = async (postId) => {
+    const body = (replyText[postId] || '').trim()
+    if (!loggedIn) return navigateTo('/login')
+    if (body.length < 2) return
+    try {
+      const payload = await apiRequest(`/tests/discussions/${encodeURIComponent(postId)}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ content: body, anonymous: true }),
+      })
+      setPosts((current) => current.map((post) => (post.id === postId ? payload.data?.discussion || post : post)))
+      setReplyText((current) => ({ ...current, [postId]: '' }))
+      setNotice(payload.message || '已回复')
+    } catch (error) {
+      setNotice(error.message || '回复失败')
+    }
+  }
+
+  return (
+    <section className="test-discussion-panel" aria-label="测友讨论">
+      <div className="report-history-head">
+        <div>
+          <span className="section-label">测友讨论</span>
+          <h3>看看同校同结果的人怎么说</h3>
+        </div>
+        <button type="button" onClick={loadDiscussions} disabled={!loggedIn || loading}>
+          {loading ? '刷新中' : '刷新'}
+        </button>
+      </div>
+      <form className="test-discussion-form" onSubmit={submitDiscussion}>
+        <textarea
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder={loggedIn ? `匿名聊聊你测完「${pack.title}」的感受` : '登录后可以查看和发布同校测友讨论'}
+          rows="3"
+        />
+        <button type="submit" disabled={loading || content.trim().length < 6}>
+          {loggedIn ? '匿名发布' : '去登录'}
+        </button>
+      </form>
+      {notice && <p className="treehole-notice">{notice}</p>}
+      <div className="test-discussion-list">
+        {posts.length ? posts.map((post) => (
+          <article className="test-discussion-card" key={post.id}>
+            <div>
+              <strong>{post.author?.nickname || '匿名同学'}</strong>
+              <small>{post.school || '同校'} · {formatRelativeTime(post.createdAt)}</small>
+            </div>
+            <p>{post.content}</p>
+            <div className="quiz-tag-row">
+              {(post.tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
+            </div>
+            <div className="discussion-actions">
+              <button type="button" onClick={() => reactToPost(post.id, 'resonate')}>共鸣 {post.reactionCounts?.resonate || 0}</button>
+              <button type="button" onClick={() => reactToPost(post.id, 'like')}>喜欢 {post.reactionCounts?.like || 0}</button>
+              <button type="button" onClick={() => reportPost(post.id)}>举报</button>
+            </div>
+            <div className="discussion-replies">
+              {(post.replies || []).slice(0, 2).map((reply) => (
+                <span key={reply.id}>{reply.author?.nickname || '匿名'}：{reply.content}</span>
+              ))}
+              <div className="discussion-reply-form">
+                <input
+                  value={replyText[post.id] || ''}
+                  onChange={(event) => setReplyText((current) => ({ ...current, [post.id]: event.target.value }))}
+                  placeholder="回复一句"
+                />
+                <button type="button" onClick={() => submitReply(post.id)}>回复</button>
+              </div>
+            </div>
+          </article>
+        )) : (
+          <p className="discussion-empty">{loggedIn ? '这个测试还没有同校讨论，做第一个开场的人。' : '登录后查看同校测友讨论。'}</p>
+        )}
       </div>
     </section>
   )
@@ -1836,7 +2378,7 @@ function SelfInsightPanel({
           <span>{insight.zodiac || '补生日'}</span>
           <span>{formatBirthDate(insight.birthDate) || '生辰待补'}</span>
         </div>
-        <QuizPager onComplete={onQuizComplete} busy={busy} />
+        <QuizPager onComplete={onQuizComplete} busy={busy} insight={insight} />
         <div className="daily-card-grid">
           {insight.dailyCards.slice(0, 4).map((card) => (
             <article className="daily-card" key={card.title}>
@@ -2071,7 +2613,7 @@ function BottomNav({ active = 'home', hideAtTop = 180 }) {
   const items = [
     { key: 'home', icon: 'home', label: '首页', href: '/' },
     { key: 'chat', icon: 'chat', label: '消息', href: '/messages' },
-    { key: 'ai', icon: 'ai', label: '问问', href: '/#tests' },
+    { key: 'tests', icon: 'ai', label: '测试', href: '/#tests' },
     { key: 'online', icon: 'online', label: '在线', href: '/#discover' },
     { key: 'user', icon: 'user', label: '我的', href: '/profile' },
   ]
@@ -2104,7 +2646,7 @@ function BottomNav({ active = 'home', hideAtTop = 180 }) {
     <nav className={`bottom-nav ${hidden ? 'hidden' : ''}`} aria-label="底部导航">
       {items.map((item) => (
         <a
-          className={`${item.key === 'ai' ? 'center' : ''} ${item.key === active ? 'active' : ''}`}
+          className={`${item.key === 'tests' ? 'center' : ''} ${item.key === active ? 'active' : ''}`}
           href={item.href}
           key={item.label}
           onClick={(event) => {
@@ -2446,7 +2988,7 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
-  const [notice, setNotice] = useState(hasStoredToken ? '' : '当前是本地预览。登录后，资料和头像会保存到你的账号里。')
+  const [notice, setNotice] = useState(hasStoredToken ? '' : '登录后，资料和头像会保存到你的账号里。')
   const [error, setError] = useState('')
   const [activity, setActivity] = useState(null)
   const [membership, setMembership] = useState(null)
@@ -2509,7 +3051,7 @@ function ProfilePage() {
       } catch (err) {
         if (!mounted) return
         setError(err.message)
-        setNotice('先用本地预览看页面，重新登录后会读取你的真实资料。')
+        setNotice('重新登录后会读取你的真实资料。')
         setIsLoggedIn(false)
       } finally {
         if (mounted) setLoading(false)
@@ -2572,7 +3114,7 @@ function ProfilePage() {
         setUser(localUser)
         setForm(userToProfileForm(localUser))
         setInsight((current) => normalizeInsightPayload(current, localUser))
-        setNotice('本地预览已更新。登录后可以把这些资料保存到账号里。')
+        setNotice('本地资料已更新。登录后可以把这些资料保存到账号里。')
         setEditing(false)
         return
       }
@@ -2695,7 +3237,7 @@ function ProfilePage() {
     setAvatarPreview(localPreview)
 
     if (!isLoggedIn) {
-      setNotice('头像已在本地预览里换好。登录后可以保存到账号。')
+      setNotice('头像已在本地换好。登录后可以保存到账号。')
       return
     }
 
@@ -2745,7 +3287,7 @@ function ProfilePage() {
         ...current,
         photos: normalizeProfilePhotos([...(current.photos || []), ...localPhotos]),
       }))
-      setNotice('照片已加入本地预览。登录后可以保存到账号。')
+      setNotice('照片已加入本地资料。登录后可以保存到账号。')
       return
     }
 
@@ -2870,9 +3412,19 @@ function ProfilePage() {
   }[user.verificationStatus || 'none']
 
   return (
-    <main className="app-shell profile-shell">
+    <main className="app-shell cece-layout profile-shell">
       <Background />
       <Header />
+
+      <section className="cece-profile-topbar" aria-label="我的顶部操作">
+        <h1>我</h1>
+        <div>
+          <button className="cece-checkin" type="button" onClick={() => navigateTo('/#tests')}>签到</button>
+          <button className="cece-settings" type="button" onClick={() => setEditing(true)} aria-label="设置">
+            <Icon name="edit" />
+          </button>
+        </div>
+      </section>
 
       <section className="profile-hero">
         <div className="profile-summary">
@@ -2926,6 +3478,12 @@ function ProfilePage() {
           </div>
         </div>
       </section>
+
+      <ProfileUtilityDeck
+        currentMembership={currentMembership}
+        displayStats={displayStats}
+        onEditProfile={() => setEditing(true)}
+      />
 
       <section className="profile-layout">
         <aside className="profile-panel profile-progress">
@@ -3185,9 +3743,9 @@ function ProfilePage() {
         <section className="profile-panel membership-panel">
           <div className="profile-panel-head">
             <div>
-              <span className="section-label">会员中心</span>
+              <span className="section-label">内测权益</span>
               <h2>{currentMembership.title || '免费用户'}</h2>
-              <p>{currentMembership.description || '先用基础功能体验真实校园连接。'}</p>
+              <p>{currentMembership.description || '内测阶段先开放基础匹配、测试报告和社区反馈，不接真实付费。'}</p>
             </div>
             <span className="membership-status">
               {currentMembership.status === 'active' ? '使用中' : '已到期'}
@@ -3207,7 +3765,7 @@ function ProfilePage() {
                     <strong>{plan.name}</strong>
                     <p>{plan.description}</p>
                   </div>
-                  <span>{formatPlanPrice(plan)}</span>
+                  <span>{plan.id === 'free' ? '基础权益' : '内测中'}</span>
                   <ul>
                     {plan.features.slice(0, 3).map((feature) => (
                       <li key={feature}>{feature}</li>
@@ -3216,10 +3774,10 @@ function ProfilePage() {
                   <button
                     className={active ? 'ghost-action' : 'primary-action'}
                     type="button"
-                    disabled={!isLoggedIn || Boolean(membershipBusy) || active}
+                    disabled
                     onClick={() => subscribePlan(plan.id)}
                   >
-                    {busy ? '开通中' : active ? '当前方案' : '切换方案'}
+                    {busy ? '更新中' : active ? '当前权益' : '暂未开放'}
                   </button>
                 </article>
               )
@@ -3355,7 +3913,7 @@ function MessagesPage() {
         }
 
         if (matchesResult.status !== 'fulfilled') {
-          setMessageNotice(matchesResult.reason?.message || '消息接口暂时没有返回，先保留预览会话。')
+          setMessageNotice(matchesResult.reason?.message || '消息接口暂时没有返回，先保留示范会话。')
           return
         }
 
@@ -3389,7 +3947,10 @@ function MessagesPage() {
   }, [])
 
   const selectedThread = threads.find((thread) => thread.id === selectedId) || threads[0]
-  const selectedMessages = messagesByThread[selectedThread?.id] || selectedThread?.messages || []
+  const selectedMessages = useMemo(
+    () => messagesByThread[selectedThread?.id] || selectedThread?.messages || [],
+    [messagesByThread, selectedThread?.id, selectedThread?.messages],
+  )
   const selectedMessageRows = useMemo(() => groupMessagesByDay(selectedMessages), [selectedMessages])
   const selectedThreadHasSourceMatch = Boolean(selectedThread?.sourceMatch)
   const isLoggedIn = hasAuthToken()
@@ -3666,16 +4227,33 @@ function MessagesPage() {
   }, [chatOpen, selectedThread?.id])
 
   useEffect(() => {
-    if (!selectedThread?.id) return
+    if (!selectedThread?.id) return undefined
     if (chatOpen || window.innerWidth > 860) {
-      markThreadReadLocally(selectedThread.id)
+      let cancelled = false
+      const threadId = selectedThread.id
+      Promise.resolve().then(() => {
+        if (cancelled) return
+        markThreadReadLocally(threadId)
+      })
+      return () => {
+        cancelled = true
+      }
     }
+    return undefined
   }, [chatOpen, selectedThread?.id])
 
   useEffect(() => {
-    setActiveMessageMenu('')
-    resetSwipeGesture()
-    return clearLongPressTimer
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      setActiveMessageMenu('')
+      swipeGestureRef.current = { id: '', startX: 0, startY: 0, swiping: false }
+      setSwipeVisual({ id: '', offset: 0, dragging: false })
+    })
+    return () => {
+      cancelled = true
+      clearLongPressTimer()
+    }
   }, [selectedId])
 
   useEffect(() => {
@@ -3741,7 +4319,7 @@ function MessagesPage() {
         }))
         syncThreadFromPayload(selectedThread.id, payload)
         setLastMessageSyncAt(new Date().toISOString())
-      } catch (error) {
+      } catch {
         if (mounted) {
           setTypingByThread((current) => ({
             ...current,
@@ -3767,7 +4345,7 @@ function MessagesPage() {
         const payload = await apiRequest('/matches')
         if (!mounted) return
         updateThreadListFromMatches(payload.data?.matches || [])
-      } catch (error) {
+      } catch {
         // 静默轮询，失败时保留当前会话列表。
       }
     }
@@ -3817,15 +4395,17 @@ function MessagesPage() {
   }
 
   useEffect(() => {
+    const typingTimer = typingTimerRef.current
+    const threadId = selectedThread?.id
     return () => {
-      window.clearTimeout(typingTimerRef.current.idle)
-      if (typingTimerRef.current.active && selectedThreadHasSourceMatch) {
-        apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}/typing`, {
+      window.clearTimeout(typingTimer.idle)
+      if (typingTimer.active && selectedThreadHasSourceMatch && threadId) {
+        apiRequest(`/messages/${encodeURIComponent(threadId)}/typing`, {
           method: 'POST',
           body: JSON.stringify({ active: false }),
         }).catch(() => {})
       }
-      typingTimerRef.current.active = false
+      typingTimer.active = false
     }
   }, [selectedThread?.id, selectedThreadHasSourceMatch])
 
@@ -3839,7 +4419,7 @@ function MessagesPage() {
     }
 
     if (!selectedThread?.sourceMatch) {
-      setMessageNotice('这是预览会话。互相喜欢形成真实匹配后，就能发送到后端保存。')
+      setMessageNotice('这是示范会话。互相喜欢形成真实匹配后，就能发送到后端保存。')
       return false
     }
 
@@ -3895,7 +4475,7 @@ function MessagesPage() {
       return
     }
     if (!selectedThread?.sourceMatch) {
-      setMessageNotice('预览会话还不能发图片。互相喜欢后，图片会保存到真实聊天里。')
+      setMessageNotice('示范会话还不能发图片。互相喜欢后，图片会保存到真实聊天里。')
       return
     }
     chatImageInputRef.current?.click()
@@ -3932,7 +4512,7 @@ function MessagesPage() {
       navigateTo('/login')
       return
     }
-    setMessageNotice('语音消息入口已经放好，下一步可以接录音权限和音频存储。')
+    setMessageNotice('语音消息还在内测准备中，当前请先用文字或图片聊天。')
   }
 
   const handleRefreshConversations = async () => {
@@ -3960,7 +4540,7 @@ function MessagesPage() {
       const content = message.type === 'image' && message.imageUrl ? message.imageUrl : message.text
       const copied = await copyText(content)
       setMessageNotice(copied ? '已复制这条消息。' : '复制没有成功，可以再试一次。')
-    } catch (error) {
+    } catch {
       setMessageNotice('复制没有成功，可以再试一次。')
     } finally {
       setActiveMessageMenu('')
@@ -3975,12 +4555,12 @@ function MessagesPage() {
         [selectedThread.id]: (current[selectedThread.id] || []).filter((item) => item !== message),
       }))
       setActiveMessageMenu('')
-      setMessageNotice('这条预览消息已从本地移除。')
+      setMessageNotice('这条示范消息已从本地移除。')
       return
     }
 
     if (!selectedThread?.sourceMatch) {
-      setMessageNotice('预览会话只能本地删除，真实匹配后会同步到后端。')
+      setMessageNotice('示范会话只能本地删除，真实匹配后会同步到后端。')
       return
     }
 
@@ -3997,6 +4577,33 @@ function MessagesPage() {
       setMessageNotice(payload.message || (recall ? '消息已撤回。' : '消息已从你的聊天里删除。'))
     } catch (error) {
       setMessageNotice(error.message || (recall ? '撤回失败，请稍后再试。' : '删除失败，请稍后再试。'))
+    } finally {
+      setActiveMessageMenu('')
+    }
+  }
+
+  const handleReportMessage = async (message) => {
+    const messageId = message.id
+    if (!messageId || !selectedThread?.sourceMatch) {
+      setMessageNotice('示范会话暂不需要举报，真实匹配聊天会进入运营复核。')
+      setActiveMessageMenu('')
+      return
+    }
+
+    try {
+      const payload = await apiRequest(`/messages/${encodeURIComponent(selectedThread.id)}/${encodeURIComponent(messageId)}/reports`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: '不适合校园聊天' }),
+      })
+      const nextMessages = (payload.data?.messages || []).map((item) => normalizeChatMessage(item, currentUserId))
+      setMessagesByThread((current) => ({
+        ...current,
+        [selectedThread.id]: nextMessages,
+      }))
+      syncThreadFromPayload(selectedThread.id, payload)
+      setMessageNotice(payload.message || '举报已提交，运营会复核这条消息。')
+    } catch (error) {
+      setMessageNotice(error.message || '举报失败，请稍后再试。')
     } finally {
       setActiveMessageMenu('')
     }
@@ -4039,7 +4646,7 @@ function MessagesPage() {
   }
 
   return (
-    <main className={`app-shell messages-shell ${effectiveChatOpen ? 'chat-open' : ''}`}>
+    <main className={`app-shell cece-layout messages-shell ${effectiveChatOpen ? 'chat-open' : ''}`}>
       <Background />
       <Header />
 
@@ -4140,7 +4747,7 @@ function MessagesPage() {
           {isLoggedIn && selectedThread && (
         <motion.section
           className="messages-panel chat-panel"
-          aria-label="聊天预览"
+          aria-label="聊天面板"
           key={selectedThread.id}
           initial={{ opacity: 0, x: 18, filter: 'blur(8px)' }}
           animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
@@ -4252,6 +4859,9 @@ function MessagesPage() {
                           )}
                           <button type="button" role="menuitem" onClick={() => handleDeleteMessage(message)}>
                             删除
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => handleReportMessage(message)}>
+                            举报
                           </button>
                           {canRecall && (
                             <button type="button" role="menuitem" onClick={() => handleDeleteMessage(message, { recall: true })}>
@@ -4427,9 +5037,6 @@ function HomePage() {
     () => normalizeInsightPayload(homeData.insight, homeData.profile || profileFallback),
     [homeData.insight, homeData.profile],
   )
-  const isHomeLoggedIn = hasAuthToken()
-  const heroDisplayName = homeData.profile?.nickname || '同学'
-
   const updateHomeInsight = async (body) => {
     if (!hasAuthToken()) {
       setHomeData((current) => ({
@@ -4443,7 +5050,7 @@ function HomePage() {
           },
         }, current.profile || profileFallback),
       }))
-      setInsightNotice('本地预览已更新。登录后会保存到账号里。')
+        setInsightNotice('本地状态已更新。登录后会保存到账号里。')
       return true
     }
 
@@ -4468,7 +5075,7 @@ function HomePage() {
     }
   }
 
-  const completeHomeQuiz = async ({ mbti, birthDate = '', relationshipGoal = '', tags = [], sceneTags = [], focus, moodLabel, moodScore }) => {
+  const completeHomeQuiz = async ({ mbti, birthDate = '', relationshipGoal = '', tags = [], sceneTags = [], focus, moodLabel, moodScore, report }) => {
     const insightBody = { moodLabel, moodScore, focus }
     const buildUpdatedProfile = (profile = {}) => {
       const nextTags = Array.from(new Set([...splitList(profile.tags), ...tags, '测一测'])).slice(0, 10)
@@ -4495,9 +5102,16 @@ function HomePage() {
             birthDate: updatedProfile.birthDate,
             tags: updatedProfile.tags,
             moodScore,
+            latestReport: report || current.insight?.latestReport,
+            testReports: report
+              ? [report, ...(current.insight?.testReports || []).filter((item) => item.id !== report.id)].slice(0, 40)
+              : current.insight?.testReports,
             selfInsight: {
               ...(current.insight?.selfInsight || {}),
               ...insightBody,
+              testReports: report
+                ? [report, ...(current.insight?.selfInsight?.testReports || []).filter((item) => item.id !== report.id)].slice(0, 40)
+                : current.insight?.selfInsight?.testReports,
             },
           }, updatedProfile),
         }
@@ -4510,16 +5124,12 @@ function HomePage() {
     setInsightNotice('')
     try {
       const profileDraft = buildUpdatedProfile(homeData.profile || profileFallback)
-      const profilePayload = await apiRequest('/users/profile', {
-        method: 'PUT',
-        body: JSON.stringify({
-          mbti: profileDraft.mbti,
-          birthDate: profileDraft.birthDate,
-          relationshipGoal: profileDraft.relationshipGoal,
-          tags: profileDraft.tags,
-          sceneTags: profileDraft.sceneTags,
-        }),
-      })
+      const reportPayload = report
+        ? await apiRequest('/users/insights/reports', {
+            method: 'POST',
+            body: JSON.stringify({ mbti: profileDraft.mbti, birthDate: profileDraft.birthDate, report }),
+          })
+        : null
       const insightPayload = await apiRequest('/users/insights', {
         method: 'POST',
         body: JSON.stringify(insightBody),
@@ -4528,11 +5138,16 @@ function HomePage() {
         apiRequest('/users/recommendations?limit=6'),
         apiRequest('/users/activity'),
       ])
-      const updatedProfile = profilePayload.data?.user || profileDraft
+      const updatedProfile = buildUpdatedProfile(homeData.profile || profileFallback)
       setHomeData((current) => ({
         ...current,
         profile: updatedProfile,
-        insight: normalizeInsightPayload(insightPayload.data, updatedProfile),
+        insight: normalizeInsightPayload({
+          ...(reportPayload?.data || {}),
+          ...(insightPayload.data || {}),
+          latestReport: reportPayload?.data?.latestReport || report,
+          testReports: reportPayload?.data?.testReports || current.insight?.testReports,
+        }, updatedProfile),
         recommendations:
           recommendationResult.status === 'fulfilled'
             ? recommendationResult.value.data?.users || current.recommendations
@@ -4613,46 +5228,13 @@ function HomePage() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell cece-layout">
       <Background />
       <Header />
-      <section className="hero-section">
-        <div className="hero-card">
-          <div className="hero-copy">
-            <span className="section-label">Campus Match</span>
-            <ScrollReveal as="h1" {...revealTitleProps}>
-              {isHomeLoggedIn ? `${heroDisplayName}，今天看看新的同校推荐` : '校园里的真实连接，从一条低压力消息开始'}
-            </ScrollReveal>
-            <ScrollReveal as="p" {...revealBodyProps}>
-              {isHomeLoggedIn
-                ? '账号已经创建成功，推荐、画像和聊天都会保存到你的主页里。'
-                : '基于校内认证、兴趣标签、MBTI、生辰和树洞话题，先找到聊得来的同校新朋友。'}
-            </ScrollReveal>
-            <div className="hero-actions">
-              {isHomeLoggedIn ? (
-                <>
-                  <button className="primary-action" type="button" onClick={() => navigateTo('/#match')}>看今日推荐</button>
-                  <button className="ghost-action" type="button" onClick={() => navigateTo('/profile')}>完善资料</button>
-                </>
-              ) : (
-                <>
-                  <a className="primary-action" href="/login">立即开始</a>
-                  <a className="ghost-action" href="#discover">先看看内容</a>
-                </>
-              )}
-            </div>
-          </div>
-          <MatchPreview />
-        </div>
-      </section>
+      <HomeTopDock profile={homeData.profile || profileFallback} insight={visibleInsight} />
       <MoodCard />
-      <section className="section-intro" aria-label="功能入口介绍">
-        <span className="section-label">功能入口</span>
-        <ScrollReveal as="h2" {...revealSectionTitleProps}>
-          从性格、星座、生辰和树洞里找到开场理由
-        </ScrollReveal>
-      </section>
       <ShortcutGrid items={shortcutItems} onSelect={handleShortcutSelect} />
+      <PromoBanner />
       <SelfInsightPanel
         insight={visibleInsight}
         treeholes={homeData.treeholes}
@@ -4663,6 +5245,7 @@ function HomePage() {
         notice={insightNotice}
       />
       <Feed items={feedItems} />
+      <MatchPreview />
       <AnimatePresence>
         {activeShortcut && (
           <FeatureSheet

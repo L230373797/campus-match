@@ -137,6 +137,76 @@ await check("self insight and treehole flow", async () => {
     body: { moodScore: 84, moodLabel: "想聊天", focus: "找一个轻松开场" },
   });
   assert(updatedInsight.data?.selfInsight?.moodLabel === "想聊天", "mood label should persist");
+  assert(Array.isArray(updatedInsight.data?.moodCurve), "mood curve should be returned");
+
+  const savedReport = await call("/users/insights/reports", {
+    method: "POST",
+    token: state.user.token,
+    body: {
+      mbti: "INFP",
+      birthDate: "2004-10-08",
+      report: {
+        id: `launch-report-${stamp}`,
+        type: "campus-fit",
+        title: "学习能量",
+        packId: "study-energy",
+        packTitle: "学习能量",
+        category: "学习",
+        version: "2026-05-scale-v1",
+        completedAt: new Date().toISOString(),
+        answers: { "study-energy-start": "outline", "study-energy-partner": "silent" },
+        dimensions: [
+          { label: "MBTI", value: "INFP", text: "慢热观察型" },
+          { label: "场景入口", value: "图书馆", text: "适合从自习搭子开始" },
+        ],
+        resultTitle: "学习能量 · 计划型学习",
+        resultSummary: "适合从低压力的校园场景开始认识。",
+        tags: ["INFP", "慢热", "测一测"],
+        sceneTags: ["图书馆", "自习"],
+        relationshipGoal: "找学习搭子",
+        opener: "看到你也常去图书馆，想问问你最近一般几点自习？",
+        recommendedPeople: "能互相监督、但不制造额外压力的学习搭子",
+        riskReminder: "学习搭子适合互相提醒，不适合互相审判。",
+        deepSections: [
+          {
+            title: "学习节奏",
+            summary: "更适合计划清晰、安静同行的学习关系。",
+            items: ["先确认自习时间", "保留各自专注空间", "用轻提醒代替催促"],
+          },
+        ],
+        matchAdvice: {
+          suitable: "适合能互相监督、但不制造额外压力的学习搭子。",
+          unsuitable: "不太适合频繁打断、临时改计划或把学习变成审判的人。",
+        },
+        openingLines: [
+          "看到你也常去图书馆，想问问你最近一般几点自习？",
+          "我也在找安静一点的学习搭子，你更喜欢固定座位还是灵活安排？",
+          "如果这周约一次低压力自习，你会更想上午还是晚上？",
+        ],
+        compareHints: {
+          targetName: "Launch Peer",
+          shared: ["图书馆", "自习"],
+          complement: ["法学", "晨型"],
+          opener: "你们都提到图书馆，可以先从常去楼层和自习时间聊起。",
+        },
+        shareCard: {
+          title: "学习能量深度报告",
+          resultTitle: "学习能量 · 计划型学习",
+          tags: ["INFP", "图书馆", "学习搭子"],
+          quote: "看到你也常去图书馆，想问问你最近一般几点自习？",
+          text: "学习能量深度报告\n学习能量 · 计划型学习\n关键词：INFP、图书馆、学习搭子\n开场：看到你也常去图书馆，想问问你最近一般几点自习？",
+        },
+      },
+    },
+  });
+  assert(savedReport.data?.latestReport?.id === `launch-report-${stamp}`, "latest report should be saved");
+  assert(savedReport.data?.latestReport?.packId === "study-energy", "latest report should keep pack id");
+  assert(savedReport.data?.latestReport?.recommendedPeople, "latest report should keep recommended people");
+  assert(savedReport.data?.latestReport?.deepSections?.length >= 1, "latest report should keep deep sections");
+  assert(savedReport.data?.latestReport?.openingLines?.length === 3, "latest report should keep opening lines");
+  assert(savedReport.data?.latestReport?.shareCard?.text, "latest report should keep share card copy");
+  assert(savedReport.data?.testReports?.length >= 1, "test report history should be returned");
+  assert(savedReport.data?.recommendedTags?.includes("图书馆"), "recommended tags should include report scene tags");
 
   const treehole = await call("/users/treeholes", {
     method: "POST",
@@ -148,6 +218,120 @@ await check("self insight and treehole flow", async () => {
 
   const listed = await call("/users/treeholes", { token: state.user.token });
   assert(listed.data?.posts?.[0]?.content.includes("认真听"), "treehole should persist");
+
+  let treeholeBlocked = false;
+  try {
+    await call("/users/treeholes", {
+      method: "POST",
+      token: state.user.token,
+      body: { mood: "危险内容", content: "约炮开房这种内容不应该出现在校园树洞。" },
+    });
+  } catch {
+    treeholeBlocked = true;
+  }
+  assert(treeholeBlocked, "severe sensitive treehole should be blocked");
+});
+
+await check("test discussion community and moderation flow", async () => {
+  const created = await call("/tests/discussions", {
+    method: "POST",
+    token: state.user.token,
+    body: {
+      packId: "study-energy",
+      packTitle: "学习能量",
+      reportId: `launch-report-${stamp}`,
+      content: "我测完发现自己更适合图书馆安静搭子，想看看同校有没有类似节奏的人。",
+      anonymous: true,
+      tags: ["图书馆", "慢热", "学习搭子"],
+    },
+  });
+  const discussionId = created.data?.discussion?.id;
+  assert(discussionId, "discussion should be created");
+  assert(created.data?.discussion?.anonymous, "discussion should support anonymous posting");
+  state.discussionId = discussionId;
+
+  const sameSchool = await call("/tests/discussions?packId=study-energy&scope=same-school&limit=10", {
+    token: state.peer.token,
+  });
+  assert(
+    sameSchool.data?.discussions?.some((discussion) => discussion.id === discussionId),
+    "same-school discussion list should include new post",
+  );
+
+  const replied = await call(`/tests/discussions/${discussionId}/replies`, {
+    method: "POST",
+    token: state.peer.token,
+    body: {
+      content: "我也是安静型学习搭子，更喜欢先约固定时段。",
+      anonymous: false,
+    },
+  });
+  assert(replied.data?.discussion?.replyCount >= 1, "reply should be saved on discussion");
+
+  const reacted = await call(`/tests/discussions/${discussionId}/reactions`, {
+    method: "POST",
+    token: state.peer.token,
+    body: { type: "resonate" },
+  });
+  assert(reacted.data?.discussion?.reactionCounts?.resonate >= 1, "resonate reaction should be counted");
+
+  let blocked = false;
+  try {
+    await call("/tests/discussions", {
+      method: "POST",
+      token: state.user.token,
+      body: {
+        packId: "study-energy",
+        content: "约炮开房这种内容不应该出现在校园社区。",
+      },
+    });
+  } catch {
+    blocked = true;
+  }
+  assert(blocked, "severe sensitive discussion should be blocked");
+
+  await call(`/tests/discussions/${discussionId}/reports`, {
+    method: "POST",
+    token: state.peer.token,
+    body: { reason: "Launch smoke report 1" },
+  });
+  await call(`/tests/discussions/${discussionId}/reports`, {
+    method: "POST",
+    token: state.operator.token,
+    body: { reason: "Launch smoke report 2" },
+  });
+  await call(`/tests/discussions/${discussionId}/reports`, {
+    method: "POST",
+    token: state.user.token,
+    body: { reason: "Launch smoke report 3" },
+  });
+
+  const hiddenList = await call("/tests/discussions?packId=study-energy&scope=same-school&limit=10", {
+    token: state.peer.token,
+  });
+  assert(
+    !hiddenList.data?.discussions?.some((discussion) => discussion.id === discussionId),
+    "three reports should hide discussion from public list",
+  );
+
+  const adminQueue = await call("/admin/discussions?status=queue", { token: state.operator.token });
+  const queued = adminQueue.data?.discussions?.find((discussion) => discussion.id === discussionId);
+  assert(queued?.hidden && queued.reportCount >= 3, "admin discussion queue should include auto-hidden reported post");
+
+  const restored = await call(`/admin/discussions/${discussionId}/moderate`, {
+    method: "POST",
+    token: state.operator.token,
+    body: { action: "restore", notes: "Launch smoke restored discussion" },
+  });
+  assert(restored.data?.discussion?.hidden === false, "operator should restore discussion");
+
+  const restoredList = await call("/tests/discussions?packId=study-energy&scope=same-school&limit=10", {
+    token: state.peer.token,
+  });
+  assert(
+    restoredList.data?.discussions?.some((discussion) => discussion.id === discussionId),
+    "restored discussion should return to public list",
+  );
 });
 
 await check("membership read and subscribe", async () => {
@@ -316,6 +500,17 @@ await check("chat and identity reveal flow", async () => {
     "locally deleted message should stay visible to the other user",
   );
 
+  const reported = await call(`/messages/${state.matchId}/${state.firstMessageId}/reports`, {
+    method: "POST",
+    token: state.user.token,
+    body: { reason: "Launch smoke message report" },
+  });
+  assert(reported.data?.reportCount === 1, "message report should be counted");
+  assert(
+    !reported.data?.messages?.some((message) => message.id === state.firstMessageId),
+    "reported message should be hidden for reporter",
+  );
+
   const recalled = await call(`/messages/${state.matchId}/${imageMessage.data.message.id}?scope=all`, {
     method: "DELETE",
     token: state.peer.token,
@@ -339,6 +534,8 @@ await check("admin user and match data are unified", async () => {
   const overview = await call("/admin/overview", { token: state.operator.token });
   assert(overview.data?.counts?.matches >= 1, "admin overview should count matches");
   assert(Number.isFinite(overview.data?.counts?.unreadMessages), "admin overview should expose unread message count");
+  assert(overview.data?.counts?.testReports >= 1, "admin overview should count saved test reports");
+  assert(overview.data?.counts?.reportedMessages >= 1, "admin overview should count reported messages");
 
   const users = await call("/admin/users", { token: state.operator.token });
   const launchUser = users.data?.users?.find((user) => user.id === state.user.user.id);

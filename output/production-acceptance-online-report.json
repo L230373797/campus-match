@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-05-05T05:24:29.691Z",
+  "baseUrl": "https://campus-match-sansui.netlify.app",
+  "ok": false,
+  "results": [
+    {
+      "name": "GET /",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /login",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /profile",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /search.html",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /upload.html",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /admin.html",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /privacy",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "GET /terms",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "entry assets load",
+      "ok": false,
+      "detail": "expected JS/CSS assets in entry HTML"
+    },
+    {
+      "name": "admin script loads",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "health endpoint",
+      "ok": false,
+      "detail": "expected 200, got 503"
+    },
+    {
+      "name": "profile endpoint requires login",
+      "ok": false,
+      "detail": "expected 401, got 503"
+    },
+    {
+      "name": "admin overview requires login",
+      "ok": false,
+      "detail": "expected 401, got 503"
+    }
+  ]
+}

@@ -414,7 +414,7 @@ class MysqlStore {
       };
     }
 
-    return null;
+    return this.blobStore.get(key, options);
   }
 
   async setJSON(key, value) {
@@ -477,7 +477,10 @@ class MysqlStore {
         toMysqlDateTime(value.expiresAt),
         Number(value.attempts || 0),
       ]);
+      return;
     }
+
+    await this.blobStore.setJSON(key, value);
   }
 
   async set(key, value) {
@@ -509,7 +512,10 @@ class MysqlStore {
     if (key.startsWith("sessions/")) {
       const token = key.slice("sessions/".length);
       await this.pool.execute("DELETE FROM sessions WHERE token = ?", [token]);
+      return;
     }
+
+    await this.blobStore.delete(key);
   }
 
   async list({ prefix, cursor } = {}) {
@@ -537,7 +543,7 @@ class MysqlStore {
       return buildListResult(rows.map((row) => `messages/${row.match_id}`), rows.length, limit, offset);
     }
 
-    return { blobs: [], cursor: null };
+    return this.blobStore.list({ prefix, cursor });
   }
 }
 

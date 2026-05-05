@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-05-05T07:47:51.988Z",
+  "baseUrl": "http://127.0.0.1:3199",
+  "ok": true,
+  "results": [
+    {
+      "name": "GET /",
+      "ok": true
+    },
+    {
+      "name": "GET /login",
+      "ok": true
+    },
+    {
+      "name": "GET /profile",
+      "ok": true
+    },
+    {
+      "name": "GET /search.html",
+      "ok": true
+    },
+    {
+      "name": "GET /upload.html",
+      "ok": true
+    },
+    {
+      "name": "GET /admin.html",
+      "ok": true
+    },
+    {
+      "name": "GET /privacy",
+      "ok": true
+    },
+    {
+      "name": "GET /terms",
+      "ok": true
+    },
+    {
+      "name": "entry assets load",
+      "ok": true
+    },
+    {
+      "name": "admin script loads",
+      "ok": true
+    },
+    {
+      "name": "health endpoint",
+      "ok": true
+    },
+    {
+      "name": "profile endpoint requires login",
+      "ok": true
+    },
+    {
+      "name": "admin overview requires login",
+      "ok": true
+    }
+  ]
+}

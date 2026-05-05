@@ -9,6 +9,8 @@ node_modules/
 netlify-dev.*.log
 netlify-dev.pid
 standalone*.log
+local-*.log
+ios26-campus-ui/
 playwright-test-email.txt
 test-results/
 deno.lock

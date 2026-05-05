@@ -11,6 +11,8 @@ const EMAIL_CODE_RESEND_MS = 1000 * 60;
 const TYPING_TTL_MS = 1000 * 8;
 const IMAGE_UPLOAD_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+const DISCUSSION_SEVERE_KEYWORDS = ["约炮", "裸照", "开房", "毒品", "人肉", "身份证", "银行卡", "刷单诈骗"];
+const DISCUSSION_REVIEW_KEYWORDS = ["微信", "电话", "联系方式", "抑郁", "焦虑", "自残", "想死", "单独见面"];
 const MEMBERSHIP_PLAN_LIBRARY = {
   free: {
     id: "free",
@@ -97,6 +99,10 @@ export default async (req, context) => {
 
     if (segments[0] === "users") {
       return await handleUsers(req, store, segments, url);
+    }
+
+    if (segments[0] === "tests") {
+      return await handleTests(req, store, segments, url);
     }
 
     if (segments[0] === "uploads") {
@@ -291,15 +297,16 @@ async function handleAdmin(req, store, segments, url) {
   requireAdmin(user);
 
   if (segments[1] === "overview" && req.method === "GET") {
-    const [users, matches, messages] = await Promise.all([
+    const [users, matches, messages, discussions] = await Promise.all([
       listUsers(store),
       listMatches(store),
       listAllMessages(store),
+      listTestDiscussions(store),
     ]);
 
     return json({
       success: true,
-      data: buildAdminOverview(users, matches, messages),
+      data: buildAdminOverview(users, matches, messages, discussions),
     });
   }
 
@@ -402,11 +409,30 @@ async function handleAdmin(req, store, segments, url) {
     });
   }
 
+  if (segments[1] === "discussions" && req.method === "GET") {
+    const discussions = await listTestDiscussions(store);
+    return json({
+      success: true,
+      data: buildAdminDiscussionsPayload(discussions, url),
+    });
+  }
+
+  if (segments[1] === "discussions" && segments[2] && segments[3] === "moderate" && req.method === "POST") {
+    const body = await readBody(req);
+    const discussion = await moderateDiscussion(store, user, decodePathSegment(segments[2]), body);
+    return json({
+      success: true,
+      message: "测友讨论状态已更新",
+      data: { discussion: publicDiscussion(discussion, user, { admin: true }) },
+    });
+  }
+
   if (segments[1] === "export" && req.method === "GET") {
-    const [users, matches, messages] = await Promise.all([
+    const [users, matches, messages, discussions] = await Promise.all([
       listUsers(store),
       listMatches(store),
       listAllMessages(store),
+      listTestDiscussions(store),
     ]);
 
     return json({
@@ -417,10 +443,12 @@ async function handleAdmin(req, store, segments, url) {
           users: users.length,
           matches: matches.length,
           messages: messages.length,
+          discussions: discussions.length,
         },
         users: users.map(adminExportUser),
         matches,
         messages,
+        discussions,
       },
     });
   }
@@ -538,6 +566,20 @@ async function handleUsers(req, store, segments, url) {
     });
   }
 
+  if (segments[1] === "insights" && segments[2] === "reports" && req.method === "POST") {
+    const body = await readBody(req);
+    const { user: updatedUser, report } = appendSelfInsightReport(user, body);
+    await saveUser(store, updatedUser);
+    return json({
+      success: true,
+      message: "测试报告已保存",
+      data: {
+        report,
+        ...buildSelfInsightPayload(updatedUser),
+      },
+    }, 201);
+  }
+
   if (segments[1] === "insights" && req.method === "POST") {
     const body = await readBody(req);
     const updatedUser = updateSelfInsight(user, body);
@@ -562,6 +604,10 @@ async function handleUsers(req, store, segments, url) {
     if (content.length < 6) {
       throw httpError("写一点更具体的倾诉内容吧", 400);
     }
+    const moderation = moderateDiscussionContent(content);
+    if (moderation.blocked) {
+      throw httpError("这段内容不适合放进校园树洞，请换一种更安全的表达。", 400);
+    }
 
     const post = normalizeTreeholePost({
       id: makeId("treehole"),
@@ -569,6 +615,8 @@ async function handleUsers(req, store, segments, url) {
       mood: text(body.mood).slice(0, 24) || "想被听见",
       createdAt: new Date().toISOString(),
       anonymous: true,
+      needsReview: moderation.reviewHits.length > 0,
+      moderationHits: moderation.reviewHits,
     });
     const updatedUser = {
       ...user,
@@ -579,7 +627,7 @@ async function handleUsers(req, store, segments, url) {
     await saveUser(store, updatedUser);
     return json({
       success: true,
-      message: "已放进你的匿名树洞",
+      message: post.needsReview ? "已放进树洞，内容会进入运营复核" : "已放进你的匿名树洞",
       data: { post, posts: normalizeTreeholePosts(updatedUser.treeholePosts) },
     }, 201);
   }
@@ -800,6 +848,550 @@ async function handleUsers(req, store, segments, url) {
   }
 
   return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function handleTests(req, store, segments, url) {
+  const user = await requireUser(req, store);
+
+  if (segments[1] === "discussions" && segments.length === 2 && req.method === "GET") {
+    const payload = await buildDiscussionListPayload(store, user, url);
+    return json({ success: true, data: payload });
+  }
+
+  if (segments[1] === "discussions" && segments.length === 2 && req.method === "POST") {
+    const body = await readBody(req);
+    const discussion = await createTestDiscussion(store, user, body);
+    return json({
+      success: true,
+      message: discussion.needsReview ? "已发布，内容会进入运营复核" : "已发布到测友讨论",
+      data: { discussion: publicDiscussion(discussion, user) },
+    }, 201);
+  }
+
+  if (segments[1] === "discussions" && segments[2] && segments[3] === "replies" && req.method === "POST") {
+    const body = await readBody(req);
+    const discussion = await addDiscussionReply(store, user, decodePathSegment(segments[2]), body);
+    return json({
+      success: true,
+      message: discussion.needsReview ? "已回复，内容会进入运营复核" : "已回复",
+      data: { discussion: publicDiscussion(discussion, user) },
+    }, 201);
+  }
+
+  if (segments[1] === "discussions" && segments[2] && segments[3] === "reactions" && req.method === "POST") {
+    const body = await readBody(req);
+    const discussion = await toggleDiscussionReaction(store, user, decodePathSegment(segments[2]), body);
+    return json({
+      success: true,
+      message: "互动已更新",
+      data: { discussion: publicDiscussion(discussion, user) },
+    });
+  }
+
+  if (segments[1] === "discussions" && segments[2] && segments[3] === "reports" && req.method === "POST") {
+    const body = await readBody(req);
+    const discussion = await reportDiscussion(store, user, decodePathSegment(segments[2]), body);
+    return json({
+      success: true,
+      message: discussion.hidden ? "举报已收到，内容已自动隐藏等待复核" : "举报已收到",
+      data: { discussion: publicDiscussion(discussion, user) },
+    });
+  }
+
+  return json({ success: false, message: "接口不存在" }, 404);
+}
+
+async function buildDiscussionListPayload(store, user, url) {
+  const packId = text(url.searchParams.get("packId")).slice(0, 80);
+  const scope = text(url.searchParams.get("scope")).toLowerCase() === "all" ? "all" : "same-school";
+  const limit = clampNumber(url.searchParams.get("limit"), 1, 30, 8);
+  const page = clampNumber(url.searchParams.get("page"), 1, 999, 1);
+  const discussions = (await listTestDiscussions(store))
+    .filter((discussion) => isPublicDiscussionVisible(discussion))
+    .filter((discussion) => !packId || discussion.packId === packId);
+  const sameSchoolDiscussions = discussions.filter((discussion) => isSameSchoolDiscussion(discussion, user));
+  const scoped = scope === "same-school" ? sameSchoolDiscussions : discussions;
+  const latest = sortDiscussionsByLatest(scoped);
+  const hot = sortDiscussionsByHot(scoped);
+  const start = (page - 1) * limit;
+
+  return {
+    packId,
+    scope,
+    discussions: latest.slice(start, start + limit).map((discussion) => publicDiscussion(discussion, user)),
+    hotDiscussions: hot.slice(0, 3).map((discussion) => publicDiscussion(discussion, user)),
+    latestDiscussions: latest.slice(0, 3).map((discussion) => publicDiscussion(discussion, user)),
+    sameSchoolCount: sameSchoolDiscussions.length,
+    total: scoped.length,
+    pagination: { page, limit, total: scoped.length },
+    packStats: buildDiscussionPackStats(discussions, user),
+  };
+}
+
+async function createTestDiscussion(store, user, body = {}) {
+  const content = text(body.content).slice(0, 500);
+  if (content.length < 6) {
+    throw httpError("至少写 6 个字，再发到测友讨论。", 400);
+  }
+
+  const moderation = moderateDiscussionContent(content);
+  if (moderation.blocked) {
+    throw httpError("这段内容不适合公开讨论，请换一种更安全的表达。", 400);
+  }
+
+  const now = new Date().toISOString();
+  const discussion = normalizeTestDiscussion({
+    id: makeId("discussion"),
+    packId: text(body.packId).slice(0, 80) || "campus-general",
+    packTitle: text(body.packTitle || body.title).slice(0, 80) || "校园测友讨论",
+    reportId: text(body.reportId).slice(0, 80),
+    content,
+    tags: uniqueTextValues(arrayOfText(body.tags)).slice(0, 8),
+    anonymous: body.anonymous !== false,
+    school: user.school || "",
+    author: discussionAuthorFromUser(user),
+    createdAt: now,
+    updatedAt: now,
+    needsReview: moderation.reviewHits.length > 0,
+    moderationHits: moderation.reviewHits,
+    replies: [],
+    reactions: [],
+    reports: [],
+  });
+  await saveTestDiscussion(store, discussion);
+  return discussion;
+}
+
+async function addDiscussionReply(store, user, discussionId, body = {}) {
+  const discussion = await getTestDiscussion(store, discussionId);
+  if (!discussion) {
+    throw httpError("讨论不存在", 404);
+  }
+  if (discussion.hidden) {
+    throw httpError("这条讨论暂时不能回复", 400);
+  }
+
+  const content = text(body.content).slice(0, 360);
+  if (content.length < 2) {
+    throw httpError("回复再写具体一点。", 400);
+  }
+
+  const moderation = moderateDiscussionContent(content);
+  if (moderation.blocked) {
+    throw httpError("这段回复不适合公开讨论，请换一种更安全的表达。", 400);
+  }
+
+  const now = new Date().toISOString();
+  const reply = normalizeDiscussionReply({
+    id: makeId("reply"),
+    content,
+    anonymous: body.anonymous !== false,
+    author: discussionAuthorFromUser(user),
+    createdAt: now,
+    needsReview: moderation.reviewHits.length > 0,
+    moderationHits: moderation.reviewHits,
+  });
+  const updated = normalizeTestDiscussion({
+    ...discussion,
+    replies: [reply, ...discussion.replies].slice(0, 80),
+    needsReview: discussion.needsReview || reply.needsReview,
+    moderationHits: uniqueTextValues([...(discussion.moderationHits || []), ...reply.moderationHits]),
+    updatedAt: now,
+  });
+  await saveTestDiscussion(store, updated);
+  return updated;
+}
+
+async function toggleDiscussionReaction(store, user, discussionId, body = {}) {
+  const discussion = await getTestDiscussion(store, discussionId);
+  if (!discussion || discussion.hidden) {
+    throw httpError("讨论不存在", 404);
+  }
+
+  const type = ["like", "resonate"].includes(text(body.type).toLowerCase())
+    ? text(body.type).toLowerCase()
+    : "resonate";
+  const existingIndex = discussion.reactions.findIndex((reaction) => reaction.userId === user.id && reaction.type === type);
+  const reactions = [...discussion.reactions];
+  if (existingIndex >= 0) {
+    reactions.splice(existingIndex, 1);
+  } else {
+    reactions.unshift(normalizeDiscussionReaction({
+      userId: user.id,
+      type,
+      createdAt: new Date().toISOString(),
+    }));
+  }
+
+  const updated = normalizeTestDiscussion({
+    ...discussion,
+    reactions,
+    updatedAt: new Date().toISOString(),
+  });
+  await saveTestDiscussion(store, updated);
+  return updated;
+}
+
+async function reportDiscussion(store, user, discussionId, body = {}) {
+  const discussion = await getTestDiscussion(store, discussionId);
+  if (!discussion) {
+    throw httpError("讨论不存在", 404);
+  }
+
+  const replyId = text(body.replyId).slice(0, 80);
+  const targetId = replyId || discussion.id;
+  const reason = text(body.reason).slice(0, 180) || "不适合公开讨论";
+  const reports = discussion.reports.filter((report) => !(report.userId === user.id && report.targetId === targetId));
+  reports.unshift(normalizeDiscussionReport({
+    id: makeId("discussion_report"),
+    userId: user.id,
+    targetId,
+    reason,
+    createdAt: new Date().toISOString(),
+  }));
+  const shouldHide = reports.length >= 3;
+  const updated = normalizeTestDiscussion({
+    ...discussion,
+    reports,
+    hidden: discussion.hidden || shouldHide,
+    hiddenReason: shouldHide ? "累计举报达到 3 次，自动隐藏等待复核" : discussion.hiddenReason,
+    needsReview: true,
+    updatedAt: new Date().toISOString(),
+  });
+  await saveTestDiscussion(store, updated);
+  return updated;
+}
+
+async function moderateDiscussion(store, adminUser, discussionId, body = {}) {
+  const discussion = await getTestDiscussion(store, discussionId);
+  if (!discussion) {
+    throw httpError("讨论不存在", 404);
+  }
+
+  const action = text(body.action || body.status).toLowerCase();
+  const notes = text(body.notes).slice(0, 240);
+  const now = new Date().toISOString();
+  let updated = { ...discussion };
+
+  if (action === "hide" || action === "hidden") {
+    updated = {
+      ...updated,
+      hidden: true,
+      hiddenReason: notes || "运营已隐藏",
+      needsReview: false,
+    };
+  } else if (action === "restore" || action === "active") {
+    updated = {
+      ...updated,
+      hidden: false,
+      hiddenReason: "",
+      needsReview: false,
+    };
+  } else if (action === "resolve" || action === "reviewed") {
+    updated = {
+      ...updated,
+      needsReview: false,
+    };
+  } else {
+    throw httpError("请选择隐藏、恢复或标记已处理", 400);
+  }
+
+  updated = normalizeTestDiscussion({
+    ...updated,
+    reviewNotes: notes,
+    reviewedBy: adminUser.email || adminUser.id,
+    reviewedAt: now,
+    updatedAt: now,
+  });
+  await saveTestDiscussion(store, updated);
+  return updated;
+}
+
+async function listTestDiscussions(store) {
+  return (await listJsonRecords(store, "test-discussions/"))
+    .map(normalizeTestDiscussion)
+    .filter((discussion) => discussion.id && discussion.content);
+}
+
+async function getTestDiscussion(store, discussionId) {
+  return normalizeTestDiscussion(await store.get(`test-discussions/${discussionId}`, { type: "json" }));
+}
+
+async function saveTestDiscussion(store, discussion) {
+  await store.setJSON(`test-discussions/${discussion.id}`, normalizeTestDiscussion(discussion));
+}
+
+function normalizeTestDiscussion(value = {}) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return {
+    id: text(value.id),
+    packId: text(value.packId).slice(0, 80),
+    packTitle: text(value.packTitle || value.title).slice(0, 80),
+    reportId: text(value.reportId).slice(0, 80),
+    content: text(value.content).slice(0, 500),
+    tags: uniqueTextValues(arrayOfText(value.tags)).slice(0, 8),
+    anonymous: value.anonymous !== false,
+    school: text(value.school).slice(0, 80),
+    author: normalizeDiscussionAuthor(value.author),
+    createdAt: text(value.createdAt) || new Date().toISOString(),
+    updatedAt: text(value.updatedAt) || text(value.createdAt) || new Date().toISOString(),
+    hidden: Boolean(value.hidden),
+    hiddenReason: text(value.hiddenReason).slice(0, 240),
+    needsReview: Boolean(value.needsReview),
+    moderationHits: uniqueTextValues(arrayOfText(value.moderationHits)).slice(0, 12),
+    reviewedAt: text(value.reviewedAt),
+    reviewedBy: text(value.reviewedBy),
+    reviewNotes: text(value.reviewNotes).slice(0, 240),
+    replies: Array.isArray(value.replies) ? value.replies.map(normalizeDiscussionReply).filter(Boolean).slice(0, 80) : [],
+    reactions: Array.isArray(value.reactions) ? value.reactions.map(normalizeDiscussionReaction).filter(Boolean).slice(0, 500) : [],
+    reports: Array.isArray(value.reports) ? value.reports.map(normalizeDiscussionReport).filter(Boolean).slice(0, 80) : [],
+  };
+}
+
+function normalizeDiscussionAuthor(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    userId: text(source.userId).slice(0, 80),
+    nickname: text(source.nickname).slice(0, 40),
+    school: text(source.school).slice(0, 80),
+    major: text(source.major).slice(0, 80),
+    grade: text(source.grade).slice(0, 40),
+    isVerified: Boolean(source.isVerified),
+    verificationStatus: text(source.verificationStatus).slice(0, 40),
+  };
+}
+
+function normalizeDiscussionReply(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const content = text(source.content).slice(0, 360);
+  if (!content) return null;
+  return {
+    id: text(source.id).slice(0, 80) || makeId("reply"),
+    content,
+    anonymous: source.anonymous !== false,
+    author: normalizeDiscussionAuthor(source.author),
+    createdAt: text(source.createdAt) || new Date().toISOString(),
+    needsReview: Boolean(source.needsReview),
+    moderationHits: uniqueTextValues(arrayOfText(source.moderationHits)).slice(0, 8),
+  };
+}
+
+function normalizeDiscussionReaction(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const userId = text(source.userId).slice(0, 80);
+  if (!userId) return null;
+  return {
+    userId,
+    type: ["like", "resonate"].includes(text(source.type).toLowerCase()) ? text(source.type).toLowerCase() : "resonate",
+    createdAt: text(source.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeDiscussionReport(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const userId = text(source.userId).slice(0, 80);
+  if (!userId) return null;
+  return {
+    id: text(source.id).slice(0, 80) || makeId("discussion_report"),
+    userId,
+    targetId: text(source.targetId).slice(0, 80),
+    reason: text(source.reason).slice(0, 180) || "不适合公开讨论",
+    createdAt: text(source.createdAt) || new Date().toISOString(),
+  };
+}
+
+function discussionAuthorFromUser(user) {
+  return normalizeDiscussionAuthor({
+    userId: user.id,
+    nickname: user.nickname || user.email,
+    school: user.school,
+    major: user.major,
+    grade: user.grade,
+    isVerified: Boolean(user.isVerified || user.verificationStatus === "approved"),
+    verificationStatus: user.verificationStatus,
+  });
+}
+
+function moderateDiscussionContent(content) {
+  const value = text(content).toLowerCase();
+  const blockHits = DISCUSSION_SEVERE_KEYWORDS.filter((keyword) => value.includes(keyword.toLowerCase()));
+  const reviewHits = DISCUSSION_REVIEW_KEYWORDS.filter((keyword) => value.includes(keyword.toLowerCase()));
+  return {
+    blocked: blockHits.length > 0,
+    blockHits,
+    reviewHits,
+  };
+}
+
+function publicDiscussion(discussion, viewer, { admin = false } = {}) {
+  const normalized = normalizeTestDiscussion(discussion);
+  const reactionCounts = discussionReactionCounts(normalized);
+  const reports = normalized.reports || [];
+  return {
+    id: normalized.id,
+    packId: normalized.packId,
+    packTitle: normalized.packTitle,
+    reportId: normalized.reportId,
+    content: normalized.hidden && !admin ? "这条讨论正在复核中" : normalized.content,
+    tags: normalized.tags,
+    anonymous: normalized.anonymous,
+    author: publicDiscussionAuthor(normalized, viewer, admin),
+    school: admin ? normalized.school : (isSameSchoolDiscussion(normalized, viewer) ? "同校" : ""),
+    sameSchool: isSameSchoolDiscussion(normalized, viewer),
+    createdAt: normalized.createdAt,
+    updatedAt: normalized.updatedAt,
+    status: discussionStatus(normalized),
+    needsReview: admin ? normalized.needsReview : Boolean(normalized.needsReview),
+    hidden: admin ? normalized.hidden : false,
+    hiddenReason: admin ? normalized.hiddenReason : "",
+    moderationHits: admin ? normalized.moderationHits : [],
+    reportCount: reports.length,
+    reports: admin ? reports : [],
+    replies: normalized.replies.map((reply) => publicDiscussionReply(reply, viewer, admin)),
+    replyCount: normalized.replies.length,
+    reactionCounts,
+    viewerReacted: {
+      like: normalized.reactions.some((reaction) => reaction.userId === viewer?.id && reaction.type === "like"),
+      resonate: normalized.reactions.some((reaction) => reaction.userId === viewer?.id && reaction.type === "resonate"),
+    },
+    reviewedAt: admin ? normalized.reviewedAt : "",
+    reviewedBy: admin ? normalized.reviewedBy : "",
+    reviewNotes: admin ? normalized.reviewNotes : "",
+  };
+}
+
+function publicDiscussionReply(reply, viewer, admin = false) {
+  const normalized = normalizeDiscussionReply(reply);
+  return {
+    id: normalized.id,
+    content: normalized.content,
+    anonymous: normalized.anonymous,
+    author: publicDiscussionAuthor(normalized, viewer, admin),
+    createdAt: normalized.createdAt,
+    needsReview: admin ? normalized.needsReview : Boolean(normalized.needsReview),
+    moderationHits: admin ? normalized.moderationHits : [],
+  };
+}
+
+function publicDiscussionAuthor(item, viewer, admin = false) {
+  const author = normalizeDiscussionAuthor(item.author);
+  if (admin) {
+    return author;
+  }
+  if (item.anonymous !== false) {
+    return {
+      nickname: isSameSchoolDiscussion(item, viewer) ? "同校匿名测友" : "匿名测友",
+      school: isSameSchoolDiscussion(item, viewer) ? "同校" : "",
+      major: "",
+      isVerified: false,
+      anonymous: true,
+    };
+  }
+  return {
+    nickname: author.nickname || "校园测友",
+    school: isSameSchoolDiscussion(item, viewer) ? (author.school || "同校") : "",
+    major: author.major,
+    isVerified: author.isVerified || author.verificationStatus === "approved",
+    verificationStatus: author.verificationStatus,
+    anonymous: false,
+  };
+}
+
+function isPublicDiscussionVisible(discussion) {
+  return Boolean(discussion && !discussion.hidden && discussion.id && discussion.content);
+}
+
+function isSameSchoolDiscussion(discussion, user) {
+  return Boolean(text(discussion?.school) && text(user?.school) && text(discussion.school) === text(user.school));
+}
+
+function discussionReactionCounts(discussion) {
+  return discussion.reactions.reduce((counts, reaction) => ({
+    ...counts,
+    [reaction.type]: (counts[reaction.type] || 0) + 1,
+  }), { like: 0, resonate: 0 });
+}
+
+function discussionScore(discussion) {
+  const counts = discussionReactionCounts(discussion);
+  return counts.like + counts.resonate * 2 + discussion.replies.length * 3;
+}
+
+function sortDiscussionsByLatest(discussions) {
+  return discussions.slice().sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+}
+
+function sortDiscussionsByHot(discussions) {
+  return discussions.slice().sort((a, b) => {
+    const scoreDiff = discussionScore(b) - discussionScore(a);
+    if (scoreDiff) return scoreDiff;
+    return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+  });
+}
+
+function discussionStatus(discussion) {
+  if (discussion.hidden) return "hidden";
+  if (discussion.needsReview) return "needsReview";
+  if (discussion.reports.length) return "reported";
+  return "active";
+}
+
+function buildDiscussionPackStats(discussions, user) {
+  const stats = new Map();
+  discussions.forEach((discussion) => {
+    const key = discussion.packId || "campus-general";
+    const current = stats.get(key) || {
+      packId: key,
+      packTitle: discussion.packTitle || "校园测友讨论",
+      total: 0,
+      sameSchool: 0,
+      hotScore: 0,
+      latestAt: "",
+    };
+    current.total += 1;
+    current.sameSchool += isSameSchoolDiscussion(discussion, user) ? 1 : 0;
+    current.hotScore += discussionScore(discussion);
+    current.latestAt = [current.latestAt, discussion.updatedAt, discussion.createdAt]
+      .filter(Boolean)
+      .sort()
+      .at(-1) || "";
+    stats.set(key, current);
+  });
+  return [...stats.values()].sort((a, b) => b.hotScore - a.hotScore || String(b.latestAt).localeCompare(String(a.latestAt))).slice(0, 12);
+}
+
+function buildAdminDiscussionsPayload(discussions, url) {
+  const status = text(url.searchParams.get("status") || "queue").toLowerCase();
+  const query = text(url.searchParams.get("q")).toLowerCase();
+  const normalized = discussions.map(normalizeTestDiscussion).filter(Boolean);
+  let rows = normalized;
+  if (status === "queue") {
+    rows = rows.filter((discussion) => discussion.needsReview || discussion.reports.length || discussion.hidden);
+  } else if (status === "hidden") {
+    rows = rows.filter((discussion) => discussion.hidden);
+  } else if (status === "reported") {
+    rows = rows.filter((discussion) => discussion.reports.length);
+  } else if (status === "active") {
+    rows = rows.filter((discussion) => !discussion.hidden && !discussion.needsReview);
+  }
+  if (query) {
+    rows = rows.filter((discussion) => `${discussion.content} ${discussion.packTitle} ${discussion.author.nickname} ${discussion.school}`.toLowerCase().includes(query));
+  }
+
+  return {
+    discussions: sortDiscussionsByLatest(rows).slice(0, 80).map((discussion) => publicDiscussion(discussion, null, { admin: true })),
+    counts: {
+      all: normalized.length,
+      queue: normalized.filter((discussion) => discussion.needsReview || discussion.reports.length || discussion.hidden).length,
+      hidden: normalized.filter((discussion) => discussion.hidden).length,
+      reported: normalized.filter((discussion) => discussion.reports.length).length,
+      needsReview: normalized.filter((discussion) => discussion.needsReview).length,
+    },
+    status,
+  };
 }
 
 async function handleUploads(req, store, segments) {
@@ -1081,6 +1673,16 @@ async function handleMessages(req, store, segments, url) {
     return handleMessageTyping(req, store, match, user);
   }
 
+  if (segments[2] && segments[3] === "reports" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = await reportMessage(store, match, user, decodePathSegment(segments[2]), body);
+    return json({
+      success: true,
+      message: result.autoHidden ? "举报已收到，这条消息已自动隐藏等待复核" : "举报已收到",
+      data: result,
+    });
+  }
+
   if (segments[2]) {
     return handleSingleMessage(req, store, match, user, decodePathSegment(segments[2]), url);
   }
@@ -1115,6 +1717,10 @@ async function handleMessages(req, store, segments, url) {
       throw httpError("消息内容不能为空", 400);
     }
     validateMessageContent(type, content);
+    const moderation = type === "text" ? moderateDiscussionContent(content) : { blocked: false, reviewHits: [] };
+    if (moderation.blocked) {
+      throw httpError("这段内容不适合发送到校园聊天，请换一种更安全的表达。", 400);
+    }
 
     const now = new Date().toISOString();
     const messageId = makeId("msg");
@@ -1127,6 +1733,8 @@ async function handleMessages(req, store, segments, url) {
       content,
       type,
       createdAt: now,
+      needsReview: moderation.reviewHits.length > 0,
+      moderationHits: moderation.reviewHits,
     };
     const messages = await getMessages(store, matchId);
     messages.push(message);
@@ -1222,6 +1830,58 @@ async function handleSingleMessage(req, store, match, user, messageId, url) {
   });
 }
 
+async function reportMessage(store, match, user, messageId, body = {}) {
+  const messages = await getMessages(store, match.id);
+  const index = messages.findIndex((message) => messageIdForMessage(message) === messageId);
+  if (index < 0) {
+    throw httpError("消息不存在", 404);
+  }
+
+  const message = messages[index];
+  if (!messageVisibleToUser(message, user.id)) {
+    throw httpError("消息不存在", 404);
+  }
+
+  const reason = text(body.reason).slice(0, 180) || "不适合校园聊天";
+  const reports = normalizeMessageReports(message.reports)
+    .filter((report) => report.userId !== user.id);
+  reports.unshift({
+    id: makeId("message_report"),
+    userId: user.id,
+    reason,
+    createdAt: new Date().toISOString(),
+  });
+  const hiddenFor = new Set(Array.isArray(message.hiddenFor) ? message.hiddenFor : []);
+  hiddenFor.add(user.id);
+  const autoHidden = reports.length >= 3;
+  if (autoHidden) {
+    for (const participant of match.participants || []) {
+      hiddenFor.add(participant);
+    }
+  }
+
+  messages[index] = {
+    ...message,
+    reports,
+    needsReview: true,
+    hiddenFor: [...hiddenFor],
+    hiddenReason: autoHidden ? "累计举报达到 3 次，自动隐藏等待复核" : message.hiddenReason || "",
+    updatedAt: new Date().toISOString(),
+  };
+  await store.setJSON(`messages/${match.id}`, messages);
+  const updatedMatch = refreshMatchMessageSummary(markMatchRead(match, user.id), messages, new Date().toISOString());
+  await saveMatch(store, updatedMatch);
+  const otherProfile = await findOtherProfile(store, updatedMatch, user.id);
+
+  return {
+    autoHidden,
+    messageId,
+    reportCount: reports.length,
+    messages: visibleMessagesForUser(messages, user.id),
+    match: serializeMatch(updatedMatch, user.id, otherProfile, messages),
+  };
+}
+
 async function handleMessageTyping(req, store, match, user) {
   if (req.method === "GET") {
     const messages = await getMessages(store, match.id);
@@ -1257,6 +1917,22 @@ async function handleMessageTyping(req, store, match, user) {
 function normalizeMessageType(value) {
   const type = text(value || "text");
   return ["text", "image", "profile_card"].includes(type) ? type : "text";
+}
+
+function normalizeMessageReports(value = []) {
+  const reports = Array.isArray(value) ? value : [];
+  return reports
+    .map((report) => {
+      const source = report && typeof report === "object" ? report : {};
+      return {
+        id: text(source.id) || makeId("message_report"),
+        userId: text(source.userId).slice(0, 80),
+        reason: text(source.reason).slice(0, 180) || "不适合校园聊天",
+        createdAt: text(source.createdAt) || new Date().toISOString(),
+      };
+    })
+    .filter((report) => report.userId)
+    .slice(0, 20);
 }
 
 function validateMessageContent(type, content) {
@@ -1464,10 +2140,24 @@ function buildSelfInsightPayload(user) {
   const completeness = profileCompletenessScore(normalizedUser);
   const moodScore = selfInsight.moodScore || estimateMoodScore(normalizedUser, completeness);
   const affinityScore = estimateAffinityScore(normalizedUser, completeness);
+  const testReports = normalizeTestReports(selfInsight.testReports);
+  const latestReport = testReports[0] || null;
+  const recentReportTags = testReports
+    .slice(0, 3)
+    .flatMap((report) => [...(report.tags || []), ...(report.sceneTags || [])]);
+  const moodCurve = normalizeMoodCurve(selfInsight.moodCurve, {
+    moodScore,
+    moodLabel: selfInsight.moodLabel,
+    updatedAt: selfInsight.updatedAt || normalizedUser.updatedAt,
+  });
+  const recommendedTags = uniqueTextValues([
+    ...recentReportTags,
+    ...tags,
+  ]).slice(0, 8);
   const dailyCards = buildDailyInsightCards(normalizedUser, {
     mbti,
     zodiac,
-    tags,
+    tags: recommendedTags.length ? recommendedTags : tags,
     treeholes,
     moodScore,
     affinityScore,
@@ -1480,8 +2170,12 @@ function buildSelfInsightPayload(user) {
     zodiac,
     birthDate: normalizedUser.birthDate || "",
     tags,
+    recommendedTags,
     selfInsight,
     dailyCards,
+    latestReport,
+    testReports,
+    moodCurve,
     treeholeCount: treeholes.length,
     headline: buildSelfInsightHeadline(normalizedUser, { mbti, zodiac, moodScore, affinityScore }),
   };
@@ -1492,6 +2186,7 @@ function updateSelfInsight(user, body) {
   const moodScore = clampNumber(body.moodScore, 1, 100, current.moodScore || 70);
   const moodLabel = text(body.moodLabel || current.moodLabel).slice(0, 24) || "平稳";
   const focus = text(body.focus || current.focus).slice(0, 40) || "自然认识同校新朋友";
+  const now = new Date().toISOString();
   return {
     ...user,
     selfInsight: normalizeSelfInsight({
@@ -1499,9 +2194,10 @@ function updateSelfInsight(user, body) {
       moodScore,
       moodLabel,
       focus,
-      updatedAt: new Date().toISOString(),
+      moodCurve: addMoodCurvePoint(current.moodCurve, { moodScore, moodLabel, updatedAt: now }),
+      updatedAt: now,
     }),
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
 }
 
@@ -1511,8 +2207,188 @@ function normalizeSelfInsight(value) {
     moodScore: clampNumber(source.moodScore, 1, 100, 70),
     moodLabel: text(source.moodLabel).slice(0, 24) || "平稳",
     focus: text(source.focus).slice(0, 40) || "自然认识同校新朋友",
+    testReports: normalizeTestReports(source.testReports),
+    moodCurve: normalizeMoodCurve(source.moodCurve),
     updatedAt: text(source.updatedAt) || "",
   };
+}
+
+function appendSelfInsightReport(user, body = {}) {
+  const current = normalizeSelfInsight(user.selfInsight);
+  const report = normalizeTestReport(body.report || body);
+  const mbti = normalizeMbti(body.mbti || report.dimensions.find((item) => item.label === "MBTI")?.value);
+  const birthDate = normalizeBirthDate(body.birthDate || report.answers?.birthDate);
+  const nextReports = [report, ...current.testReports.filter((item) => item.id !== report.id)].slice(0, 40);
+  const updatedAt = new Date().toISOString();
+  const nextUser = {
+    ...user,
+    ...(mbti ? { mbti } : {}),
+    ...(birthDate ? { birthDate } : {}),
+    relationshipGoal: report.relationshipGoal || user.relationshipGoal || "",
+    tags: uniqueTextValues([...(user.tags || []), ...report.tags, "测一测"]).slice(0, 12),
+    sceneTags: uniqueTextValues([...(user.sceneTags || []), ...report.sceneTags, "测一测"]).slice(0, 12),
+    selfInsight: normalizeSelfInsight({
+      ...current,
+      focus: report.opener || current.focus,
+      testReports: nextReports,
+      updatedAt,
+    }),
+    updatedAt,
+  };
+
+  return { user: nextUser, report };
+}
+
+function normalizeTestReports(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeTestReport)
+    .filter((report) => report.title && report.resultTitle)
+    .sort((a, b) => String(b.completedAt || "").localeCompare(String(a.completedAt || "")))
+    .slice(0, 40);
+}
+
+function normalizeTestReport(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const completedAt = text(source.completedAt) || new Date().toISOString();
+  const title = text(source.title).slice(0, 80) || "校园合拍测试";
+  const resultTitle = text(source.resultTitle).slice(0, 80) || "校园合拍画像";
+
+    return {
+      id: text(source.id).slice(0, 80) || makeId("report"),
+      type: text(source.type).slice(0, 40) || "campus-fit",
+      title,
+      packId: text(source.packId).slice(0, 80),
+      packTitle: text(source.packTitle).slice(0, 80),
+      category: text(source.category).slice(0, 40),
+      version: text(source.version).slice(0, 40),
+      completedAt,
+      answers: normalizeReportAnswers(source.answers),
+      dimensions: normalizeReportDimensions(source.dimensions),
+      resultTitle,
+      resultSummary: text(source.resultSummary).slice(0, 280) || "根据你的选择生成校园合拍建议。",
+      tags: uniqueTextValues(arrayOfText(source.tags)).slice(0, 10),
+      sceneTags: uniqueTextValues(arrayOfText(source.sceneTags)).slice(0, 10),
+      relationshipGoal: text(source.relationshipGoal).slice(0, 80),
+      opener: text(source.opener).slice(0, 180),
+      recommendedPeople: text(source.recommendedPeople).slice(0, 140),
+      riskReminder: text(source.riskReminder).slice(0, 160),
+      deepSections: normalizeReportDeepSections(source.deepSections),
+      matchAdvice: normalizeReportMatchAdvice(source.matchAdvice),
+      openingLines: arrayOfText(source.openingLines).slice(0, 5).map((line) => line.slice(0, 180)),
+      compareHints: normalizeReportCompareHints(source.compareHints),
+      shareCard: normalizeReportShareCard(source.shareCard),
+    };
+  }
+
+function normalizeReportAnswers(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, answer]) => [text(key).slice(0, 40), text(answer).slice(0, 120)])
+      .filter(([key, answer]) => key && answer),
+  );
+}
+
+function normalizeReportDimensions(value = []) {
+  const items = Array.isArray(value) ? value : [];
+  return items
+    .map((item) => {
+      const source = item && typeof item === "object" ? item : {};
+      return {
+        label: text(source.label).slice(0, 40),
+        value: text(source.value).slice(0, 80),
+        text: text(source.text).slice(0, 180),
+      };
+    })
+    .filter((item) => item.label && item.value)
+    .slice(0, 8);
+}
+
+function normalizeReportDeepSections(value = []) {
+  const items = Array.isArray(value) ? value : [];
+  return items
+    .map((item) => {
+      const source = item && typeof item === "object" ? item : {};
+      return {
+        title: text(source.title).slice(0, 60),
+        summary: text(source.summary).slice(0, 180),
+        items: arrayOfText(source.items).slice(0, 6).map((line) => line.slice(0, 180)),
+      };
+    })
+    .filter((item) => item.title && item.summary)
+    .slice(0, 6);
+}
+
+function normalizeReportMatchAdvice(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    suitable: text(source.suitable).slice(0, 180),
+    unsuitable: text(source.unsuitable).slice(0, 180),
+  };
+}
+
+function normalizeReportCompareHints(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    targetName: text(source.targetName).slice(0, 80),
+    shared: arrayOfText(source.shared).slice(0, 4).map((line) => line.slice(0, 60)),
+    complement: arrayOfText(source.complement).slice(0, 4).map((line) => line.slice(0, 60)),
+    opener: text(source.opener).slice(0, 220),
+  };
+}
+
+function normalizeReportShareCard(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    title: text(source.title).slice(0, 80),
+    resultTitle: text(source.resultTitle).slice(0, 80),
+    tags: arrayOfText(source.tags).slice(0, 3).map((line) => line.slice(0, 40)),
+    quote: text(source.quote).slice(0, 180),
+    text: text(source.text).slice(0, 320),
+  };
+}
+
+function normalizeMoodCurve(value = [], fallbackPoint = null) {
+  const points = Array.isArray(value) ? value : [];
+  const normalized = points
+    .map((point) => {
+      const source = point && typeof point === "object" ? point : {};
+      const moodScore = clampNumber(source.moodScore, 1, 100, 70);
+      const date = text(source.date || source.updatedAt).slice(0, 10);
+      return {
+        date,
+        moodScore,
+        moodLabel: text(source.moodLabel).slice(0, 24) || "平稳",
+      };
+    })
+    .filter((point) => point.date)
+    .slice(-14);
+
+  if (!fallbackPoint?.updatedAt) {
+    return normalized;
+  }
+
+  return addMoodCurvePoint(normalized, fallbackPoint);
+}
+
+function addMoodCurvePoint(value = [], point = {}) {
+  const date = text(point.date || point.updatedAt).slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const nextPoint = {
+    date,
+    moodScore: clampNumber(point.moodScore, 1, 100, 70),
+    moodLabel: text(point.moodLabel).slice(0, 24) || "平稳",
+  };
+  return [
+    ...normalizeMoodCurve(value).filter((item) => item.date !== date),
+    nextPoint,
+  ].slice(-14);
 }
 
 function normalizeTreeholePosts(value) {
@@ -1535,6 +2411,10 @@ function normalizeTreeholePost(value) {
     mood: text(source.mood).slice(0, 24) || "想被听见",
     createdAt: text(source.createdAt) || new Date().toISOString(),
     anonymous: source.anonymous !== false,
+    needsReview: Boolean(source.needsReview),
+    moderationHits: uniqueTextValues(arrayOfText(source.moderationHits)).slice(0, 8),
+    hidden: Boolean(source.hidden),
+    hiddenReason: text(source.hiddenReason).slice(0, 160),
   };
 }
 
@@ -2776,10 +3656,18 @@ async function resolveAdminTargetUser(store, body) {
   return null;
 }
 
-function buildAdminOverview(users, matches, messages) {
+function buildAdminOverview(users, matches, messages, discussions = []) {
   const activeUsers = users.map(normalizeUserRecord).filter(isActiveUser);
   const pendingPrivacyRequests = activeUsers
     .flatMap((user) => normalizePrivacyRequests(user).filter((request) => request.status === "pending"));
+  const normalizedDiscussions = discussions.map(normalizeTestDiscussion).filter(Boolean);
+  const pendingDiscussions = normalizedDiscussions.filter((discussion) =>
+    discussion.needsReview || discussion.reports.length || discussion.hidden);
+  const treeholePosts = activeUsers.flatMap((user) =>
+    normalizeTreeholePosts(user.treeholePosts).map((post) => ({ ...post, userId: user.id, school: user.school })),
+  );
+  const pendingTreeholes = treeholePosts.filter((post) => post.needsReview || post.hidden);
+  const reportedMessages = messages.filter((message) => normalizeMessageReports(message.reports).length || message.needsReview);
   const now = new Date();
   const paidMembers = activeUsers.filter((user) => {
     const membership = normalizeMembershipRecord(user.membership, user.createdAt);
@@ -2800,7 +3688,13 @@ function buildAdminOverview(users, matches, messages) {
       matches: matches.length,
       messages: messages.length,
       messagesToday: countSince(messages, "createdAt", startOfLocalDay(now)),
-      treeholes: activeUsers.reduce((total, user) => total + normalizeTreeholePosts(user.treeholePosts).length, 0),
+      reportedMessages: reportedMessages.length,
+      discussions: normalizedDiscussions.length,
+      pendingDiscussions: pendingDiscussions.length,
+      hiddenDiscussions: normalizedDiscussions.filter((discussion) => discussion.hidden).length,
+      treeholes: treeholePosts.length,
+      pendingTreeholes: pendingTreeholes.length,
+      testReports: activeUsers.reduce((total, user) => total + normalizeTestReports(user.selfInsight?.testReports).length, 0),
       activeProfiles: activeUsers.filter((user) => calculateProfileReadiness(user).score >= 60).length,
       unreadMessages: matches.reduce(
         (total, match) =>

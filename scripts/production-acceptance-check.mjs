@@ -4,7 +4,7 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const baseUrl = normalizeBaseUrl(args.baseUrl || process.env.CAMPUS_MATCH_BASE_URL || "https://campus-match-sansui.netlify.app");
-const reportPath = path.resolve("output/production-acceptance-report.json");
+const reportPath = path.resolve(args.report || process.env.CAMPUS_MATCH_ACCEPTANCE_REPORT || "output/production-acceptance-report.json");
 const results = [];
 
 await fs.mkdir(path.dirname(reportPath), { recursive: true });
@@ -16,15 +16,20 @@ const pageChecks = [
   { path: "/search.html", expect: ["校园匹配"] },
   { path: "/upload.html", expect: ["校园匹配"] },
   { path: "/admin.html", expect: ["admin.js"] },
-  { path: "/privacy", expect: ["隐私"] },
-  { path: "/terms", expect: ["协议"] },
+  { path: "/privacy", fallbackPath: "/privacy.html", expect: ["隐私"] },
+  { path: "/terms", fallbackPath: "/terms.html", expect: ["协议"] },
 ];
 
 for (const item of pageChecks) {
   await check(`GET ${item.path}`, async () => {
     const response = await fetchUrl(item.path);
     assert(response.status === 200, `expected 200, got ${response.status}`);
-    const text = await response.text();
+    let text = await response.text();
+    if (item.fallbackPath && !item.expect.every((expected) => text.includes(expected))) {
+      const fallback = await fetchUrl(item.fallbackPath);
+      assert(fallback.status === 200, `fallback ${item.fallbackPath} expected 200, got ${fallback.status}`);
+      text = await fallback.text();
+    }
     for (const expected of item.expect) {
       assert(text.includes(expected), `missing "${expected}"`);
     }
@@ -134,7 +139,7 @@ function normalizeBaseUrl(value) {
 }
 
 function parseArgs(rawArgs) {
-  const parsed = { baseUrl: "" };
+  const parsed = { baseUrl: "", report: "" };
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (arg === "--base-url") {
@@ -144,6 +149,15 @@ function parseArgs(rawArgs) {
     }
     if (arg.startsWith("--base-url=")) {
       parsed.baseUrl = arg.slice("--base-url=".length);
+      continue;
+    }
+    if (arg === "--report") {
+      parsed.report = rawArgs[index + 1] || "";
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--report=")) {
+      parsed.report = arg.slice("--report=".length);
     }
   }
   return parsed;

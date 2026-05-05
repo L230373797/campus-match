@@ -1,6 +1,6 @@
 # 校园匹配线上验收清单
 
-最后更新：2026-05-04
+最后更新：2026-05-05
 
 ## 一键检查
 
@@ -27,6 +27,34 @@ npm run check:production:acceptance
 ```text
 output/production-acceptance-report.json
 ```
+
+需要同时保留本地和线上报告时，可以指定报告文件：
+
+```bash
+node scripts/production-acceptance-check.mjs --base-url http://127.0.0.1:3199 --report output/production-acceptance-local-report.json
+node scripts/production-acceptance-check.mjs --base-url https://campus-match-sansui.netlify.app --report output/production-acceptance-online-report.json
+```
+
+生产 MySQL 检查必须使用真实云数据库配置：
+
+```bash
+npm run check:mysql:production
+```
+
+如只想验证本机 MySQL 表结构和读写适配，可显式运行：
+
+```bash
+node scripts/check-production-mysql.mjs --allow-local
+```
+
+## 校园内测 P0 收口
+
+- 用户端不露出真实付费承诺，会员相关文案只作为内测权益展示。
+- 首页、测试中心、报告历史、测友讨论、推荐匹配、消息、我的页需要在手机尺寸走完一遍。
+- 20 个 5 题短测都能选择、完成、保存，最近报告会写入画像标签和推荐标签。
+- 测友讨论、树洞、聊天文本均有关键词安全检查；测友讨论和聊天消息支持举报，累计举报会自动隐藏。
+- 管理后台数据看板需要关注认证待审、账号资料请求、测友讨论复核、树洞复核、聊天举报。
+- 生产环境必须确认 MySQL、SMTP、管理员账号、HTTPS、上传图片读取和隐私/协议页面都可用。
 
 ## 当前线上地址
 
@@ -81,3 +109,12 @@ output/production-acceptance-report.json
 - 已完成 Netlify 生产部署。
 - 已新增线上验收脚本。
 - 下一步重点：真实账号跑完整用户流程和管理端人工验收。
+
+2026-05-05：
+
+- 本地核心流程 `npm run check:launch` 通过，覆盖注册、登录、资料、测试、测友讨论、上传、认证、匹配、聊天、后台和隐私请求。
+- 本地生产验收通过，报告见 `output/production-acceptance-local-report.json`。
+- 390px 移动端截图已输出到 `output/internal-beta-acceptance/`，覆盖首页、测试中心、消息、我的和登录页。
+- 线上站点当前阻塞：Netlify 返回 `503 usage_exceeded`，所有线上页面和接口暂不可用；需先处理 Netlify 用量/套餐/站点额度。
+- 生产 MySQL 当前阻塞：缺少 `.env.production-mysql` 云数据库配置；`npm run check:mysql:production` 会拒绝使用 `.env.local` 作为生产库。
+- 本机 MySQL 适配检查可用：`node scripts/check-production-mysql.mjs --allow-local` 通过，但不代表线上 Netlify 已接入云数据库。

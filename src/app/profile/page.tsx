@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { BottomNav } from "@/components/bottom-nav";
-import { User, Settings, ChevronRight, Heart, MessageCircle, Edit3 } from "lucide-react";
+import { User, Settings, ChevronRight, Heart, MessageCircle, Edit3, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -16,6 +16,9 @@ export default function ProfilePage() {
     likesSent: 0,
     likesReceived: 0,
     matches: 0,
+    mbtiType: "",
+    mbtiPlanet: "",
+    mbtiTag: "",
   });
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +54,8 @@ export default function ProfilePage() {
         .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`);
 
       if (profile) {
+        const localResult = typeof window !== "undefined" ? localStorage.getItem("campus_mbti_result") : null;
+        const parsedResult = localResult ? JSON.parse(localResult) : null;
         setUserData({
           nickname: profile.nickname,
           grade: profile.grade || '未知年级',
@@ -60,6 +65,9 @@ export default function ProfilePage() {
           likesSent: likesSent || 0,
           likesReceived: likesReceived || 0,
           matches: matches || 0,
+          mbtiType: profile.mbti_type || parsedResult?.mbti_type || "",
+          mbtiPlanet: profile.mbti_planet || parsedResult?.mbti_planet || "",
+          mbtiTag: profile.mbti_tag || parsedResult?.mbti_tag || "",
         });
       }
       setLoading(false);
@@ -110,6 +118,39 @@ export default function ProfilePage() {
             编辑资料
           </Link>
         </div>
+
+        {userData.mbtiType && (
+          <Link href="/planet-test" className="block bg-white rounded-2xl p-4 mb-4 border border-[#e9edff]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4c7dff] to-[#ff5fcf] flex items-center justify-center text-white">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">校园人格星球</p>
+                  <p className="font-semibold text-gray-900">{userData.mbtiType} · {userData.mbtiPlanet || "未命名星球"}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{userData.mbtiTag || "点击查看完整结果"}</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-300" />
+            </div>
+          </Link>
+        )}
+
+        <Link href="/planet-test" className="block bg-white rounded-2xl p-4 mb-4 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4c7dff] to-[#ff5fcf] flex items-center justify-center text-white">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">校园人格星球测试</p>
+                <p className="text-xs text-gray-500">16 道题，生成你的 MBTI 星球画像</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </div>
+        </Link>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
